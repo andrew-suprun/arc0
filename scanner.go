@@ -1,15 +1,17 @@
 package main
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"time"
@@ -26,6 +28,8 @@ var fileFlag = flag.String("file", "", "")
 func main() {
 	log.SetFlags(0)
 
+	signal.Notify(c, os.Interrupt)
+
 	if len(os.Args) > 1 {
 		flag.CommandLine.Parse(os.Args[2:])
 		switch os.Args[1] {
@@ -39,7 +43,25 @@ func main() {
 	}
 }
 
-type HashInfo struct {
+var c = make(chan os.Signal, 1)
+
+var gotInterrupted = false
+
+func interrupted() bool {
+	if gotInterrupted {
+		return true
+	}
+	select {
+	case s := <-c:
+		log.Println("Got signal:", s)
+		gotInterrupted = true
+		return true
+	default:
+		return false
+	}
+}
+
+type hashInfo struct {
 	Size    int64
 	Hash    string
 	Mode    os.FileMode
@@ -71,11 +93,11 @@ func dedup() {
 		os.Exit(1)
 	}
 
-	base, err := filepath.Abs(*pathFlag)
+	basePath, err := filepath.Abs(*pathFlag)
 	if err != nil {
 		panic(err)
 	}
-	infos := rehashPath(base)
+	infos := rehashPath(basePath)
 
 	hashMap := map[string][]string{}
 	dirCounts := map[string]int{}
@@ -154,8 +176,8 @@ func dedup() {
 				baseName := filepath.Base(name)
 
 				if (*dirFlag != "" && dir == *dirFlag) || (*fileFlag != "" && baseName == *fileFlag) {
-					from := filepath.Join(base, name)
-					to := filepath.Join(base+".bak", name)
+					from := filepath.Join(basePath, name)
+					to := filepath.Join(basePath+".bak", name)
 
 					fmt.Printf("moving %q\n", from)
 					fmt.Printf("    to %q\n", to)
@@ -166,8 +188,8 @@ func dedup() {
 			}
 		} else {
 			for _, name := range names[1:] {
-				from := filepath.Join(base, name)
-				to := filepath.Join(base+".bak", name)
+				from := filepath.Join(basePath, name)
+				to := filepath.Join(basePath+".bak", name)
 
 				fmt.Printf("moving %q\n", from)
 				fmt.Printf("    to %q\n", to)
@@ -180,7 +202,7 @@ func dedup() {
 	}
 	if totalRemoved > 0 {
 		fmt.Println("### total removed", totalRemoved)
-		rehashPath(base)
+		rehashPath(basePath)
 	}
 }
 
@@ -205,7 +227,8 @@ func mirror() {
 
 	fromInfos := rehashPath(fromBase)
 	toInfos := rehashPath(toBase)
-	toOriginalInfos := map[string]HashInfo{}
+
+	toOriginalInfos := map[string]hashInfo{}
 	for name, info := range toInfos {
 		toOriginalInfos[name] = info
 	}
@@ -227,8 +250,6 @@ func mirror() {
 		if toNames, ok := toMap[fromInfo.Hash]; ok && len(toNames) > 0 {
 			fmt.Printf("rename %q\n", toNames[0])
 			fmt.Printf("    as %q\n", name)
-			fmt.Printf("### rename %v\n", []byte(toNames[0]))
-			fmt.Printf("###     as %v\n", []byte(name))
 			toName := filepath.Join(toBase, name)
 			toDir := filepath.Dir(toName)
 			os.MkdirAll(toDir, 0755)
@@ -275,25 +296,30 @@ func mirror() {
 		storeInfos(filepath.Join(toBase, hashFileName), toOriginalInfos)
 		removeEmptyFolders(toBase)
 	}
+	rehashPath(toBase)
 }
 
-func rehashPath(base string) map[string]HashInfo {
-	fileNames := map[string]struct{}{}
+func infoKey(name string, size int64, modTime time.Time) string {
+	return fmt.Sprintf("%s:%d:%s", filepath.Base(name), size, modTime.UTC().Format("2006-01-02:15:04:05.999999999"))
+}
 
-	absHashFileName := filepath.Join(base, hashFileName)
-	infoMap := map[string]HashInfo{}
+func rehashPath(basePath string) map[string]hashInfo {
+	absHashFileName := filepath.Join(basePath, hashFileName)
+	originalInfoMap := map[string]hashInfo{}
+	infoMap := map[string]hashInfo{}
+	newInfoMap := map[string]hashInfo{}
 
-	hashFile, err := os.Open(absHashFileName)
+	hashInfoFile, err := os.Open(absHashFileName)
 	if err == nil {
-		buf, err := ioutil.ReadAll(hashFile)
+		buf, err := ioutil.ReadAll(hashInfoFile)
 		if err != nil {
 			panic(err)
 		}
-		hashFile.Close()
-		json.Unmarshal(buf, &infoMap)
+		hashInfoFile.Close()
+		json.Unmarshal(buf, &originalInfoMap)
 
-		for name := range infoMap {
-			fileNames[name] = struct{}{}
+		for name, info := range originalInfoMap {
+			infoMap[infoKey(name, info.Size, info.ModTime)] = info
 		}
 	}
 
@@ -304,26 +330,24 @@ func rehashPath(base string) map[string]HashInfo {
 		panic(err)
 	}
 
-	storeTimer := time.Now()
 	shoudStore := false
 
-	err = filepath.Walk(base, func(name string, info os.FileInfo, err error) error {
+	err = filepath.Walk(basePath, func(name string, info os.FileInfo, err error) error {
 		name = norm.NFD.String(name)
 		if err != nil || info.IsDir() || info.Size() == 0 || info.Name() == ".DS_Store" || info.Name() == hashFileName {
 			return nil
 		}
-		relName := name[len(base)+1:]
+		relName := name[len(basePath)+1:]
+		baseName := filepath.Base(name)
+		key := infoKey(baseName, info.Size(), info.ModTime())
 
-		delete(fileNames, relName)
-
-		if prevInfo, ok := infoMap[relName]; ok && prevInfo.ModTime.Equal(info.ModTime()) && prevInfo.Size == info.Size() {
+		if prevInfo, ok := infoMap[key]; ok {
+			newInfoMap[relName] = prevInfo
+			delete(originalInfoMap, relName)
 			return nil
 		}
 		fmt.Printf("rehashing %q\n", relName)
-		if !shoudStore {
-			storeTimer = time.Now()
-			shoudStore = true
-		}
+		shoudStore = true
 
 		file, err := os.Open(name)
 		if err != nil {
@@ -333,45 +357,73 @@ func rehashPath(base string) map[string]HashInfo {
 		defer file.Close()
 
 		h := md5.New()
-		if _, err := io.Copy(h, file); err != nil {
+		hash, err := hashFile(h, file)
+		if err != nil {
 			log.Printf("FAILED to process %s: %v\n", name, err)
-			return nil
+			return err
 		}
-		hash := fmt.Sprintf("%x", h.Sum(nil))
 
-		infoMap[relName] = HashInfo{
+		newInfoMap[relName] = hashInfo{
 			Size:    info.Size(),
 			Hash:    hash,
 			Mode:    info.Mode(),
 			ModTime: info.ModTime(),
 		}
 
-		if time.Since(storeTimer) > time.Minute {
-			if shoudStore {
-				storeInfos(absHashFileName, infoMap)
-				storeTimer = time.Now()
-			}
-		}
-
 		return nil
 	})
 
-	delete(infoMap, absHashFileName)
-	for name := range fileNames {
-		fmt.Printf("removing exta info for %q\n", name)
-		delete(infoMap, name)
-		shoudStore = true
+	if interrupted() {
+		for name, info := range originalInfoMap {
+			newInfoMap[name] = info
+		}
+	} else {
+		shoudStore = shoudStore || len(originalInfoMap) > 0
 	}
 
 	if shoudStore {
-		storeInfos(absHashFileName, infoMap)
+		storeInfos(absHashFileName, newInfoMap)
 		removeEmptyFolders(*pathFlag)
 	}
-	return infoMap
+
+	return newInfoMap
 }
 
-func storeInfos(name string, infoMap map[string]HashInfo) {
-	fmt.Printf("\n---- Storing file %q ----\n\n", name)
+func hashFile(dst hash.Hash, src *os.File) (hash string, err error) {
+	written := int64(0)
+	buf := make([]byte, 32*1024)
+	for {
+		if interrupted() {
+			return "", errors.New("interrupted")
+		}
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return fmt.Sprintf("%x", dst.Sum(nil)), err
+}
+
+func storeInfos(name string, infoMap map[string]hashInfo) {
+	fmt.Printf("---- Storing file %q ----\n", name)
+
 	buf, err := json.MarshalIndent(infoMap, "", "    ")
 	if err != nil {
 		panic(err)
@@ -431,18 +483,4 @@ func removeEmptyFolders(path string) bool {
 		os.Remove(path)
 	}
 	return empty
-}
-
-// EqualSimple uses a norm.Iter to compare two non-normalized
-// strings for equivalence.
-func EqualSimple(a, b string) bool {
-	var ia, ib norm.Iter
-	ia.InitString(norm.NFKD, a)
-	ib.InitString(norm.NFKD, b)
-	for !ia.Done() && !ib.Done() {
-		if !bytes.Equal(ia.Next(), ib.Next()) {
-			return false
-		}
-	}
-	return ia.Done() && ib.Done()
 }
