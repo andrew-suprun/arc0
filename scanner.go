@@ -333,7 +333,7 @@ func rehashPath(basePath string) map[string]hashInfo {
 	shoudStore := false
 
 	err = filepath.Walk(basePath, func(name string, info os.FileInfo, err error) error {
-		name = norm.NFD.String(name)
+		name = norm.NFC.String(name)
 		if err != nil || info.IsDir() || info.Size() == 0 || info.Name() == ".DS_Store" || info.Name() == hashFileName {
 			return nil
 		}
