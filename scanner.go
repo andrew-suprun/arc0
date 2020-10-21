@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"log"
@@ -24,6 +23,9 @@ var fromFlag = flag.String("from", "", "Directory to move files from.")
 var toFlag = flag.String("to", "", "Directory to move files to.")
 var dirFlag = flag.String("dir", "", "")
 var fileFlag = flag.String("file", "", "")
+
+const backupDir = "~~~backup~~~"
+const hashFileName = ".hashes.json"
 
 func main() {
 	log.SetFlags(0)
@@ -67,8 +69,6 @@ type hashInfo struct {
 	Mode    os.FileMode
 	ModTime time.Time
 }
-
-const hashFileName = ".hashes.json"
 
 func rehash() {
 	if *pathFlag == "" || *pathFlag == "/" {
@@ -177,7 +177,7 @@ func dedup() {
 
 				if (*dirFlag != "" && dir == *dirFlag) || (*fileFlag != "" && baseName == *fileFlag) {
 					from := filepath.Join(basePath, name)
-					to := filepath.Join(basePath+".bak", name)
+					to := filepath.Join(basePath, backupDir, name)
 
 					fmt.Printf("moving %q\n", from)
 					fmt.Printf("    to %q\n", to)
@@ -189,7 +189,7 @@ func dedup() {
 		} else {
 			for _, name := range names[1:] {
 				from := filepath.Join(basePath, name)
-				to := filepath.Join(basePath+".bak", name)
+				to := filepath.Join(basePath, backupDir, name)
 
 				fmt.Printf("moving %q\n", from)
 				fmt.Printf("    to %q\n", to)
@@ -283,11 +283,18 @@ func mirror() {
 	}
 
 	for toName := range toInfos {
-		fmt.Printf("remove %q\n", toName)
-		err = os.Remove(filepath.Join(toBase, toName))
+		from := filepath.Join(toBase, toName)
+		to := filepath.Join(toBase, backupDir, toName)
+
+		fmt.Printf("moving %q\n", from)
+		fmt.Printf("    to %q\n", to)
+
+		os.MkdirAll(filepath.Dir(to), 0755)
+		err = os.Rename(from, to)
 		if err != nil {
 			fmt.Println("###", err)
 		}
+
 		delete(toOriginalInfos, toName)
 		originalInfosChanged = true
 	}
@@ -334,7 +341,15 @@ func rehashPath(basePath string) map[string]hashInfo {
 
 	err = filepath.Walk(basePath, func(name string, info os.FileInfo, err error) error {
 		name = norm.NFC.String(name)
-		if err != nil || info.IsDir() || info.Size() == 0 || info.Name() == ".DS_Store" || info.Name() == hashFileName {
+		if info.Name() == backupDir {
+			return filepath.SkipDir
+		}
+		if err != nil ||
+			info.IsDir() ||
+			info.Size() == 0 ||
+			info.Name() == ".DS_Store" ||
+			info.Name() == hashFileName {
+
 			return nil
 		}
 		relName := name[len(basePath)+1:]
@@ -349,15 +364,7 @@ func rehashPath(basePath string) map[string]hashInfo {
 		fmt.Printf("rehashing %q\n", relName)
 		shoudStore = true
 
-		file, err := os.Open(name)
-		if err != nil {
-			fmt.Printf("err.1: %v\n", err)
-			return nil
-		}
-		defer file.Close()
-
-		h := md5.New()
-		hash, err := hashFile(h, file)
+		hash, err := hashFile(name)
 		if err != nil {
 			log.Printf("FAILED to process %s: %v\n", name, err)
 			return err
@@ -389,19 +396,22 @@ func rehashPath(basePath string) map[string]hashInfo {
 	return newInfoMap
 }
 
-func hashFile(dst hash.Hash, src *os.File) (hash string, err error) {
-	written := int64(0)
+func hashFile(name string) (hash string, err error) {
+	file, err := os.Open(name)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	md5Hash := md5.New()
 	buf := make([]byte, 32*1024)
 	for {
 		if interrupted() {
 			return "", errors.New("interrupted")
 		}
-		nr, er := src.Read(buf)
+		nr, er := file.Read(buf)
 		if nr > 0 {
-			nw, ew := dst.Write(buf[0:nr])
-			if nw > 0 {
-				written += int64(nw)
-			}
+			nw, ew := md5Hash.Write(buf[0:nr])
 			if ew != nil {
 				err = ew
 				break
@@ -418,7 +428,49 @@ func hashFile(dst hash.Hash, src *os.File) (hash string, err error) {
 			break
 		}
 	}
-	return fmt.Sprintf("%x", dst.Sum(nil)), err
+	return fmt.Sprintf("%x", md5Hash.Sum(nil)), err
+}
+
+func copyFile(src, dst string, perm os.FileMode) error {
+	from, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer from.Close()
+
+	to, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, perm)
+	if err != nil {
+		return err
+	}
+	defer to.Close()
+
+	buf := make([]byte, 32*1024)
+	for {
+		if interrupted() {
+			return errors.New("interrupted")
+		}
+		nr, er := from.Read(buf)
+		if nr > 0 {
+			nw, ew := to.Write(buf[0:nr])
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+
+	info, _ := os.Stat(src)
+	return os.Chtimes(dst, time.Now(), info.ModTime())
 }
 
 func storeInfos(name string, infoMap map[string]hashInfo) {
@@ -439,28 +491,6 @@ func storeInfos(name string, infoMap map[string]hashInfo) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func copyFile(oldName, newName string, perm os.FileMode) error {
-	from, err := os.Open(oldName)
-	if err != nil {
-		return err
-	}
-	defer from.Close()
-
-	to, err := os.OpenFile(newName, os.O_WRONLY|os.O_CREATE, perm)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(to, from)
-	to.Close()
-	if err != nil {
-		return err
-	}
-
-	info, _ := os.Stat(oldName)
-	return os.Chtimes(newName, time.Now(), info.ModTime())
 }
 
 func removeEmptyFolders(path string) bool {
