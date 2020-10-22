@@ -523,6 +523,14 @@ func hashFile(name string) (hash string, err error) {
 }
 
 func copyFile(src, dst string, perm os.FileMode) error {
+	err := copyFileInternal(src, dst, perm)
+	if err != nil {
+		return err
+	}
+	return setFileModTime(src, dst)
+}
+
+func copyFileInternal(src, dst string, perm os.FileMode) error {
 	from, err := os.Open(src)
 	if err != nil {
 		return err
@@ -560,8 +568,14 @@ func copyFile(src, dst string, perm os.FileMode) error {
 			break
 		}
 	}
+	return nil
+}
 
-	info, _ := os.Stat(src)
+func setFileModTime(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
 	return os.Chtimes(dst, time.Now(), info.ModTime())
 }
 
