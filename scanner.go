@@ -245,6 +245,7 @@ func mirror() {
 				fmt.Println("###:1", err)
 			}
 
+			delete(toInfos, toName)
 			delete(toOriginalInfos, toName)
 			originalInfosChanged = true
 		}
