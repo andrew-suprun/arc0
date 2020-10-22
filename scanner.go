@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"golang.org/x/text/unicode/norm"
@@ -22,9 +23,9 @@ var pathFlag = flag.String("path", "", "Directory to scan.")
 var fromFlag = flag.String("from", "", "Directory to move files from.")
 var toFlag = flag.String("to", "", "Directory to move files to.")
 var dirFlag = flag.String("dir", "", "")
-var fileFlag = flag.String("file", "", "")
 
-const backupDir = "~~~backup~~~"
+const extraDir = "~~~extra~~~"
+const dupsDir = "~~~dups~~~"
 const hashFileName = ".hashes.json"
 
 func main() {
@@ -41,6 +42,8 @@ func main() {
 			dedup()
 		case "mirror":
 			mirror()
+		case "merge":
+			merge()
 		}
 	}
 }
@@ -112,7 +115,7 @@ func dedup() {
 		hashMap[info.Hash] = fileNames
 	}
 
-	if *dirFlag == "" && *fileFlag == "" {
+	if *dirFlag == "" {
 		for hash, names := range hashMap {
 
 			if len(names) == 1 {
@@ -161,10 +164,7 @@ func dedup() {
 
 		hasRemainingFile := false
 		for _, name := range names {
-			dir := filepath.Dir(name)
-			baseName := filepath.Base(name)
-
-			if (*dirFlag == "" || dir != *dirFlag) && (*fileFlag == "" || baseName != *fileFlag) {
+			if filepath.Dir(name) == *dirFlag {
 				hasRemainingFile = true
 				break
 			}
@@ -172,12 +172,9 @@ func dedup() {
 
 		if hasRemainingFile {
 			for _, name := range names {
-				dir := filepath.Dir(name)
-				baseName := filepath.Base(name)
-
-				if (*dirFlag != "" && dir == *dirFlag) || (*fileFlag != "" && baseName == *fileFlag) {
+				if filepath.Dir(name) != *dirFlag {
 					from := filepath.Join(basePath, name)
-					to := filepath.Join(basePath, backupDir, name)
+					to := filepath.Join(basePath, dupsDir, name)
 
 					fmt.Printf("moving %q\n", from)
 					fmt.Printf("    to %q\n", to)
@@ -185,18 +182,6 @@ func dedup() {
 					os.Rename(from, to)
 					totalRemoved++
 				}
-			}
-		} else {
-			for _, name := range names[1:] {
-				from := filepath.Join(basePath, name)
-				to := filepath.Join(basePath, backupDir, name)
-
-				fmt.Printf("moving %q\n", from)
-				fmt.Printf("    to %q\n", to)
-
-				os.MkdirAll(filepath.Dir(to), 0755)
-				os.Rename(from, to)
-				totalRemoved++
 			}
 		}
 	}
@@ -241,6 +226,30 @@ func mirror() {
 		}
 	}
 
+	fromMap := map[string]struct{}{}
+	for _, fromInfo := range fromInfos {
+		fromMap[fromInfo.Hash] = struct{}{}
+	}
+
+	for toName, toInfo := range toInfos {
+		if _, ok := fromMap[toInfo.Hash]; ok {
+			from := filepath.Join(toBase, toName)
+			to := filepath.Join(toBase, extraDir, toName)
+
+			fmt.Printf("moving %q\n", from)
+			fmt.Printf("    to %q\n", to)
+
+			os.MkdirAll(filepath.Dir(to), 0755)
+			err = os.Rename(from, to)
+			if err != nil {
+				fmt.Println("###:1", err)
+			}
+
+			delete(toOriginalInfos, toName)
+			originalInfosChanged = true
+		}
+	}
+
 	toMap := map[string][]string{}
 	for toName, toInfo := range toInfos {
 		toMap[toInfo.Hash] = append(toMap[toInfo.Hash], toName)
@@ -255,7 +264,7 @@ func mirror() {
 			os.MkdirAll(toDir, 0755)
 			err = os.Rename(filepath.Join(toBase, toNames[0]), toName)
 			if err != nil {
-				fmt.Println("###", err)
+				fmt.Println("###:2", err)
 			}
 			delete(fromInfos, name)
 			delete(toInfos, toNames[0])
@@ -274,7 +283,7 @@ func mirror() {
 			os.MkdirAll(toDir, 0755)
 			err = copyFile(filepath.Join(fromBase, name), toName, fromInfo.Mode)
 			if err != nil {
-				fmt.Println("###", err)
+				fmt.Println("###:3", err)
 			}
 			delete(toInfos, name)
 			toOriginalInfos[name] = fromInfo
@@ -284,7 +293,7 @@ func mirror() {
 
 	for toName := range toInfos {
 		from := filepath.Join(toBase, toName)
-		to := filepath.Join(toBase, backupDir, toName)
+		to := filepath.Join(toBase, dupsDir, toName)
 
 		fmt.Printf("moving %q\n", from)
 		fmt.Printf("    to %q\n", to)
@@ -292,7 +301,7 @@ func mirror() {
 		os.MkdirAll(filepath.Dir(to), 0755)
 		err = os.Rename(from, to)
 		if err != nil {
-			fmt.Println("###", err)
+			fmt.Println("###:4", err)
 		}
 
 		delete(toOriginalInfos, toName)
@@ -304,6 +313,82 @@ func mirror() {
 		removeEmptyFolders(toBase)
 	}
 	rehashPath(toBase)
+}
+
+func merge() {
+	if *fromFlag == "" || *fromFlag == "/" {
+		log.Println("-from is required.")
+		os.Exit(1)
+	}
+	if *toFlag == "" || *toFlag == "/" {
+		log.Println("-to is required.")
+		os.Exit(1)
+	}
+
+	fromBase, err := filepath.Abs(*fromFlag)
+	if err != nil {
+		panic(err)
+	}
+	toBase, err := filepath.Abs(*toFlag)
+	if err != nil {
+		panic(err)
+	}
+
+	fromInfos := rehashPath(fromBase)
+	toInfos := rehashPath(toBase)
+
+	toHashes := map[string]struct{}{}
+	for _, toInfo := range toInfos {
+		toHashes[toInfo.Hash] = struct{}{}
+	}
+
+	toInfosChanged := false
+
+	for fromName, fromInfo := range fromInfos {
+		if _, ok := toHashes[fromInfo.Hash]; ok {
+			continue
+		}
+		nameBase := ""
+		nameExt := filepath.Ext(fromName)
+		if nameExt != "" {
+			nameExt = nameExt[1:]
+			nameBase = fromName[:len(fromName)-len(nameExt)-1]
+		} else {
+			nameBase = fromName
+		}
+
+		toName := fromName
+		if _, ok := toInfos[toName]; ok {
+			for i := 1; ; i++ {
+				toName = fmt.Sprintf("%s (%d).%s", nameBase, i, nameExt)
+				if _, ok = toInfos[toName]; !ok {
+					break
+				}
+			}
+		}
+
+		fromFileName := filepath.Join(fromBase, fromName)
+		toFileName := filepath.Join(toBase, toName)
+
+		os.MkdirAll(filepath.Dir(toFileName), 0755)
+		err = os.Rename(fromFileName, toFileName)
+		if err != nil {
+			fmt.Printf("copy %q\n  to %q\n", fromFileName, toFileName)
+			err = copyFile(fromFileName, toFileName, fromInfo.Mode)
+		} else {
+			fmt.Printf("move %q\n  to %q\n", fromFileName, toFileName)
+		}
+
+		if err != nil {
+			fmt.Printf("### ERROR: %v\n", err)
+		} else {
+			toInfos[toName] = fromInfo
+			toInfosChanged = true
+		}
+	}
+	if toInfosChanged {
+		storeInfos(filepath.Join(toBase, hashFileName), toInfos)
+	}
 }
 
 func infoKey(name string, size int64, modTime time.Time) string {
@@ -340,18 +425,24 @@ func rehashPath(basePath string) map[string]hashInfo {
 	shoudStore := false
 
 	err = filepath.Walk(basePath, func(name string, info os.FileInfo, err error) error {
-		name = norm.NFC.String(name)
-		if info.Name() == backupDir {
-			return filepath.SkipDir
-		}
-		if err != nil ||
-			info.IsDir() ||
-			info.Size() == 0 ||
-			info.Name() == ".DS_Store" ||
-			info.Name() == hashFileName {
-
+		if err != nil {
 			return nil
 		}
+		name = norm.NFC.String(name)
+		if info.IsDir() && (info.Name() == extraDir || info.Name() == dupsDir) {
+			return filepath.SkipDir
+		}
+
+		if info.Name() == ".DS_Store" || strings.HasPrefix(info.Name(), "._") {
+			fmt.Printf("removing %q\n", name)
+			os.Remove(name)
+			return nil
+		}
+
+		if info.IsDir() || info.Size() == 0 || info.Name() == hashFileName {
+			return nil
+		}
+
 		relName := name[len(basePath)+1:]
 		baseName := filepath.Base(name)
 		key := infoKey(baseName, info.Size(), info.ModTime())
@@ -438,6 +529,7 @@ func copyFile(src, dst string, perm os.FileMode) error {
 	}
 	defer from.Close()
 
+	os.MkdirAll(filepath.Dir(dst), 0755)
 	to, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, perm)
 	if err != nil {
 		return err

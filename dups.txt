@@ -1,0 +1,432 @@
+rehashing "private/Andrew/dev/connect6/.gitignore"
+rehashing "private/Andrew/dev/connect6/.metadata"
+rehashing "private/Andrew/dev/connect6/.packages"
+rehashing "private/Andrew/dev/connect6/android/.gitignore"
+rehashing "private/Andrew/dev/connect6/ios/.gitignore"
+rehashing "private/Andrew/dev/envoy/src/github.com/andrew-suprun/envoy/.gitignore"
+rehashing "private/Andrew/dev/epubs-dart/.packages"
+rehashing "private/Andrew/dev/epubs-go/.gitignore"
+rehashing "private/Andrew/dev/legion/.gitignore"
+rehashing "private/Andrew/dev/legion-dart/.packages"
+rehashing "private/Andrew/dev/legion-go/.gitignore"
+rehashing "private/Andrew/dev/legion-hg/.gitignore"
+rehashing "private/Andrew/dev/legion-hg/.hgignore"
+rehashing "private/Andrew/dev/legion-services/.gitignore"
+rehashing "private/Andrew/dev/rulemaker/.gitignore"
+rehashing "private/Andrew/dev/rules/.gitignore"
+rehashing "private/Andrew/dev/rules/vendor/github.com/BurntSushi/toml/.gitignore"
+rehashing "private/Andrew/dev/rules/vendor/github.com/BurntSushi/toml/.travis.yml"
+rehashing "private/Andrew/dev/rules/vendor/github.com/radovskyb/watcher/.travis.yml"
+rehashing "private/Andrew/dev/rules/vendor/github.com/tealeg/xlsx/.gitignore"
+rehashing "private/Andrew/dev/rules/vendor/github.com/tealeg/xlsx/.travis.yml"
+rehashing "private/Andrew/dev/scanner/.gitignore"
+---- Storing file "/Volumes/Archive/arc/.hashes.json" ----
+7bae3be2cb265856f9916b3c7f973f77
+    private/Andrew/dev/legion-go/json
+        json.go
+    private/Andrew/dev/legion-hg/json
+        json.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/json
+        json.go
+    private/Andrew/dev/legion/json
+        json.go
+0178a207aca92c792fee181a62ee4439
+    private/Andrew/dev/legion-go
+        go.mod
+    private/Andrew/dev/legion
+        go.mod
+db2d07b0e9936ea73f6e7cefdf8cac6d
+    private/Andrew/dev/legion-go/vendor/github.com/reillywatson/goloose
+        README.md
+    private/Andrew/dev/legion-hg/vendor/github.com/reillywatson/goloose
+        README.md
+    private/Andrew/dev/legion-services/vendor/github.com/reillywatson/goloose
+        README.md
+    private/Andrew/dev/legion/vendor/github.com/reillywatson/goloose
+        README.md
+99febaa82b2afede73ba6fb6658cae37
+    private/Andrew/dev/legion-hg/apps/server
+        server.go
+    private/Andrew/dev/legion-services/apps/server
+        server.go
+978c1bee49d7ad5fc1a4d81099b13e18
+    private/Andrew/dev/connect6/ios/Runner/Assets.xcassets/LaunchImage.imageset
+        LaunchImage.png
+        LaunchImage@2x.png
+        LaunchImage@3x.png
+fce2621d052f73b488603af5885f1fb6
+    private/Andrew/dev/legion-go/diagnostics
+        diagnostics.go
+    private/Andrew/dev/legion/diagnostics
+        diagnostics.go
+27c7e24d5bfb4f14a7978883bebfaf73
+    private/Andrew/dev/connect6/ios/Runner/Assets.xcassets/AppIcon.appiconset
+        Icon-App-40x40@3x.png
+        Icon-App-60x60@2x.png
+2205151f4456d230b6124925e7b0f65f
+    private/Andrew/dev/legion-go/persistence/in_memory
+        in_memory.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/persistence/in_memory
+        in_memory.go
+    private/Andrew/dev/legion/persistence/in_memory
+        in_memory.go
+9ee17c73be580f21ae400805bbba9f82
+    private/Maria/all but music
+        2a507ac6fa98.rar
+        aaa.rar
+b5d543310d68c03e3cc813a5b97eab96
+    private/Maria
+        CoverLetter gnss.doc
+        CoverLetter.doc
+a32b2b8e431d69b35b8df31f4a79c037
+    private/videos
+        MVI_0048.AVI
+        mvi_0048.avi
+aaa980e54975388f26833fdb60e5749c
+    private/Andrew/dev/legion-go/tests
+        validators.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/tests
+        validators.go
+    private/Andrew/dev/legion/tests
+        validators.go
+4ab4e4f17fd588db54d50873bd23b790
+    private/Andrew/dev/epubs-dart
+        analysis_options.yaml
+    private/Andrew/dev/legion-dart
+        analysis_options.yaml
+f1ba00ed9455070f0970d40cb76554ea
+    private/Andrew/dev/legion-go/debug
+        debug.go
+    private/Andrew/dev/legion-hg/debug
+        debug.go
+    private/Andrew/dev/legion/debug
+        debug.go
+c42cc5544f0b3fcfef307515c3b3b90b
+    private/Andrew/dev/legion-go/aggregates
+        aggregates.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/aggregates
+        aggregates.go
+    private/Andrew/dev/legion/aggregates
+        aggregates.go
+69874bb8677e8da11a831c8e5a7cbb6a
+    private/Andrew/dev/legion-go/tasks
+        tasks_test.go
+    private/Andrew/dev/legion-hg/tasks
+        tasks_test.go
+    private/Andrew/dev/legion/tasks
+        tasks_test.go
+eece3a7777d2fbc77100e973c383be99
+    private/Andrew/dev/legion-go/server
+        server.go
+    private/Andrew/dev/legion/server
+        server.go
+2c41f490620d323e37e0b87f5c6ce929
+    private/Andrew/dev/legion-go/tasks
+        tasks.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/tasks
+        tasks.go
+    private/Andrew/dev/legion/tasks
+        tasks.go
+d062b3864ffe7e31a8c0e1afc60751cc
+    private/Andrew/dev/legion-go/vendor/github.com/reillywatson/goloose
+        go.mod
+    private/Andrew/dev/legion-hg/vendor/github.com/reillywatson/goloose
+        go.mod
+    private/Andrew/dev/legion-services/vendor/github.com/reillywatson/goloose
+        go.mod
+    private/Andrew/dev/legion/vendor/github.com/reillywatson/goloose
+        go.mod
+d48c11ff615b58835c3f266004c760fa
+    private/Andrew/dev/legion-go/tests
+        tests_test.go
+    private/Andrew/dev/legion/tests
+        tests_test.go
+ed689ca8a5a378782dc5332af22b68e6
+    private/Andrew/resume
+        07-01-29.doc
+    private/Maria/all but music
+        Andrew Suprun.doc
+f64000ee938a3e6c08beaf817cc56dd5
+    private/Andrew/dev/legion-go/persistence/mongo
+        mongo.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/persistence/mongo
+        mongo.go
+    private/Andrew/dev/legion/persistence/mongo
+        mongo.go
+91862790603b86b3b26bae10e19eacc9
+    private/Zeev
+        Debat.doc
+        Débat.doc
+edd3b8abdcafe68ca082cf2b0a84173f
+    private/videos/kempo/embu/VIDEO_RM
+        VIDEO_RM.BUP
+        VIDEO_RM.IFO
+2e6e146e0b5758982c0c1e73576ccc0f
+    private/Andrew/resume
+        05-01-26.doc
+        05-02-01.doc
+ba16179077cfce2d1b2b2791a19c4ef2
+    private/Andrew/dev/legion-go/aggregates
+        aggregates_test.go
+    private/Andrew/dev/legion/aggregates
+        aggregates_test.go
+53ad7d8acb43f46a5741026dc9b05fca
+    private/Andrew/dev/legion-go/actors
+        actors.go
+    private/Andrew/dev/legion-hg/actors
+        actors.go
+    private/Andrew/dev/legion/actors
+        actors.go
+515a8ec35bfe1566c3896429c899ed53
+    private/Andrew/dev/legion-go/apps/server
+        server.go
+    private/Andrew/dev/legion/apps/server
+        server.go
+56b1e4b1f6b3b790f471044c301e69ea
+    private/Andrew/dev/connect6/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata
+        WorkspaceSettings.xcsettings
+    private/Andrew/dev/connect6/ios/Runner.xcworkspace/xcshareddata
+        WorkspaceSettings.xcsettings
+098b4d65ecb530256a5bf08e638dbeda
+    private/Maria/Accounting
+        Portfolio Report July 27, 2005 - Maria.pdf
+    private/Maria/all but music/Masha/Accounting
+        Portfolio Report July 27, 2005 - Maria.pdf
+9725c50293780ae164b25df2e0e37e4c
+    private/Andrew/dev/legion-go/es
+        event_sourcing.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/es
+        event_sourcing.go
+    private/Andrew/dev/legion/es
+        event_sourcing.go
+09a2ab99434848408daf4aaefc7acab6
+    private/Andrew/dev/legion-go/server
+        server_test.go
+    private/Andrew/dev/legion/server
+        server_test.go
+c864219bf0828fe71086110d71104dec
+    private/videos/kempo/embu/VIDEO_TS
+        VIDEO_TS.BUP
+        VIDEO_TS.IFO
+6d2693aa32751d0359f56eb971970467
+    private/Andrew/dev/legion-go/vendor/github.com/reillywatson/goloose
+        field.go
+    private/Andrew/dev/legion-hg/vendor/github.com/reillywatson/goloose
+        field.go
+    private/Andrew/dev/legion-services/vendor/github.com/reillywatson/goloose
+        field.go
+    private/Andrew/dev/legion/vendor/github.com/reillywatson/goloose
+        field.go
+e252b1da4b8df0c0ae130d9cd2fcfaa5
+    private/Andrew/dev/legion-go/locale
+        locale.go
+    private/Andrew/dev/legion/locale
+        locale.go
+117105d2f2ee718eb485a07574a219b6
+    private/Andrew/dev/Connect6/Connect6.xcodeproj/project.xcworkspace/xcshareddata
+        IDEWorkspaceChecks.plist
+    private/Andrew/dev/connect6/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata
+        IDEWorkspaceChecks.plist
+    private/Andrew/dev/connect6/ios/Runner.xcworkspace/xcshareddata
+        IDEWorkspaceChecks.plist
+49081a421fcfa6ecb540f51001060314
+    private/Andrew/dev/legion-go/vendor
+        modules.txt
+    private/Andrew/dev/legion-hg/vendor
+        modules.txt
+    private/Andrew/dev/legion/vendor
+        modules.txt
+fcb74f15ec5aca51081680fc68dd04ff
+    private/Andrew/dev/legion-go
+        notes.md
+    private/Andrew/dev/legion
+        notes.md
+ac2557226d5301a2d65b5f6ff0591d40
+    private/Andrew/dev/legion-go/validation
+        validation.go
+    private/Andrew/dev/legion-hg/validation
+        validation.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/validation
+        validation.go
+    private/Andrew/dev/legion/validation
+        validation.go
+5e58eab362c46ae9c7e5685ba275d271
+    private/Andrew/dev/legion-go/vendor/github.com/reillywatson/goloose
+        goloose.go
+    private/Andrew/dev/legion-hg/vendor/github.com/reillywatson/goloose
+        goloose.go
+    private/Andrew/dev/legion-services/vendor/github.com/reillywatson/goloose
+        goloose.go
+    private/Andrew/dev/legion/vendor/github.com/reillywatson/goloose
+        goloose.go
+19898f3eea0783250a0e2a20dc147827
+    private/Andrew/dev/connect6/ios/Runner/Assets.xcassets/AppIcon.appiconset
+        Icon-App-20x20@2x.png
+        Icon-App-40x40@1x.png
+6e963af95d538d70946b376b9eee6af4
+    private/Andrew/dev/legion-go/tests
+        tests.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/tests
+        tests.go
+    private/Andrew/dev/legion/tests
+        tests.go
+f954e1f3619be45a9776c8a104751b56
+    private/Andrew/dev/legion-go
+        README.md
+    private/Andrew/dev/legion-hg
+        README.md
+    private/Andrew/dev/legion
+        README.md
+7e2f3bef69983b83b07ad31566a98200
+    private/Andrew/dev/legion-go/queue
+        queue.go
+    private/Andrew/dev/legion-hg/queue
+        queue.go
+    private/Andrew/dev/legion/queue
+        queue.go
+2f0daa6dd60766e949bea925ee6803e4
+    private/Maria/Accounting
+        Portfolio Report July 27, 2005 - Andrew.pdf
+    private/Maria/all but music/Masha/Accounting
+        Portfolio Report July 27, 2005 - Andrew.pdf
+bd6254e10068a9a3539aa9710626ac24
+    private/Andrew/dev/connect6/ios/Flutter
+        Debug.xcconfig
+        Release.xcconfig
+6285d2974293b23062f1a2d944582de5
+    private/Andrew/dev/legion-go
+        .gitignore
+    private/Andrew/dev/legion-hg
+        .gitignore
+    private/Andrew/dev/legion
+        .gitignore
+159ddadd0f6496a73d827885b33f7fd0
+    private/Andrew/dev/legion-go
+        go.sum
+    private/Andrew/dev/legion
+        go.sum
+bbd38e544510a1a87beaf8d625f13c5f
+    private/Andrew/dev/Connect6/Tests iOS
+        Info.plist
+    private/Andrew/dev/Connect6/Tests macOS
+        Info.plist
+aa9a1bfa84573527c0ef451bb63ad316
+    private/videos/kempo/embu/VIDEO_TS
+        VTS_01_0.BUP
+        VTS_01_0.IFO
+3533fb51abb3c30361e608748df75f82
+    private/Andrew/dev/legion-go/tests
+        validators_test.go
+    private/Andrew/dev/legion/tests
+        validators_test.go
+911690f51af322440237a253d695d19f
+    private/Andrew/dev/epubs-go
+        LICENSE
+    private/Andrew/dev/legion-go
+        LICENSE
+    private/Andrew/dev/legion-hg
+        LICENSE
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion
+        LICENSE
+    private/Andrew/dev/legion
+        LICENSE
+7053ea3423578187357b9f92d0c67fc6
+    private/Andrew/dev/connect6/ios/Runner.xcodeproj/project.xcworkspace
+        contents.xcworkspacedata
+    private/Andrew/dev/connect6/ios/Runner.xcworkspace
+        contents.xcworkspacedata
+79dca0d6a1264f369ff9ea51147f7100
+    private/Andrew/dev/connect6/android/app/src/debug
+        AndroidManifest.xml
+    private/Andrew/dev/connect6/android/app/src/profile
+        AndroidManifest.xml
+e32ca99e7aa9432f0b97f90da407d86c
+    private/Andrew/dev/legion-go/tests
+        reply.go
+    private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/tests
+        reply.go
+    private/Andrew/dev/legion/tests
+        reply.go
+
+ counts:
+   6 "private/Andrew/dev/legion"
+   6 "private/Andrew/dev/legion-go"
+   5 "private/Andrew/dev/legion/tests"
+   5 "private/Andrew/dev/legion-go/tests"
+   4 "private/Andrew/dev/legion-hg/vendor/github.com/reillywatson/goloose"
+   4 "private/Andrew/dev/legion-services/vendor/github.com/reillywatson/goloose"
+   4 "private/videos/kempo/embu/VIDEO_TS"
+   4 "private/Andrew/dev/legion-go/vendor/github.com/reillywatson/goloose"
+   4 "private/Andrew/dev/legion/vendor/github.com/reillywatson/goloose"
+   4 "private/Andrew/dev/connect6/ios/Runner/Assets.xcassets/AppIcon.appiconset"
+   3 "private/Maria/all but music"
+   3 "private/Andrew/dev/legion-hg"
+   3 "private/Andrew/resume"
+   3 "private/Andrew/dev/connect6/ios/Runner/Assets.xcassets/LaunchImage.imageset"
+   3 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/tests"
+   2 "private/Andrew/dev/legion-go/server"
+   2 "private/Andrew/dev/legion-go/aggregates"
+   2 "private/Maria/all but music/Masha/Accounting"
+   2 "private/videos/kempo/embu/VIDEO_RM"
+   2 "private/Andrew/dev/legion/aggregates"
+   2 "private/Maria"
+   2 "private/Andrew/dev/connect6/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata"
+   2 "private/Andrew/dev/legion/tasks"
+   2 "private/Andrew/dev/legion/server"
+   2 "private/Andrew/dev/connect6/ios/Flutter"
+   2 "private/Zeev"
+   2 "private/Maria/Accounting"
+   2 "private/videos"
+   2 "private/Andrew/dev/legion-go/tasks"
+   2 "private/Andrew/dev/connect6/ios/Runner.xcworkspace/xcshareddata"
+   1 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/persistence/in_memory"
+   1 "private/Andrew/dev/legion/vendor"
+   1 "private/Andrew/dev/legion/validation"
+   1 "private/Andrew/dev/Connect6/Tests macOS"
+   1 "private/Andrew/dev/legion-go/queue"
+   1 "private/Andrew/dev/legion-go/diagnostics"
+   1 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion"
+   1 "private/Andrew/dev/connect6/ios/Runner.xcodeproj/project.xcworkspace"
+   1 "private/Andrew/dev/legion/es"
+   1 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/es"
+   1 "private/Andrew/dev/legion/actors"
+   1 "private/Andrew/dev/legion/json"
+   1 "private/Andrew/dev/legion-go/vendor"
+   1 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/json"
+   1 "private/Andrew/dev/legion-hg/tasks"
+   1 "private/Andrew/dev/legion/apps/server"
+   1 "private/Andrew/dev/legion-services/apps/server"
+   1 "private/Andrew/dev/epubs-go"
+   1 "private/Andrew/dev/legion/diagnostics"
+   1 "private/Andrew/dev/legion-hg/queue"
+   1 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/tasks"
+   1 "private/Andrew/dev/legion-dart"
+   1 "private/Andrew/dev/legion-go/debug"
+   1 "private/Andrew/dev/Connect6/Connect6.xcodeproj/project.xcworkspace/xcshareddata"
+   1 "private/Andrew/dev/legion-hg/json"
+   1 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/persistence/mongo"
+   1 "private/Andrew/dev/epubs-dart"
+   1 "private/Andrew/dev/legion-go/actors"
+   1 "private/Andrew/dev/legion/persistence/mongo"
+   1 "private/Andrew/dev/connect6/ios/Runner.xcworkspace"
+   1 "private/Andrew/dev/connect6/android/app/src/profile"
+   1 "private/Andrew/dev/legion-hg/vendor"
+   1 "private/Andrew/dev/legion-hg/debug"
+   1 "private/Andrew/dev/legion/persistence/in_memory"
+   1 "private/Andrew/dev/legion-hg/actors"
+   1 "private/Andrew/dev/connect6/android/app/src/debug"
+   1 "private/Andrew/dev/legion-go/locale"
+   1 "private/Andrew/dev/legion/queue"
+   1 "private/Andrew/dev/legion-hg/validation"
+   1 "private/Andrew/dev/legion-go/json"
+   1 "private/Andrew/dev/legion/debug"
+   1 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/aggregates"
+   1 "private/Andrew/dev/legion-go/persistence/mongo"
+   1 "private/Andrew/dev/legion-services/vendor/github.com/andrew-suprun/legion/validation"
+   1 "private/Andrew/dev/legion-hg/apps/server"
+   1 "private/Andrew/dev/legion-go/es"
+   1 "private/Andrew/dev/legion-go/validation"
+   1 "private/Andrew/dev/legion-go/apps/server"
+   1 "private/Andrew/dev/legion-go/persistence/in_memory"
+   1 "private/Andrew/dev/Connect6/Tests iOS"
+   1 "private/Andrew/dev/legion/locale"
