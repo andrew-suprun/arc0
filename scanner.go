@@ -24,7 +24,7 @@ var fromFlag = flag.String("from", "", "Directory to move files from.")
 var toFlag = flag.String("to", "", "Directory to move files to.")
 var dirFlag = flag.String("dir", "", "")
 
-const extraDir = "~~~extra~~~"
+const extrasDir = "~~~extras~~~"
 const dupsDir = "~~~dups~~~"
 const hashFileName = ".hashes.json"
 
@@ -36,8 +36,8 @@ func main() {
 	if len(os.Args) > 1 {
 		flag.CommandLine.Parse(os.Args[2:])
 		switch os.Args[1] {
-		case "rehash":
-			rehash()
+		case "hash":
+			hash()
 		case "dedup":
 			dedup()
 		case "mirror":
@@ -69,11 +69,10 @@ func interrupted() bool {
 type hashInfo struct {
 	Size    int64
 	Hash    string
-	Mode    os.FileMode
 	ModTime time.Time
 }
 
-func rehash() {
+func hash() {
 	if *pathFlag == "" || *pathFlag == "/" {
 		log.Println("-path flag is required.")
 		os.Exit(1)
@@ -82,7 +81,7 @@ func rehash() {
 	if err != nil {
 		panic(err)
 	}
-	rehashPath(path)
+	hashPath(path)
 }
 
 type counts struct {
@@ -100,7 +99,7 @@ func dedup() {
 	if err != nil {
 		panic(err)
 	}
-	infos := rehashPath(basePath)
+	infos := hashPath(basePath)
 
 	hashMap := map[string][]string{}
 	dirCounts := map[string]int{}
@@ -187,7 +186,7 @@ func dedup() {
 	}
 	if totalRemoved > 0 {
 		fmt.Println("### total removed", totalRemoved)
-		rehashPath(basePath)
+		hashPath(basePath)
 	}
 }
 
@@ -210,8 +209,14 @@ func mirror() {
 		panic(err)
 	}
 
-	fromInfos := rehashPath(fromBase)
-	toInfos := rehashPath(toBase)
+	fromInfos := hashPath(fromBase)
+	if interrupted() {
+		return
+	}
+	toInfos := hashPath(toBase)
+	if interrupted() {
+		return
+	}
 
 	toOriginalInfos := map[string]hashInfo{}
 	for name, info := range toInfos {
@@ -226,30 +231,35 @@ func mirror() {
 		}
 	}
 
-	fromMap := map[string]struct{}{}
-	for _, fromInfo := range fromInfos {
-		fromMap[fromInfo.Hash] = struct{}{}
-	}
+	// TODO: unnecessary?
+	// fromMap := map[string][]string{}
+	// for fromName, fromInfo := range fromInfos {
+	// 	fromMap[fromInfo.Hash] = append(fromMap[fromInfo.Hash], fromName)
+	// }
 
-	for toName, toInfo := range toInfos {
-		if _, ok := fromMap[toInfo.Hash]; ok {
-			from := filepath.Join(toBase, toName)
-			to := filepath.Join(toBase, extraDir, toName)
+	// for toName, toInfo := range toInfos {
+	// 	if fromNames, ok := fromMap[toInfo.Hash]; ok && len(fromNames) > 0 {
+	// 		fromName := fromNames[0]
+	// 		from := filepath.Join(toBase, toName)
+	// 		to := filepath.Join(toBase, fromName)
 
-			fmt.Printf("moving %q\n", from)
-			fmt.Printf("    to %q\n", to)
+	// 		fmt.Printf("moving %q\n", from)
+	// 		fmt.Printf("    to %q\n", to)
 
-			os.MkdirAll(filepath.Dir(to), 0755)
-			err = os.Rename(from, to)
-			if err != nil {
-				fmt.Println("###:1", err)
-			}
+	// 		os.MkdirAll(filepath.Dir(to), 0755)
+	// 		err = os.Rename(from, to)
+	// 		if err != nil {
+	// 			fmt.Println("###:1", err)
+	// 		}
 
-			delete(toInfos, toName)
-			delete(toOriginalInfos, toName)
-			originalInfosChanged = true
-		}
-	}
+	// 		fromMap[toInfo.Hash] = fromNames[1:]
+	// 		delete(fromInfos, fromName)
+	// 		delete(toInfos, toName)
+	// 		delete(toOriginalInfos, toName)
+	// 		toOriginalInfos[fromName] = toInfo
+	// 		originalInfosChanged = true
+	// 	}
+	// }
 
 	toMap := map[string][]string{}
 	for toName, toInfo := range toInfos {
@@ -257,6 +267,9 @@ func mirror() {
 	}
 
 	for name, fromInfo := range fromInfos {
+		if interrupted() {
+			break
+		}
 		if toNames, ok := toMap[fromInfo.Hash]; ok && len(toNames) > 0 {
 			fmt.Printf("rename %q\n", toNames[0])
 			fmt.Printf("    as %q\n", name)
@@ -277,12 +290,15 @@ func mirror() {
 	}
 
 	for name, fromInfo := range fromInfos {
+		if interrupted() {
+			break
+		}
 		if toNames, ok := toMap[fromInfo.Hash]; !ok || len(toNames) == 0 {
 			fmt.Printf("copy   %q\n", name)
 			toName := filepath.Join(toBase, name)
 			toDir := filepath.Dir(toName)
 			os.MkdirAll(toDir, 0755)
-			err = copyFile(filepath.Join(fromBase, name), toName, fromInfo.Mode)
+			err = copyFile(filepath.Join(fromBase, name), toName)
 			if err != nil {
 				fmt.Println("###:3", err)
 			}
@@ -293,8 +309,11 @@ func mirror() {
 	}
 
 	for toName := range toInfos {
+		if interrupted() {
+			break
+		}
 		from := filepath.Join(toBase, toName)
-		to := filepath.Join(toBase, dupsDir, toName)
+		to := filepath.Join(toBase, extrasDir, toName)
 
 		fmt.Printf("moving %q\n", from)
 		fmt.Printf("    to %q\n", to)
@@ -313,7 +332,10 @@ func mirror() {
 		storeInfos(filepath.Join(toBase, hashFileName), toOriginalInfos)
 		removeEmptyFolders(toBase)
 	}
-	rehashPath(toBase)
+	if interrupted() {
+		return
+	}
+	hashPath(toBase)
 }
 
 func merge() {
@@ -335,8 +357,8 @@ func merge() {
 		panic(err)
 	}
 
-	fromInfos := rehashPath(fromBase)
-	toInfos := rehashPath(toBase)
+	fromInfos := hashPath(fromBase)
+	toInfos := hashPath(toBase)
 
 	toHashes := map[string]struct{}{}
 	for _, toInfo := range toInfos {
@@ -375,7 +397,7 @@ func merge() {
 		err = os.Rename(fromFileName, toFileName)
 		if err != nil {
 			fmt.Printf("copy %q\n  to %q\n", fromFileName, toFileName)
-			err = copyFile(fromFileName, toFileName, fromInfo.Mode)
+			err = copyFile(fromFileName, toFileName)
 		} else {
 			fmt.Printf("move %q\n  to %q\n", fromFileName, toFileName)
 		}
@@ -396,7 +418,7 @@ func infoKey(name string, size int64, modTime time.Time) string {
 	return fmt.Sprintf("%s:%d:%s", filepath.Base(name), size, modTime.UTC().Format("2006-01-02:15:04:05.999999999"))
 }
 
-func rehashPath(basePath string) map[string]hashInfo {
+func hashPath(basePath string) map[string]hashInfo {
 	absHashFileName := filepath.Join(basePath, hashFileName)
 	originalInfoMap := map[string]hashInfo{}
 	infoMap := map[string]hashInfo{}
@@ -430,7 +452,7 @@ func rehashPath(basePath string) map[string]hashInfo {
 			return nil
 		}
 		name = norm.NFC.String(name)
-		if info.IsDir() && (info.Name() == extraDir || info.Name() == dupsDir) {
+		if info.IsDir() && (info.Name() == extrasDir || info.Name() == dupsDir) {
 			return filepath.SkipDir
 		}
 
@@ -453,7 +475,7 @@ func rehashPath(basePath string) map[string]hashInfo {
 			delete(originalInfoMap, relName)
 			return nil
 		}
-		fmt.Printf("rehashing %q\n", relName)
+		fmt.Printf(" hashing %q\n", name)
 		shoudStore = true
 
 		hash, err := hashFile(name)
@@ -465,7 +487,6 @@ func rehashPath(basePath string) map[string]hashInfo {
 		newInfoMap[relName] = hashInfo{
 			Size:    info.Size(),
 			Hash:    hash,
-			Mode:    info.Mode(),
 			ModTime: info.ModTime(),
 		}
 
@@ -523,15 +544,20 @@ func hashFile(name string) (hash string, err error) {
 	return fmt.Sprintf("%x", md5Hash.Sum(nil)), err
 }
 
-func copyFile(src, dst string, perm os.FileMode) error {
-	err := copyFileInternal(src, dst, perm)
+func copyFile(src, dst string) error {
+	err := copyFileInternal(src, dst)
 	if err != nil {
 		return err
 	}
 	return setFileModTime(src, dst)
 }
 
-func copyFileInternal(src, dst string, perm os.FileMode) error {
+func copyFileInternal(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
 	from, err := os.Open(src)
 	if err != nil {
 		return err
@@ -539,7 +565,7 @@ func copyFileInternal(src, dst string, perm os.FileMode) error {
 	defer from.Close()
 
 	os.MkdirAll(filepath.Dir(dst), 0755)
-	to, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, perm)
+	to, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, info.Mode())
 	if err != nil {
 		return err
 	}
