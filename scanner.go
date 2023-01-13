@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -426,7 +425,7 @@ func hashPath(basePath string) map[string]hashInfo {
 
 	hashInfoFile, err := os.Open(absHashFileName)
 	if err == nil {
-		buf, err := ioutil.ReadAll(hashInfoFile)
+		buf, err := io.ReadAll(hashInfoFile)
 		if err != nil {
 			panic(err)
 		}
@@ -478,7 +477,7 @@ func hashPath(basePath string) map[string]hashInfo {
 		fmt.Printf(" hashing %q\n", name)
 		shoudStore = true
 
-		hash, err := hashFile(name)
+		hash, err := hashFileX(name)
 		if err != nil {
 			log.Printf("FAILED to process %s: %v\n", name, err)
 			return err
@@ -492,6 +491,9 @@ func hashPath(basePath string) map[string]hashInfo {
 
 		return nil
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	if interrupted() {
 		for name, info := range originalInfoMap {
@@ -509,7 +511,7 @@ func hashPath(basePath string) map[string]hashInfo {
 	return newInfoMap
 }
 
-func hashFile(name string) (hash string, err error) {
+func hashFileX(name string) (hash string, err error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return "", err
@@ -627,7 +629,7 @@ func storeInfos(name string, infoMap map[string]hashInfo) {
 }
 
 func removeEmptyFolders(path string) bool {
-	infos, _ := ioutil.ReadDir(path)
+	infos, _ := os.ReadDir(path)
 
 	empty := true
 	for _, info := range infos {
