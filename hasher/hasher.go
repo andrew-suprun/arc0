@@ -4,52 +4,51 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"io"
+	"io/fs"
 )
 
-type FS interface {
-	Open(name string) (File, error)
-}
-
-type File interface {
-	Read([]byte) (int, error)
-	Close() error
-}
-
-type FileHash struct {
+type FileHashResult struct {
 	Path string
 	Hash string
-	Read int
-	Err  error
 }
 
-func Run(ctx context.Context, fs FS, paths <-chan string, results chan<- FileHash) {
+type FileHashStat struct {
+	Path   string
+	Hashed int64
+}
+
+type FileHashError struct {
+	Path  string
+	Error error
+}
+
+func HashFile(ctx context.Context, fsys fs.FS, path string) (results chan any) {
 	var (
-		file File
-		read int
-		path string
+		file fs.File
 		hash = sha256.New()
 		buf  = make([]byte, 1024*1024)
 		err  error
-		done bool
 	)
 
+	results = make(chan any)
+
 	hashFile := func() {
-		file, err = fs.Open(path)
+		defer close(results)
+
+		file, err = fsys.Open(path)
 		if err != nil {
-			results <- FileHash{Path: path, Err: err}
+			results <- FileHashError{Path: path, Error: err}
 			return
 		}
 		defer file.Close()
 
 		hash.Reset()
-		read = 0
+		var hashed int64
 
 		for {
 			select {
 			case <-ctx.Done():
-				done = true
 				return
 			default:
 			}
@@ -59,35 +58,29 @@ func Run(ctx context.Context, fs FS, paths <-chan string, results chan<- FileHas
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						results <- FileHash{Path: path, Err: err}
+						results <- FileHashError{Path: path, Error: err}
 						return
 					}
 				}
 				if nr != nw {
-					results <- FileHash{Path: path, Err: io.ErrShortWrite}
+					results <- FileHashError{Path: path, Error: io.ErrShortWrite}
 					return
 				}
-				read += nr
+				hashed += int64(nr)
 			}
 			if er == io.EOF {
 				break
 			}
 			if er != nil {
-				results <- FileHash{Path: path, Err: err}
+				results <- FileHashError{Path: path, Error: err}
 				return
 			}
-			results <- FileHash{Path: path, Read: read}
+
+			results <- FileHashStat{Path: path, Hashed: hashed}
 		}
-		results <- FileHash{Path: path, Read: read, Hash: base64.RawURLEncoding.EncodeToString(hash.Sum(nil))}
+		results <- FileHashResult{Path: path, Hash: base64.RawURLEncoding.EncodeToString(hash.Sum(nil))}
 	}
 
-	for !done {
-		select {
-		case path = <-paths:
-			hashFile()
-		case <-ctx.Done():
-			return
-		}
-	}
-	fmt.Println("Done")
+	go hashFile()
+	return results
 }

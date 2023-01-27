@@ -5,54 +5,42 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
-	"fmt"
 	"hash/fnv"
-	"io/fs"
-	"log"
-	"os"
 	"testing"
+	"time"
 )
 
-func TestFoo(t *testing.T) {
-	root := "/usr/local/go/bin"
-	fileSystem := os.DirFS(root)
-
-	fs.WalkDir(fileSystem, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			log.Fatal(err)
-		}
-		info, err := d.Info()
-		log.Println(d.Name(), info.Size())
-		return err
-	})
-	// t.Fail()
-}
-
-var a = [1000000]byte{}
-
 func TestFnv(t *testing.T) {
-	b := base64.RawURLEncoding
-	h := sha256.New224()
-	h.Write([]byte(""))
-	s := h.Sum(nil)
-	fmt.Printf("%x\n", s)
-	fmt.Println(b.EncodeToString(s))
-	h = sha256.New()
-	h.Write([]byte(""))
-	s = h.Sum(nil)
-	fmt.Printf("%x\n", s)
-	fmt.Println(b.EncodeToString(s))
-	h = sha512.New()
-	h.Write([]byte(""))
-	s = h.Sum(nil)
-	fmt.Printf("%x\n", s)
-	fmt.Println(b.EncodeToString(s))
-	t.Fail()
+	buf := [8 * 1024]byte{}
+	h := fnv.New128a()
+	start := time.Now()
+	for offset := 0; offset <= 1024*1024*1024; offset += len(buf) {
+		h.Write(buf[:])
+	}
+	s := time.Since(start).Seconds()
+	t.Log(1024 / s)
 }
+
+func TestHello(t *testing.T) {
+	buf := [8 * 1024]byte{}
+	h := sha256.New()
+	start := time.Now()
+	for offset := 0; offset <= 1024*1024*1024; offset += len(buf) {
+		h.Write(buf[:])
+	}
+	res := h.Sum(nil)
+	s := time.Since(start).Seconds()
+	t.Log(s)
+	t.Log(1024 / s)
+	t.Logf("%x\n", res)
+	t.Log(base64.RawURLEncoding.EncodeToString(res))
+}
+
+var a = [10_000_000]byte{}
 
 func BenchmarkFnv64(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		h := fnv.New64()
+		h := fnv.New64a()
 		h.Write(a[:])
 		h.Sum64()
 	}
@@ -60,7 +48,7 @@ func BenchmarkFnv64(b *testing.B) {
 
 func BenchmarkFnv128(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		h := fnv.New128()
+		h := fnv.New128a()
 		h.Write(a[:])
 		h.Sum(nil)
 	}
