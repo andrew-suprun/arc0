@@ -27,7 +27,7 @@ func HashFile(ctx context.Context, fsys fs.FS, path string) (results chan any) {
 	var (
 		file fs.File
 		hash = sha256.New()
-		buf  = make([]byte, 1024*1024)
+		buf  = make([]byte, 16*1024*1024)
 		err  error
 	)
 

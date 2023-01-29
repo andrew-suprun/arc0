@@ -54,12 +54,9 @@ func hash() {
 			progress := float64(update.TotalHashed) / float64(update.TotalToHash) * 100
 			dur := time.Since(start)
 			speed := float64(update.TotalHashed/(1024*1024)) / dur.Seconds()
-			eta := time.Now()
-			if progress < 100 {
-				// fmt.Println(update.TotalHashed, update.TotalToHash, float64(update.TotalHashed/update.TotalToHash), dur, time.Duration(float64(dur)*100/progress))
-				eta = eta.Add(time.Duration(float64(dur) * 100 / progress))
-			}
-			fmt.Printf("\033[G%6.2f %6.1f %v", progress, speed, eta.UTC().Format(time.RFC3339))
+			eta := time.Now().Add(time.Duration(float64(dur) * 100 / progress))
+			fmt.Printf("\033[G%6.2f%% %7v %5.1fMiB  ETA: %v", progress, dur.Truncate(time.Second), speed, eta.Format(time.Stamp))
+
 		case scanner.ScanResult:
 			// for _, update := range update {
 			// 	log.Printf("hash: %12d %s %s\n", update.Size, update.Hash, update.Path)

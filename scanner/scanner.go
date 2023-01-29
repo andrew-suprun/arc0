@@ -2,12 +2,10 @@ package scanner
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -31,24 +29,17 @@ type ScanError struct {
 	Error error
 }
 
-const threads = 1
-
 func Scan(ctx context.Context, base string) (results chan any) {
-	fmt.Println("scan", base)
 	results = make(chan any)
 
-	path, err := filepath.Abs(base)
-	if err != nil {
-		results <- ScanError{Path: path, Error: err}
-		return
-	}
-
-	fsys := os.DirFS(base)
-
-	wg := sync.WaitGroup{}
-	wg.Add(threads)
-
 	go func() {
+		path, err := filepath.Abs(base)
+		if err != nil {
+			results <- ScanError{Path: path, Error: err}
+			return
+		}
+
+		fsys := os.DirFS(base)
 		defer close(results)
 
 		infos := collectMeta(ctx, fsys, results)
@@ -79,52 +70,51 @@ func Scan(ctx context.Context, base string) (results chan any) {
 		var totalHashed atomic.Int64
 		requests := make(chan string)
 
-		for i := 0; i < threads; i++ {
-			go func() {
-				for path := range requests {
-					info := paths[path]
-					var hashed int64
-					updates := hasher.HashFile(ctx, fsys, path)
-					for update := range updates {
-						switch update := update.(type) {
-						case hasher.FileHashStat:
-							totalHashed.Add(update.Hashed - hashed)
-							hashed = update.Hashed
-							results <- ScanStat{
-								Path:        path,
-								Size:        info.Size,
-								Hashed:      hashed,
-								TotalToHash: totalSizeToHash,
-								TotalHashed: totalHashed.Load(),
-							}
-						case hasher.FileHashResult:
-							info.Hash = update.Hash
-							totalHashed.Add(info.Size - hashed)
-							results <- ScanFileResult(info)
-						case hasher.FileHashError:
-							totalHashed.Add(-hashed)
-							results <- ScanError{
-								Path:  path,
-								Error: update.Error,
-							}
+		go func() {
+			for path := range requests {
+				info := paths[path]
+				var hashed int64
+				updates := hasher.HashFile(ctx, fsys, path)
+				for update := range updates {
+					switch update := update.(type) {
+					case hasher.FileHashStat:
+						totalHashed.Add(update.Hashed - hashed)
+						hashed = update.Hashed
+						results <- ScanStat{
+							Path:        path,
+							Size:        info.Size,
+							Hashed:      hashed,
+							TotalToHash: totalSizeToHash,
+							TotalHashed: totalHashed.Load(),
+						}
+					case hasher.FileHashResult:
+						info.Hash = update.Hash
+						totalHashed.Add(info.Size - hashed)
+						results <- ScanFileResult(info)
+					case hasher.FileHashError:
+						totalHashed.Add(-hashed)
+						results <- ScanError{
+							Path:  path,
+							Error: update.Error,
 						}
 					}
 				}
-				wg.Done()
-			}()
-		}
+			}
+		}()
 
+	handleInfos:
 		for _, info := range infos {
 			if info.Hash == "" {
+				select {
+				case <-ctx.Done():
+					break handleInfos
+				default:
+				}
 				requests <- info.Path
 			}
 		}
 		close(requests)
-
-		wg.Wait()
-
 		meta.StoreMeta(path, infos)
-
 		results <- infos
 	}()
 
