@@ -3,14 +3,11 @@ package scanner
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 )
 
 func TestBasic(t *testing.T) {
-	fmt.Println(os.Getwd())
-	fsys := os.DirFS("../../../../Downloads")
-	updates := Scan(context.Background(), fsys, ".")
+	updates := Scan(context.Background(), "../../../../Downloads")
 	for update := range updates {
 		switch update := update.(type) {
 		case ScanStat:
@@ -21,7 +18,7 @@ func TestBasic(t *testing.T) {
 				fmt.Printf("hash: %12d %s %s\n", update.Size, update.Hash, update.Path)
 			}
 		case ScanError:
-			fmt.Printf("stat: file=%s error=%#v\n", update.Path, update.Error)
+			fmt.Printf("stat: file=%s error=%v\n", update.Path, update.Error)
 		}
 	}
 }

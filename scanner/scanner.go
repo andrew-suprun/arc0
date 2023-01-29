@@ -2,7 +2,10 @@ package scanner
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -12,6 +15,7 @@ import (
 	"scanner/meta"
 )
 
+type ScanFileResult *meta.FileMeta
 type ScanResult meta.FileMetas
 
 type ScanStat struct {
@@ -27,17 +31,27 @@ type ScanError struct {
 	Error error
 }
 
-const threads = 4
+const threads = 1
 
-func Scan(ctx context.Context, fsys fs.FS, path string) (results chan any) {
+func Scan(ctx context.Context, base string) (results chan any) {
+	fmt.Println("scan", base)
 	results = make(chan any)
+
+	path, err := filepath.Abs(base)
+	if err != nil {
+		results <- ScanError{Path: path, Error: err}
+		return
+	}
+
+	fsys := os.DirFS(base)
+
 	wg := sync.WaitGroup{}
 	wg.Add(threads)
 
 	go func() {
 		defer close(results)
 
-		infos := collectMeta(ctx, fsys, path, results)
+		infos := collectMeta(ctx, fsys, results)
 		paths := map[string]*meta.FileMeta{}
 		inodes := map[uint64]*meta.FileMeta{}
 		for _, meta := range infos {
@@ -86,6 +100,7 @@ func Scan(ctx context.Context, fsys fs.FS, path string) (results chan any) {
 						case hasher.FileHashResult:
 							info.Hash = update.Hash
 							totalHashed.Add(info.Size - hashed)
+							results <- ScanFileResult(info)
 						case hasher.FileHashError:
 							totalHashed.Add(-hashed)
 							results <- ScanError{
@@ -116,8 +131,8 @@ func Scan(ctx context.Context, fsys fs.FS, path string) (results chan any) {
 	return results
 }
 
-func collectMeta(ctx context.Context, fsys fs.FS, path string, results chan<- any) (metas ScanResult) {
-	fs.WalkDir(fsys, path, func(path string, d fs.DirEntry, err error) error {
+func collectMeta(ctx context.Context, fsys fs.FS, results chan<- any) (metas ScanResult) {
+	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			results <- ScanError{Path: path, Error: err}
 			return nil
