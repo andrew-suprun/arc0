@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -9,7 +10,7 @@ import (
 	"os/signal"
 	"time"
 
-	"scanner/scanner"
+	"scanner/fs"
 )
 
 var pathFlag = flag.String("path", "", "Directory to scan.")
@@ -41,30 +42,28 @@ func hash() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	results := scanner.Scan(ctx, *pathFlag)
+	results := fs.Scan(ctx, *pathFlag)
 	start := time.Now()
 	for result := range results {
 		if interrupted() {
 			cancel()
 		}
 		switch update := result.(type) {
-		case scanner.ScanFileResult:
+		case fs.ScanFileResult:
 			fmt.Printf("%12d %s\n", update.Size, update.Path)
-		case scanner.ScanStat:
-			progress := float64(update.TotalHashed) / float64(update.TotalToHash) * 100
+		case fs.ScanStat:
+			progress := float64(update.TotalHashed) / float64(update.TotalToHash)
 			dur := time.Since(start)
 			speed := float64(update.TotalHashed/(1024*1024)) / dur.Seconds()
-			eta := time.Now().Add(time.Duration(float64(dur) * 100 / progress))
-			fmt.Printf("\033[G%6.2f%% %7v %5.1fMiB  ETA: %v", progress, dur.Truncate(time.Second), speed, eta.Format(time.Stamp))
+			eta := start.Add(time.Duration(float64(dur) / progress))
+			fmt.Printf("\033[G%6.2f%% %5.1fMiB/s %-8v ETA: %v",
+				progress*100, speed, time.Until(eta).Truncate(time.Second), eta.Format(time.Stamp))
 
-		case scanner.ScanResult:
-			// for _, update := range update {
-			// 	log.Printf("hash: %12d %s %s\n", update.Size, update.Hash, update.Path)
-			// }
-		case scanner.ScanError:
-			log.Printf("stat: file=%s error=%v\n", update.Path, update.Error)
+		case fs.ScanError:
+			log.Printf("stat: file=%s error=%#v, %#v\n", update.Path, update.Error, errors.Unwrap(update.Error))
 		}
 	}
+	fmt.Println()
 }
 
 var c = make(chan os.Signal, 1)

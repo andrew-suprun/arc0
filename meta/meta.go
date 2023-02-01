@@ -12,7 +12,7 @@ import (
 type FileMeta struct {
 	Ino     uint64
 	Path    string
-	Size    int64
+	Size    int
 	ModTime time.Time
 	Hash    string
 }
@@ -48,7 +48,7 @@ func ReadMeta(basePath string) (result []*FileMeta) {
 		result = append(result, &FileMeta{
 			Ino:     ino,
 			Path:    record[1],
-			Size:    size,
+			Size:    int(size),
 			ModTime: modTime,
 			Hash:    record[4],
 		})

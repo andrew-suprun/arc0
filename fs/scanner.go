@@ -1,27 +1,27 @@
-package scanner
+package fs
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
-	"sync/atomic"
 	"syscall"
 
-	"scanner/hasher"
 	"scanner/meta"
 )
 
 type ScanFileResult *meta.FileMeta
-type ScanResult meta.FileMetas
 
 type ScanStat struct {
 	Path        string
-	Size        int64
-	Hashed      int64
-	TotalToHash int64
-	TotalHashed int64
+	Size        int
+	Hashed      int
+	TotalToHash int
+	TotalHashed int
 }
 
 type ScanError struct {
@@ -43,10 +43,10 @@ func Scan(ctx context.Context, base string) (results chan any) {
 		defer close(results)
 
 		infos := collectMeta(ctx, fsys, results)
-		paths := map[string]*meta.FileMeta{}
+		defer meta.StoreMeta(path, infos)
+
 		inodes := map[uint64]*meta.FileMeta{}
 		for _, meta := range infos {
-			paths[meta.Path] = meta
 			inodes[meta.Ino] = meta
 		}
 
@@ -60,68 +60,92 @@ func Scan(ctx context.Context, base string) (results chan any) {
 			}
 		}
 
-		var totalSizeToHash int64
+		var (
+			totalSizeToHash int
+			totalHashed     int
+			hash            = sha256.New()
+			buf             = make([]byte, 4*1024*1024)
+		)
+
 		for _, info := range infos {
 			if info.Hash == "" {
 				totalSizeToHash += info.Size
 			}
 		}
 
-		var totalHashed atomic.Int64
-		requests := make(chan string)
+		hashFile := func(info *meta.FileMeta) {
+			hash.Reset()
 
-		go func() {
-			for path := range requests {
-				info := paths[path]
-				var hashed int64
-				updates := hasher.HashFile(ctx, fsys, path)
-				for update := range updates {
-					switch update := update.(type) {
-					case hasher.FileHashStat:
-						totalHashed.Add(update.Hashed - hashed)
-						hashed = update.Hashed
-						results <- ScanStat{
-							Path:        path,
-							Size:        info.Size,
-							Hashed:      hashed,
-							TotalToHash: totalSizeToHash,
-							TotalHashed: totalHashed.Load(),
-						}
-					case hasher.FileHashResult:
-						info.Hash = update.Hash
-						totalHashed.Add(info.Size - hashed)
-						results <- ScanFileResult(info)
-					case hasher.FileHashError:
-						totalHashed.Add(-hashed)
-						results <- ScanError{
-							Path:  path,
-							Error: update.Error,
+			file, err := fsys.Open(info.Path)
+			if err != nil {
+				results <- ScanError{Path: info.Path, Error: err}
+				return
+			}
+			defer file.Close()
+
+			var hashed int
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				nr, er := file.Read(buf)
+				if nr > 0 {
+					nw, ew := hash.Write(buf[0:nr])
+					if ew != nil {
+						if err != nil {
+							results <- ScanError{Path: info.Path, Error: err}
+							return
 						}
 					}
+					if nr != nw {
+						results <- ScanError{Path: info.Path, Error: io.ErrShortWrite}
+						return
+					}
+				}
+
+				hashed += nr
+				totalHashed += nr
+
+				if er == io.EOF {
+					break
+				}
+				if er != nil {
+					results <- ScanError{Path: info.Path, Error: err}
+					return
+				}
+
+				results <- ScanStat{
+					Path:        info.Path,
+					Size:        info.Size,
+					Hashed:      hashed,
+					TotalToHash: totalSizeToHash,
+					TotalHashed: totalHashed,
 				}
 			}
-		}()
+			info.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
+			results <- ScanFileResult(info)
+		}
 
-	handleInfos:
 		for _, info := range infos {
 			if info.Hash == "" {
 				select {
 				case <-ctx.Done():
-					break handleInfos
+					return
 				default:
 				}
-				requests <- info.Path
+				hashFile(info)
 			}
 		}
-		close(requests)
-		meta.StoreMeta(path, infos)
-		results <- infos
 	}()
 
 	return results
 }
 
-func collectMeta(ctx context.Context, fsys fs.FS, results chan<- any) (metas ScanResult) {
+func collectMeta(ctx context.Context, fsys fs.FS, results chan<- any) (metas meta.FileMetas) {
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			results <- ScanError{Path: path, Error: err}
@@ -143,17 +167,12 @@ func collectMeta(ctx context.Context, fsys fs.FS, results chan<- any) (metas Sca
 		metas = append(metas, &meta.FileMeta{
 			Ino:     sys.Ino,
 			Path:    path,
-			Size:    sys.Size,
+			Size:    int(sys.Size),
 			ModTime: info.ModTime(),
 		})
 		return nil
 	})
 	sort.Slice(metas, func(i, j int) bool {
-		if metas[i].Size > metas[j].Size {
-			return true
-		} else if metas[i].Size < metas[j].Size {
-			return false
-		}
 		return metas[i].Path < metas[j].Path
 	})
 	return metas
