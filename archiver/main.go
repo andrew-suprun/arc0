@@ -1,85 +1,109 @@
 package main
 
 import (
-	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 	"time"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/widget"
+
 	"scanner/fs"
+	"scanner/lifecycle"
 )
 
-var pathFlag = flag.String("path", "", "Directory to scan.")
-
 func main() {
-	log.SetFlags(log.Lshortfile)
+	lc := lifecycle.New()
 
-	signal.Notify(c, os.Interrupt)
+	a := app.New()
+	a.Lifecycle().SetOnStopped(func() {
+		lc.Stop()
+	})
+	w := a.NewWindow("List Widget")
+	w.Resize(fyne.NewSize(4000, 3000))
 
-	if len(os.Args) > 1 {
-		flag.CommandLine.Parse(os.Args[2:])
-		switch os.Args[1] {
-		case "hash":
-			hash()
-			// case "dedup":
-			// 	dedup()
-			// case "mirror":
-			// 	mirror()
-			// case "merge":
-			// 	merge()
-		}
+	// vbox := container.NewVBox()
+	// vbox.Add()
+
+	fileProgress := widget.NewProgressBar()
+	fileProgress.Min = 0.0
+	fileProgress.Max = 100.0
+	// fileProgress.TextFormatter = func() string {
+	// 	return fmt.Sprintf("%.1f%%", fileProgress.Value)
+	// }
+
+	overallProgress := widget.NewProgressBar()
+	overallProgress.Min = 0.0
+	overallProgress.Max = 100.0
+	overallProgress.TextFormatter = func() string {
+		return fmt.Sprintf("%.1f%%", overallProgress.Value)
 	}
+
+	form := container.New(layout.NewFormLayout(),
+		widget.NewLabel("File"),
+		widget.NewLabel("file name"),
+
+		widget.NewLabel("ETA"),
+		widget.NewLabel("file eta"),
+
+		widget.NewLabel("Time Remaining"),
+		widget.NewLabel("time remaining"),
+
+		widget.NewLabel("File Progress"),
+		fileProgress,
+
+		widget.NewLabel("Overal Progress"),
+		overallProgress,
+	)
+
+	card := widget.NewCard("/Volumes/Seagate/tmp", "", form)
+
+	border := container.NewBorder(nil, nil, nil, nil, card)
+	w.SetContent(border)
+
+	// ui := makeHashUI()
+	go hash(lc, form, "/Volumes/Seagate/tmp")
+
+	w.ShowAndRun()
 }
 
-func hash() {
-	if *pathFlag == "" || *pathFlag == "/" {
-		log.Println("-path flag is required.")
-		os.Exit(1)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	results := fs.Scan(ctx, *pathFlag)
-	start := time.Now()
+func hash(lc *lifecycle.Lifecycle, form *fyne.Container, path string) {
+	results := fs.Scan(lc, path)
+	var start time.Time
+	var nilTime time.Time
 	for result := range results {
-		if interrupted() {
-			cancel()
+		if start == nilTime {
+			start = time.Now()
 		}
 		switch update := result.(type) {
 		case fs.ScanFileResult:
-			fmt.Printf("%12d %s\n", update.Size, update.Path)
 		case fs.ScanStat:
-			progress := float64(update.TotalHashed) / float64(update.TotalToHash)
+			fileProgress := float64(update.Hashed) / float64(update.Size)
+			etaProgress := float64(update.TotalHashed) / float64(update.TotalToHash)
+			overallHashed := update.TotalSize - update.TotalToHash + update.TotalHashed
+			overalProgress := float64(overallHashed) / float64(update.TotalSize)
 			dur := time.Since(start)
-			speed := float64(update.TotalHashed/(1024*1024)) / dur.Seconds()
-			eta := start.Add(time.Duration(float64(dur) / progress))
-			fmt.Printf("\033[G%6.2f%% %5.1fMiB/s %-8v ETA: %v",
-				progress*100, speed, time.Until(eta).Truncate(time.Second), eta.Format(time.Stamp))
+			eta := start.Add(time.Duration(float64(dur) / etaProgress))
+			remainig := time.Until(eta)
+			form.Objects[1].(*widget.Label).Text = update.Path
+			form.Objects[3].(*widget.Label).Text = eta.Format(time.TimeOnly)
+			form.Objects[5].(*widget.Label).Text = remainig.Truncate(time.Second).String()
+			form.Objects[7].(*widget.ProgressBar).Value = fileProgress * 100
+			form.Objects[9].(*widget.ProgressBar).Value = overalProgress * 100
+			form.Refresh()
 
 		case fs.ScanError:
 			log.Printf("stat: file=%s error=%#v, %#v\n", update.Path, update.Error, errors.Unwrap(update.Error))
 		}
 	}
-	fmt.Println()
-}
 
-var c = make(chan os.Signal, 1)
-
-var gotInterrupted = false
-
-func interrupted() bool {
-	if gotInterrupted {
-		return true
-	}
-	select {
-	case s := <-c:
-		log.Println("Got signal:", s)
-		gotInterrupted = true
-		return true
-	default:
-		return false
-	}
+	form.Objects[1].(*widget.Label).Text = ""
+	form.Objects[3].(*widget.Label).Text = "Done"
+	form.Objects[5].(*widget.ProgressBar).Value = 100
+	form.Objects[7].(*widget.ProgressBar).Value = 100
+	form.Refresh()
 }

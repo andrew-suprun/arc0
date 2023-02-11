@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"io"
@@ -9,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"syscall"
 
+	"scanner/lifecycle"
 	"scanner/meta"
 )
 
@@ -20,6 +21,7 @@ type ScanStat struct {
 	Path        string
 	Size        int
 	Hashed      int
+	TotalSize   int
 	TotalToHash int
 	TotalHashed int
 }
@@ -29,10 +31,13 @@ type ScanError struct {
 	Error error
 }
 
-func Scan(ctx context.Context, base string) (results chan any) {
+func Scan(lc *lifecycle.Lifecycle, base string) (results chan any) {
 	results = make(chan any)
 
 	go func() {
+		lc.Started()
+		defer lc.Done()
+
 		path, err := filepath.Abs(base)
 		if err != nil {
 			results <- ScanError{Path: path, Error: err}
@@ -42,7 +47,8 @@ func Scan(ctx context.Context, base string) (results chan any) {
 		fsys := os.DirFS(base)
 		defer close(results)
 
-		infos := collectMeta(ctx, fsys, results)
+		infos := collectMeta(lc, fsys, results)
+
 		defer meta.StoreMeta(path, infos)
 
 		inodes := map[uint64]*meta.FileMeta{}
@@ -61,6 +67,7 @@ func Scan(ctx context.Context, base string) (results chan any) {
 		}
 
 		var (
+			totalSize       int
 			totalSizeToHash int
 			totalHashed     int
 			hash            = sha256.New()
@@ -68,6 +75,7 @@ func Scan(ctx context.Context, base string) (results chan any) {
 		)
 
 		for _, info := range infos {
+			totalSize += info.Size
 			if info.Hash == "" {
 				totalSizeToHash += info.Size
 			}
@@ -86,10 +94,8 @@ func Scan(ctx context.Context, base string) (results chan any) {
 			var hashed int
 
 			for {
-				select {
-				case <-ctx.Done():
+				if lc.ShoudStop() {
 					return
-				default:
 				}
 
 				nr, er := file.Read(buf)
@@ -122,6 +128,7 @@ func Scan(ctx context.Context, base string) (results chan any) {
 					Path:        info.Path,
 					Size:        info.Size,
 					Hashed:      hashed,
+					TotalSize:   totalSize,
 					TotalToHash: totalSizeToHash,
 					TotalHashed: totalHashed,
 				}
@@ -132,10 +139,8 @@ func Scan(ctx context.Context, base string) (results chan any) {
 
 		for _, info := range infos {
 			if info.Hash == "" {
-				select {
-				case <-ctx.Done():
+				if lc.ShoudStop() {
 					return
-				default:
 				}
 				hashFile(info)
 			}
@@ -145,7 +150,7 @@ func Scan(ctx context.Context, base string) (results chan any) {
 	return results
 }
 
-func collectMeta(ctx context.Context, fsys fs.FS, results chan<- any) (metas meta.FileMetas) {
+func collectMeta(lc *lifecycle.Lifecycle, fsys fs.FS, results chan<- any) (metas meta.FileMetas) {
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			results <- ScanError{Path: path, Error: err}
@@ -173,7 +178,7 @@ func collectMeta(ctx context.Context, fsys fs.FS, results chan<- any) (metas met
 		return nil
 	})
 	sort.Slice(metas, func(i, j int) bool {
-		return metas[i].Path < metas[j].Path
+		return strings.ToLower(metas[i].Path) < strings.ToLower(metas[j].Path)
 	})
 	return metas
 }
