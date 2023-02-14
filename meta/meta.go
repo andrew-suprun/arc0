@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 type FileMeta struct {
@@ -47,7 +49,7 @@ func ReadMeta(basePath string) (result []*FileMeta) {
 		}
 		result = append(result, &FileMeta{
 			Ino:     ino,
-			Path:    record[1],
+			Path:    norm.NFC.String(record[1]),
 			Size:    int(size),
 			ModTime: modTime,
 			Hash:    record[4],

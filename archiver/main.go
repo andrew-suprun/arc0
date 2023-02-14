@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
@@ -26,22 +28,9 @@ func main() {
 	w := a.NewWindow("List Widget")
 	w.Resize(fyne.NewSize(4000, 3000))
 
-	// vbox := container.NewVBox()
-	// vbox.Add()
-
 	fileProgress := widget.NewProgressBar()
 	fileProgress.Min = 0.0
 	fileProgress.Max = 100.0
-	// fileProgress.TextFormatter = func() string {
-	// 	return fmt.Sprintf("%.1f%%", fileProgress.Value)
-	// }
-
-	overallProgress := widget.NewProgressBar()
-	overallProgress.Min = 0.0
-	overallProgress.Max = 100.0
-	overallProgress.TextFormatter = func() string {
-		return fmt.Sprintf("%.1f%%", overallProgress.Value)
-	}
 
 	form := container.New(layout.NewFormLayout(),
 		widget.NewLabel("File"),
@@ -57,17 +46,23 @@ func main() {
 		fileProgress,
 
 		widget.NewLabel("Overal Progress"),
-		overallProgress,
+		widget.NewProgressBarInfinite(),
 	)
 
-	card := widget.NewCard("/Volumes/Seagate/tmp", "", form)
+	card := widget.NewCard("", "", form)
 
 	border := container.NewBorder(nil, nil, nil, nil, card)
-	w.SetContent(border)
 
-	// ui := makeHashUI()
-	go hash(lc, form, "/Volumes/Seagate/tmp")
-
+	dialog.ShowFolderOpen(func(url fyne.ListableURI, err error) {
+		fmt.Println(url, err)
+		if url == nil {
+			os.Exit(0)
+		}
+		card.Title = "Scanning " + url.Path()
+		card.Refresh()
+		w.SetContent(border)
+		go hash(lc, form, url.Path())
+	}, w)
 	w.ShowAndRun()
 }
 
@@ -77,6 +72,14 @@ func hash(lc *lifecycle.Lifecycle, form *fyne.Container, path string) {
 	var nilTime time.Time
 	for result := range results {
 		if start == nilTime {
+			overallProgress := widget.NewProgressBar()
+			overallProgress.Min = 0.0
+			overallProgress.Max = 100.0
+			overallProgress.TextFormatter = func() string {
+				return fmt.Sprintf("%.1f%%", overallProgress.Value)
+			}
+			form.Objects[9] = overallProgress
+
 			start = time.Now()
 		}
 		switch update := result.(type) {
@@ -93,17 +96,16 @@ func hash(lc *lifecycle.Lifecycle, form *fyne.Container, path string) {
 			form.Objects[3].(*widget.Label).Text = eta.Format(time.TimeOnly)
 			form.Objects[5].(*widget.Label).Text = remainig.Truncate(time.Second).String()
 			form.Objects[7].(*widget.ProgressBar).Value = fileProgress * 100
-			form.Objects[9].(*widget.ProgressBar).Value = overalProgress * 100
+			if pb, ok := form.Objects[9].(*widget.ProgressBar); ok {
+				pb.Value = overalProgress * 100
+			}
 			form.Refresh()
 
 		case fs.ScanError:
 			log.Printf("stat: file=%s error=%#v, %#v\n", update.Path, update.Error, errors.Unwrap(update.Error))
 		}
 	}
-
-	form.Objects[1].(*widget.Label).Text = ""
-	form.Objects[3].(*widget.Label).Text = "Done"
-	form.Objects[5].(*widget.ProgressBar).Value = 100
-	form.Objects[7].(*widget.ProgressBar).Value = 100
+	form.RemoveAll()
+	form.Add(widget.NewLabel("Done"))
 	form.Refresh()
 }

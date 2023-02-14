@@ -3,6 +3,7 @@ package fs
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -13,6 +14,8 @@ import (
 
 	"scanner/lifecycle"
 	"scanner/meta"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 type ScanFileResult *meta.FileMeta
@@ -39,6 +42,7 @@ func Scan(lc *lifecycle.Lifecycle, base string) (results chan any) {
 		defer lc.Done()
 
 		path, err := filepath.Abs(base)
+		path = norm.NFC.String(path)
 		if err != nil {
 			results <- ScanError{Path: path, Error: err}
 			return
@@ -60,9 +64,11 @@ func Scan(lc *lifecycle.Lifecycle, base string) (results chan any) {
 
 		for _, storedInfo := range storedMetas {
 			if info, ok := inodes[storedInfo.Ino]; ok {
-				if storedInfo.ModTime.UTC() == info.ModTime.UTC() && storedInfo.Size == info.Size {
+				if storedInfo.Size == info.Size {
 					info.Hash = storedInfo.Hash
 				}
+			} else {
+				fmt.Println("not found", storedInfo.Path)
 			}
 		}
 
@@ -159,7 +165,7 @@ func collectMeta(lc *lifecycle.Lifecycle, fsys fs.FS, results chan<- any) (metas
 		if !d.Type().IsRegular() {
 			return nil
 		}
-		if d.Name() == meta.HashFileName || d.Name() == ".DS_Store" {
+		if strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 
