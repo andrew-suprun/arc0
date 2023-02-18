@@ -110,19 +110,19 @@ func (app *archiver) selectExistingSource() {
 		sourceBtns := container.NewVBox()
 		d := dialog.NewCustom("Select Source", "Cancel", sourceBtns, app.Window)
 		sources := strings.Split(sourcesStr, "|")
-		for _, source := range sources {
-			btn := widget.NewButton(source, func() {
+		for i := range sources {
+			btn := widget.NewButton(sources[i], func() {
 				fmt.Println("### 1")
 				form := scanForm()
 				data := <-app.data
 				data.source = scanUI{
-					path: source,
+					path: sources[i],
 					form: form,
 				}
 				app.data <- data
-				card := widget.NewCard(source, "", form)
+				card := widget.NewCard(sources[i], "", form)
 				app.cards.Add(card)
-				app.ch <- hashPathMsg{path: source}
+				app.ch <- hashPathMsg{path: sources[i]}
 				app.ch <- selectTargetsMsg{}
 				done.Store(true)
 				d.Hide()
