@@ -16,25 +16,26 @@ func main() {
 	defer f.Close()
 	log.SetOutput(f)
 
+	lc := lifecycle.New()
 	uiIn := make(chan any)
 	uiOut := make(chan any)
-	m := mainModel{uiIn: uiIn, uiOut: uiOut}
+	m := mainModel{Lifecycle: lc, uiIn: uiIn, uiOut: uiOut}
 	go m.mainLoop()
-	ui.Run(uiIn, uiOut)
+	ui.Run(lc, uiIn, uiOut)
 }
 
 type mainModel struct {
+	*lifecycle.Lifecycle
 	uiIn    chan<- any
 	uiOut   <-chan any
 	scanOut <-chan any
 }
 
 func (m *mainModel) mainLoop() {
-	lc := lifecycle.New()
 	scanOut := make(chan any)
 	m.scanOut = scanOut
 	for _, path := range os.Args[1:] {
-		go fs.Scan(lc, path, scanOut)
+		go fs.Scan(m.Lifecycle, path, scanOut)
 	}
 	for {
 		select {

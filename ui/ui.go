@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"scanner/fs"
+	"scanner/lifecycle"
 	"strings"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/muesli/termenv"
 )
 
-func Run(in <-chan any, out chan<- any) {
+func Run(lc *lifecycle.Lifecycle, in <-chan any, out chan<- any) {
 	output := termenv.NewOutput(os.Stdout)
 	bc := output.BackgroundColor()
 	defer func() {
@@ -21,7 +22,7 @@ func Run(in <-chan any, out chan<- any) {
 		defer output.SetBackgroundColor(bc)
 	}()
 
-	p := tea.NewProgram(&model{}, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(&model{Lifecycle: lc}, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	go func() {
 		for {
@@ -48,6 +49,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		log.Printf("key: %v", msg)
 		if s := msg.String(); s == "ctrl+c" || s == "q" || s == "esc" {
+			m.Lifecycle.Stop()
 			return m, tea.Quit
 		}
 		return m, nil

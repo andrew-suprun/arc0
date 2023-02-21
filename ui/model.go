@@ -1,8 +1,12 @@
 package ui
 
-import "time"
+import (
+	"scanner/lifecycle"
+	"time"
+)
 
 type model struct {
+	*lifecycle.Lifecycle
 	screenHeight int
 	screenWidth  int
 	scanStats    []*scanStats
