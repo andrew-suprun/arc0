@@ -18,7 +18,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-type ScanFileResult *meta.FileMeta
+type ScanFileResult meta.FileMeta
 
 type ScanStat struct {
 	Base        string
@@ -35,7 +35,7 @@ type ScanError struct {
 	Error error
 }
 
-func Scan(lc *lifecycle.Lifecycle, base string, results chan any) {
+func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 	lc.Started()
 	defer lc.Done()
 
@@ -138,7 +138,7 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan any) {
 			}
 		}
 		info.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
-		results <- ScanFileResult(info)
+		results <- ScanFileResult(*info)
 	}
 
 	for _, info := range infos {

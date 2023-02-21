@@ -111,18 +111,19 @@ func (app *archiver) selectExistingSource() {
 		d := dialog.NewCustom("Select Source", "Cancel", sourceBtns, app.Window)
 		sources := strings.Split(sourcesStr, "|")
 		for i := range sources {
-			btn := widget.NewButton(sources[i], func() {
+			source := sources[i]
+			btn := widget.NewButton(source, func() {
 				fmt.Println("### 1")
 				form := scanForm()
 				data := <-app.data
 				data.source = scanUI{
-					path: sources[i],
+					path: source,
 					form: form,
 				}
 				app.data <- data
-				card := widget.NewCard(sources[i], "", form)
+				card := widget.NewCard(source, "", form)
 				app.cards.Add(card)
-				app.ch <- hashPathMsg{path: sources[i]}
+				app.ch <- hashPathMsg{path: source}
 				app.ch <- selectTargetsMsg{}
 				done.Store(true)
 				d.Hide()
@@ -247,7 +248,7 @@ func (app *archiver) scanStat(update fs.ScanStat) {
 	fileProgress := float64(update.Hashed) / float64(update.Size)
 	etaProgress := float64(update.TotalHashed) / float64(update.TotalToHash)
 	overallHashed := update.TotalSize - update.TotalToHash + update.TotalHashed
-	overalProgress := float64(overallHashed) / float64(update.TotalSize)
+	overallProgress := float64(overallHashed) / float64(update.TotalSize)
 	dur := time.Since(info.start)
 	eta := info.start.Add(time.Duration(float64(dur) / etaProgress))
 	remainig := time.Until(eta)
@@ -256,7 +257,7 @@ func (app *archiver) scanStat(update fs.ScanStat) {
 	info.form.Objects[5].(*widget.Label).Text = remainig.Truncate(time.Second).String()
 	info.form.Objects[7].(*widget.ProgressBar).Value = fileProgress * 100
 	if pb, ok := info.form.Objects[9].(*widget.ProgressBar); ok {
-		pb.Value = overalProgress * 100
+		pb.Value = overallProgress * 100
 	}
 	info.form.Refresh()
 }

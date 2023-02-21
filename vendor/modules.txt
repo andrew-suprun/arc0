@@ -45,6 +45,9 @@ fyne.io/fyne/v2/widget
 fyne.io/systray
 fyne.io/systray/internal/generated/menu
 fyne.io/systray/internal/generated/notifier
+# github.com/aymanbagabas/go-osc52 v1.2.1
+## explicit; go 1.16
+github.com/aymanbagabas/go-osc52
 # github.com/benoitkugler/textlayout v0.3.0
 ## explicit; go 1.17
 github.com/benoitkugler/textlayout/fonts
@@ -58,6 +61,12 @@ github.com/benoitkugler/textlayout/graphite
 github.com/benoitkugler/textlayout/harfbuzz
 github.com/benoitkugler/textlayout/language
 github.com/benoitkugler/textlayout/unicodedata
+# github.com/charmbracelet/bubbletea v0.23.2
+## explicit; go 1.16
+github.com/charmbracelet/bubbletea
+# github.com/containerd/console v1.0.3
+## explicit; go 1.13
+github.com/containerd/console
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
@@ -116,9 +125,38 @@ github.com/gopherjs/gopherjs/js
 # github.com/jsummers/gobmp v0.0.0-20151104160322-e2ba15ffa76e
 ## explicit
 github.com/jsummers/gobmp
+# github.com/lucasb-eyer/go-colorful v1.2.0
+## explicit; go 1.12
+github.com/lucasb-eyer/go-colorful
+# github.com/mattn/go-isatty v0.0.17
+## explicit; go 1.15
+github.com/mattn/go-isatty
+# github.com/mattn/go-localereader v0.0.1
+## explicit
+github.com/mattn/go-localereader
+# github.com/mattn/go-runewidth v0.0.14
+## explicit; go 1.9
+github.com/mattn/go-runewidth
+# github.com/muesli/ansi v0.0.0-20211018074035-2e021307bc4b
+## explicit; go 1.17
+github.com/muesli/ansi
+github.com/muesli/ansi/compressor
+# github.com/muesli/cancelreader v0.2.2
+## explicit; go 1.17
+github.com/muesli/cancelreader
+# github.com/muesli/reflow v0.3.0
+## explicit; go 1.13
+github.com/muesli/reflow/ansi
+github.com/muesli/reflow/truncate
+# github.com/muesli/termenv v0.14.0
+## explicit; go 1.13
+github.com/muesli/termenv
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
+# github.com/rivo/uniseg v0.2.0
+## explicit; go 1.12
+github.com/rivo/uniseg
 # github.com/srwiley/oksvg v0.0.0-20220731023508-a61f04f16b76
 ## explicit; go 1.17
 github.com/srwiley/oksvg
@@ -160,13 +198,20 @@ golang.org/x/mobile/exp/f32
 golang.org/x/net/html
 golang.org/x/net/html/atom
 golang.org/x/net/html/charset
-# golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
+# golang.org/x/sync v0.1.0
+## explicit
+golang.org/x/sync/errgroup
+# golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
+golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
+# golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
+## explicit; go 1.17
+golang.org/x/term
 # golang.org/x/text v0.6.0
 ## explicit; go 1.17
 golang.org/x/text/encoding
