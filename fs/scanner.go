@@ -3,64 +3,44 @@ package fs
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
-	"scanner/lifecycle"
-	"scanner/meta"
+	"scanner/api"
 
 	"golang.org/x/text/unicode/norm"
 )
 
-type ScanFileResult meta.FileMeta
-
-type ScanStat struct {
-	Base        string
-	Path        string
-	Size        int
-	Hashed      int
-	TotalSize   int
-	TotalToHash int
-	TotalHashed int
-}
-
-type ScanError struct {
-	Path  string
-	Error error
-}
-
-type ScanDone struct {
-	Base string
-}
-
-func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
+func (r *runner) scan(base string) {
 	defer func() {
-		results <- ScanDone{Base: base}
+		r.out <- api.ScanDone{Base: base}
 	}()
 
 	path, err := filepath.Abs(base)
 	path = norm.NFC.String(path)
 	if err != nil {
-		results <- ScanError{Path: path, Error: err}
+		r.out <- api.ScanError{Base: base, Path: path, Error: err}
 		return
 	}
 
-	fsys := os.DirFS(base)
+	infos := r.collectMeta(base)
 
-	infos := collectMeta(lc, fsys, results)
-
-	inodes := map[uint64]*meta.FileMeta{}
+	inodes := map[uint64]*api.FileMeta{}
 	for _, meta := range infos {
 		inodes[meta.Ino] = meta
 	}
 
-	storedMetas := meta.ReadMeta(path)
+	storedMetas := readMeta(path)
 
 	for _, storedInfo := range storedMetas {
 		if info, ok := inodes[storedInfo.Ino]; ok {
@@ -91,14 +71,14 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 		return
 	}
 
-	defer meta.StoreMeta(path, infos)
+	defer storeMeta(path, infos)
 
-	hashFile := func(info *meta.FileMeta) {
+	hashFile := func(info *api.FileMeta) {
 		hash.Reset()
 
-		file, err := fsys.Open(info.Path)
+		file, err := os.Open(info.Path)
 		if err != nil {
-			results <- ScanError{Path: info.Path, Error: err}
+			r.out <- api.ScanError{Base: base, Path: info.Path, Error: err}
 			return
 		}
 		defer file.Close()
@@ -106,7 +86,7 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 		var hashed int
 
 		for {
-			if lc.ShoudStop() {
+			if r.Lifecycle.ShoudStop() {
 				return
 			}
 
@@ -115,12 +95,12 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						results <- ScanError{Path: info.Path, Error: err}
+						r.out <- api.ScanError{Base: base, Path: info.Path, Error: err}
 						return
 					}
 				}
 				if nr != nw {
-					results <- ScanError{Path: info.Path, Error: io.ErrShortWrite}
+					r.out <- api.ScanError{Base: base, Path: info.Path, Error: io.ErrShortWrite}
 					return
 				}
 			}
@@ -132,11 +112,11 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 				break
 			}
 			if er != nil {
-				results <- ScanError{Path: info.Path, Error: err}
+				r.out <- api.ScanError{Base: base, Path: info.Path, Error: err}
 				return
 			}
 
-			results <- ScanStat{
+			r.out <- api.ScanStat{
 				Base:        base,
 				Path:        info.Path,
 				Size:        info.Size,
@@ -147,38 +127,40 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 			}
 		}
 		info.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
-		results <- ScanFileResult(*info)
+		r.out <- *info
 	}
 
 	for _, info := range infos {
 		if info.Hash == "" {
-			if lc.ShoudStop() {
+			if r.Lifecycle.ShoudStop() {
 				return
 			}
 			hashFile(info)
 		}
 	}
+	log.Println("### scan: done")
 }
 
-func collectMeta(lc *lifecycle.Lifecycle, fsys fs.FS, results chan<- any) (metas meta.FileMetas) {
-	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
-		if lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
+func (r *runner) collectMeta(base string) (metas []*api.FileMeta) {
+	filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+		if r.Lifecycle.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 
 		if err != nil {
-			results <- ScanError{Path: path, Error: err}
+			r.out <- api.ScanError{Base: base, Path: path, Error: err}
 			return nil
 		}
 
 		info, err := d.Info()
 		if err != nil {
-			results <- ScanError{Path: path, Error: err}
+			r.out <- api.ScanError{Base: base, Path: path, Error: err}
 			return nil
 		}
 		sys := info.Sys().(*syscall.Stat_t)
-		metas = append(metas, &meta.FileMeta{
+		metas = append(metas, &api.FileMeta{
 			Ino:     sys.Ino,
+			Base:    base,
 			Path:    path,
 			Size:    int(sys.Size),
 			ModTime: info.ModTime(),
@@ -189,4 +171,66 @@ func collectMeta(lc *lifecycle.Lifecycle, fsys fs.FS, results chan<- any) (metas
 		return strings.ToLower(metas[i].Path) < strings.ToLower(metas[j].Path)
 	})
 	return metas
+}
+
+const HashFileName = ".meta.csv"
+
+func readMeta(basePath string) (result []*api.FileMeta) {
+	absHashFileName := filepath.Join(basePath, HashFileName)
+	hashInfoFile, err := os.Open(absHashFileName)
+
+	if err != nil {
+		return nil
+	}
+
+	defer hashInfoFile.Close()
+	records, err := csv.NewReader(hashInfoFile).ReadAll()
+	if err != nil {
+		return nil
+	}
+
+	for _, record := range records[1:] {
+		if len(record) < 5 {
+			continue
+		}
+		ino, er1 := strconv.ParseUint(record[0], 10, 64)
+		size, er2 := strconv.ParseInt(record[2], 10, 64)
+		modTime, er3 := time.Parse(time.RFC3339, record[3])
+		if er1 != nil || er2 != nil || er3 != nil {
+			continue
+		}
+		result = append(result, &api.FileMeta{
+			Ino:     ino,
+			Path:    norm.NFC.String(record[1]),
+			Size:    int(size),
+			ModTime: modTime,
+			Hash:    record[4],
+		})
+	}
+
+	return result
+}
+
+func storeMeta(basePath string, metas []*api.FileMeta) error {
+	result := make([][]string, len(metas)+1)
+	result[0] = []string{"Inode", "Path", "Size", "ModTime", "Hash"}
+
+	for i, meta := range metas {
+		result[i+1] = []string{
+			fmt.Sprint(meta.Ino),
+			norm.NFC.String(meta.Path),
+			fmt.Sprint(meta.Size),
+			meta.ModTime.UTC().Format(time.RFC3339Nano),
+			meta.Hash,
+		}
+	}
+
+	absHashFileName := filepath.Join(basePath, HashFileName)
+	hashInfoFile, err := os.Create(absHashFileName)
+
+	if err != nil {
+		return err
+	}
+	defer hashInfoFile.Close()
+	return csv.NewWriter(hashInfoFile).WriteAll(result)
 }

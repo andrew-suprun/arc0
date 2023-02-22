@@ -5,8 +5,7 @@ import (
 	"log"
 	"math"
 	"os"
-	"scanner/fs"
-	"scanner/lifecycle"
+	"scanner/api"
 	"strings"
 	"time"
 
@@ -14,7 +13,24 @@ import (
 	"github.com/muesli/termenv"
 )
 
-func Run(toScan []string, lc *lifecycle.Lifecycle, inChan <-chan any, outChan chan<- any) {
+type model struct {
+	scanStats    []*scanStats
+	screenHeight int
+	screenWidth  int
+	outChan      chan<- any
+}
+
+type scanStats struct {
+	base            string
+	path            string
+	start           time.Time
+	eta             time.Time
+	remaining       time.Duration
+	fileProgress    float64
+	overallProgress float64
+}
+
+func Run(inChan <-chan any, outChan chan<- any) {
 	output := termenv.NewOutput(os.Stdout)
 	fg := output.ForegroundColor()
 	bg := output.BackgroundColor()
@@ -24,25 +40,20 @@ func Run(toScan []string, lc *lifecycle.Lifecycle, inChan <-chan any, outChan ch
 		defer output.SetBackgroundColor(bg)
 	}()
 
-	p := tea.NewProgram(&model{Lifecycle: lc, scanStats: stats(toScan), outChan: outChan}, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(&model{outChan: outChan}, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	go func() {
 		for {
 			msg := <-inChan
 			p.Send(msg)
+			if msg == tea.Quit() {
+				return
+			}
 		}
 	}()
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func stats(toScan []string) []*scanStats {
-	result := make([]*scanStats, len(toScan))
-	for i, base := range toScan {
-		result[i] = &scanStats{base: base}
-	}
-	return result
 }
 
 func (m *model) Init() tea.Cmd {
@@ -57,7 +68,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if s := msg.String(); s == "ctrl+c" || s == "esc" {
-			m.Lifecycle.Stop()
+			m.outChan <- api.CmdQuit{}
 			return m, nil
 		}
 		return m, nil
@@ -69,9 +80,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screenHeight = msg.Height
 		m.screenWidth = msg.Width
 		return m, nil
-	case fs.ScanStat:
+
+	case api.CmdScan:
+		m.scanStats = append(m.scanStats, &scanStats{base: msg.Base})
+		return m, nil
+
+	case api.ScanStat:
 		return m.scanFileStat(msg)
-	case fs.ScanDone:
+
+	case api.ScanDone:
 		return m.scanDone(msg)
 	}
 
@@ -81,7 +98,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 var nilTime time.Time
 
-func (m *model) scanFileStat(stat fs.ScanStat) (tea.Model, tea.Cmd) {
+func (m *model) scanFileStat(stat api.ScanStat) (tea.Model, tea.Cmd) {
 	var newStat *scanStats
 	for i := range m.scanStats {
 		if stat.Base == m.scanStats[i].base {
@@ -103,19 +120,12 @@ func (m *model) scanFileStat(stat fs.ScanStat) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) scanDone(done fs.ScanDone) (tea.Model, tea.Cmd) {
+func (m *model) scanDone(done api.ScanDone) (tea.Model, tea.Cmd) {
 	for i := range m.scanStats {
 		if done.Base == m.scanStats[i].base {
 			m.scanStats = append(m.scanStats[:i], m.scanStats[i+1:]...)
 			break
 		}
-	}
-	return m.checkDone()
-}
-
-func (m *model) checkDone() (tea.Model, tea.Cmd) {
-	if len(m.scanStats) == 0 {
-		return m, tea.Quit
 	}
 	return m, nil
 }
