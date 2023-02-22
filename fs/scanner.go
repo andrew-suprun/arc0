@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -43,7 +42,6 @@ type ScanDone struct {
 func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 	defer func() {
 		results <- ScanDone{Base: base}
-		log.Println("### scan done", base)
 	}()
 
 	path, err := filepath.Abs(base)

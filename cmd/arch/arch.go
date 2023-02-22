@@ -16,10 +16,9 @@ func main() {
 	defer f.Close()
 	log.SetOutput(f)
 
-	// TODO: create more robust mechanism to gracefully shutdown
 	lc := lifecycle.New()
 
-	uiIn := make(chan any, 10)
+	uiIn := make(chan any)
 	uiOut := make(chan any)
 	m := mainModel{Lifecycle: lc, uiIn: uiIn, uiOut: uiOut}
 	go m.mainLoop()
@@ -58,7 +57,6 @@ func (m *mainModel) handleScanMessage(msg any) {
 	case fs.ScanStat:
 		m.uiIn <- msg
 	case fs.ScanDone:
-		log.Println("### arch: scan done", msg.Base)
 		m.uiIn <- msg
 	case fs.ScanFileResult:
 	default:

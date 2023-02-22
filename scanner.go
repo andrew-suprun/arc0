@@ -56,8 +56,7 @@ func interrupted() bool {
 		return true
 	}
 	select {
-	case s := <-c:
-		log.Println("Got signal:", s)
+	case <-c:
 		gotInterrupted = true
 		return true
 	default:
@@ -184,7 +183,6 @@ func dedup() {
 		}
 	}
 	if totalRemoved > 0 {
-		fmt.Println("### total removed", totalRemoved)
 		hashPath(basePath)
 	}
 }
@@ -597,7 +595,7 @@ func copyFileInternal(src, dst string) error {
 			break
 		}
 	}
-	return nil
+	return err
 }
 
 func setFileModTime(src, dst string) error {

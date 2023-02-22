@@ -113,7 +113,6 @@ func (app *archiver) selectExistingSource() {
 		for i := range sources {
 			source := sources[i]
 			btn := widget.NewButton(source, func() {
-				fmt.Println("### 1")
 				form := scanForm()
 				data := <-app.data
 				data.source = scanUI{
@@ -132,7 +131,6 @@ func (app *archiver) selectExistingSource() {
 			sourceBtns.Add(btn)
 		}
 		anotherSourceBtn := widget.NewButton("Select Another Source", func() {
-			fmt.Println("### 2")
 			app.ch <- selectNewSourceMsg{}
 			done.Store(true)
 			d.Hide()
@@ -141,13 +139,11 @@ func (app *archiver) selectExistingSource() {
 		sourceBtns.Add(anotherSourceBtn)
 		d.SetOnClosed(func() {
 			if !done.Load() {
-				fmt.Println("### 3")
 				app.ch <- selectNewSourceMsg{}
 			}
 		})
 		d.Show()
 	} else {
-		fmt.Println("### 4")
 		app.ch <- selectNewSourceMsg{}
 	}
 }

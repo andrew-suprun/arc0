@@ -38,7 +38,6 @@ func stats(toScan []string) []*scanStats {
 	result := make([]*scanStats, len(toScan))
 	for i, base := range toScan {
 		result[i] = &scanStats{base: base}
-		log.Println("### ui.stats", base)
 	}
 	return result
 }
@@ -101,10 +100,7 @@ func (m *model) scanFileStat(stat fs.ScanStat) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) scanDone(done fs.ScanDone) (tea.Model, tea.Cmd) {
-	log.Println("### ui: scan done", done.Base, "stats", len(m.scanStats))
 	for i := range m.scanStats {
-		log.Println("### ui.stats: i", i)
-		log.Println("### ui.stats: base", m.scanStats[i].base)
 		if done.Base == m.scanStats[i].base {
 			m.scanStats = append(m.scanStats[:i], m.scanStats[i+1:]...)
 			break
@@ -114,9 +110,7 @@ func (m *model) scanDone(done fs.ScanDone) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) checkDone() (tea.Model, tea.Cmd) {
-	log.Println("### ui.checkDone: stats =", len(m.scanStats))
 	if len(m.scanStats) == 0 {
-		log.Println("### ui.checkDone: quit")
 		return m, tea.Quit
 	}
 	return m, nil
@@ -127,7 +121,7 @@ func (m *model) View() string {
 	for _, stat := range m.scanStats {
 		barWidth := m.screenWidth - 29
 
-		builder.WriteString(" Сканнирование              ")
+		builder.WriteString(" Архив                      ")
 		builder.WriteString(stat.base)
 		builder.WriteString("\n Имя Файла                  ")
 		builder.WriteString(stat.path)
@@ -136,10 +130,8 @@ func (m *model) View() string {
 		builder.WriteString("\n Время До Завершения        ")
 		builder.WriteString(stat.remaining.Truncate(time.Second).String())
 		builder.WriteString("\n Прогресс Файла             ")
-		// builder.WriteString(fmt.Sprintf("%6.2f%% ", stat.fileProgress*100))
 		builder.WriteString(progressBar(barWidth, stat.fileProgress))
 		builder.WriteString("\n Общий Прогресс             ")
-		// builder.WriteString(fmt.Sprintf("%6.2f%% ", stat.overallProgress*100))
 		builder.WriteString(progressBar(barWidth, stat.overallProgress))
 		builder.WriteString("\n\n")
 	}
