@@ -70,6 +70,10 @@ func (a *mainModel) handleFsMessage(msg any) {
 		a.uiIn <- msg
 
 	case api.FileMeta:
+		// TODO
+
+	case api.ScanError:
+		// TODO
 
 	default:
 		log.Panicf("### received unhandled fs message: %#v", msg)

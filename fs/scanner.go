@@ -74,6 +74,10 @@ func (r *runner) scan(base string) {
 	defer storeMeta(path, infos)
 
 	hashFile := func(info *api.FileMeta) {
+		defer func() {
+			totalHashed += info.Size
+		}()
+
 		hash.Reset()
 
 		file, err := os.Open(info.Path)
@@ -106,7 +110,6 @@ func (r *runner) scan(base string) {
 			}
 
 			hashed += nr
-			totalHashed += nr
 
 			if er == io.EOF {
 				break
@@ -123,7 +126,7 @@ func (r *runner) scan(base string) {
 				Hashed:      hashed,
 				TotalSize:   totalSize,
 				TotalToHash: totalSizeToHash,
-				TotalHashed: totalHashed,
+				TotalHashed: totalHashed + hashed,
 			}
 		}
 		info.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
