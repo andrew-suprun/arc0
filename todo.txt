@@ -1,0 +1,2 @@
+* support themes
+* error reporting
