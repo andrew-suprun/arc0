@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"log"
 	"math"
 	"os"
@@ -15,10 +16,12 @@ import (
 
 func Run(toScan []string, lc *lifecycle.Lifecycle, inChan <-chan any, outChan chan<- any) {
 	output := termenv.NewOutput(os.Stdout)
-	bc := output.BackgroundColor()
+	fg := output.ForegroundColor()
+	bg := output.BackgroundColor()
 	defer func() {
 		output := termenv.NewOutput(os.Stdout)
-		defer output.SetBackgroundColor(bc)
+		defer output.SetForegroundColor(fg)
+		defer output.SetBackgroundColor(bg)
 	}()
 
 	p := tea.NewProgram(&model{Lifecycle: lc, scanStats: stats(toScan), outChan: outChan}, tea.WithAltScreen(), tea.WithMouseCellMotion())
@@ -43,9 +46,10 @@ func stats(toScan []string) []*scanStats {
 }
 
 func (m *model) Init() tea.Cmd {
-	// p := termenv.ColorProfile()
-	// output := termenv.NewOutput(os.Stdout)
-	// output.SetBackgroundColor(p.FromColor(color.RGBA{0, 16, 64, 255}))
+	p := termenv.ColorProfile()
+	output := termenv.NewOutput(os.Stdout)
+	output.SetBackgroundColor(p.FromColor(color.RGBA{0, 16, 64, 255}))
+	output.SetForegroundColor(p.FromColor(color.RGBA{255, 255, 64, 255}))
 	return nil
 }
 
