@@ -16,12 +16,14 @@ func main() {
 	defer f.Close()
 	log.SetOutput(f)
 
+	// TODO: create more robust mechanism to gracefully shutdown
 	lc := lifecycle.New()
-	uiIn := make(chan any)
+
+	uiIn := make(chan any, 10)
 	uiOut := make(chan any)
 	m := mainModel{Lifecycle: lc, uiIn: uiIn, uiOut: uiOut}
 	go m.mainLoop()
-	ui.Run(lc, uiIn, uiOut)
+	ui.Run(os.Args[1:], lc, uiIn, uiOut)
 }
 
 type mainModel struct {
@@ -55,8 +57,10 @@ func (m *mainModel) handleScanMessage(msg any) {
 	switch msg := msg.(type) {
 	case fs.ScanStat:
 		m.uiIn <- msg
+	case fs.ScanDone:
+		log.Println("### arch: scan done", msg.Base)
+		m.uiIn <- msg
 	case fs.ScanFileResult:
-		log.Println("arch: scan msg =", msg)
 	default:
 		log.Panicf("### received unhandled scan message: %#v", msg)
 	}

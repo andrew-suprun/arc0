@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -35,9 +36,15 @@ type ScanError struct {
 	Error error
 }
 
+type ScanDone struct {
+	Base string
+}
+
 func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
-	lc.Started()
-	defer lc.Done()
+	defer func() {
+		results <- ScanDone{Base: base}
+		log.Println("### scan done", base)
+	}()
 
 	path, err := filepath.Abs(base)
 	path = norm.NFC.String(path)
@@ -49,8 +56,6 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 	fsys := os.DirFS(base)
 
 	infos := collectMeta(lc, fsys, results)
-
-	defer meta.StoreMeta(path, infos)
 
 	inodes := map[uint64]*meta.FileMeta{}
 	for _, meta := range infos {
@@ -83,6 +88,12 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 			totalSizeToHash += info.Size
 		}
 	}
+
+	if totalSizeToHash == 0 {
+		return
+	}
+
+	defer meta.StoreMeta(path, infos)
 
 	hashFile := func(info *meta.FileMeta) {
 		hash.Reset()
@@ -153,14 +164,12 @@ func Scan(lc *lifecycle.Lifecycle, base string, results chan<- any) {
 
 func collectMeta(lc *lifecycle.Lifecycle, fsys fs.FS, results chan<- any) (metas meta.FileMetas) {
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+		if lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
+			return nil
+		}
+
 		if err != nil {
 			results <- ScanError{Path: path, Error: err}
-			return nil
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		if strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 

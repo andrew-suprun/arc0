@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"log"
 	"math"
 	"os"
@@ -14,7 +13,7 @@ import (
 	"github.com/muesli/termenv"
 )
 
-func Run(lc *lifecycle.Lifecycle, in <-chan any, out chan<- any) {
+func Run(toScan []string, lc *lifecycle.Lifecycle, inChan <-chan any, outChan chan<- any) {
 	output := termenv.NewOutput(os.Stdout)
 	bc := output.BackgroundColor()
 	defer func() {
@@ -22,18 +21,26 @@ func Run(lc *lifecycle.Lifecycle, in <-chan any, out chan<- any) {
 		defer output.SetBackgroundColor(bc)
 	}()
 
-	p := tea.NewProgram(&model{Lifecycle: lc}, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(&model{Lifecycle: lc, scanStats: stats(toScan), outChan: outChan}, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	go func() {
 		for {
-			msg := <-in
+			msg := <-inChan
 			p.Send(msg)
 		}
 	}()
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
 
+func stats(toScan []string) []*scanStats {
+	result := make([]*scanStats, len(toScan))
+	for i, base := range toScan {
+		result[i] = &scanStats{base: base}
+		log.Println("### ui.stats", base)
+	}
+	return result
 }
 
 func (m *model) Init() tea.Cmd {
@@ -44,64 +51,83 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Printf("msg: %#v", msg)
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		log.Printf("key: %v", msg)
-		if s := msg.String(); s == "ctrl+c" || s == "q" || s == "esc" {
+		if s := msg.String(); s == "ctrl+c" || s == "esc" {
 			m.Lifecycle.Stop()
-			return m, tea.Quit
+			return m, nil
 		}
 		return m, nil
 
 	case tea.MouseMsg:
-		log.Printf("mouse: %#v", msg)
 		return m, nil
 
 	case tea.WindowSizeMsg:
-		log.Printf("size: %#v", msg)
 		m.screenHeight = msg.Height
 		m.screenWidth = msg.Width
 		return m, nil
 	case fs.ScanStat:
-		return m.fileStat(msg)
+		return m.scanFileStat(msg)
+	case fs.ScanDone:
+		return m.scanDone(msg)
 	}
 
 	log.Panicf("### received unhandled message: %#v", msg)
 	return m, nil
 }
 
-func (m *model) fileStat(stat fs.ScanStat) (tea.Model, tea.Cmd) {
-	log.Printf("file stat: %#v", stat)
-	i := -1
+var nilTime time.Time
+
+func (m *model) scanFileStat(stat fs.ScanStat) (tea.Model, tea.Cmd) {
 	var newStat *scanStats
-	for i = range m.scanStats {
+	for i := range m.scanStats {
 		if stat.Base == m.scanStats[i].base {
 			newStat = m.scanStats[i]
 		}
 	}
-	if newStat == nil {
-		newStat = &scanStats{base: stat.Base, path: stat.Path, start: time.Now()}
-		m.scanStats = append(m.scanStats, newStat)
+	if newStat.start == nilTime {
+		newStat.start = time.Now()
 	}
 	newStat.path = stat.Path
 	newStat.fileProgress = float64(stat.Hashed) / float64(stat.Size)
-	etaProgress := float64(stat.TotalHashed) / float64(stat.TotalToHash)
+	etaProgress := float64(stat.TotalToHash) / float64(stat.TotalHashed)
 	overallHashed := stat.TotalSize - stat.TotalToHash + stat.TotalHashed
 	newStat.overallProgress = float64(overallHashed) / float64(stat.TotalSize)
 	dur := time.Since(newStat.start)
-	eta := newStat.start.Add(time.Duration(float64(dur) / etaProgress))
-	newStat.remaining = time.Until(eta)
+	newStat.eta = newStat.start.Add(time.Duration(float64(dur) * etaProgress))
+	newStat.remaining = time.Until(newStat.eta)
 
+	return m, nil
+}
+
+func (m *model) scanDone(done fs.ScanDone) (tea.Model, tea.Cmd) {
+	log.Println("### ui: scan done", done.Base, "stats", len(m.scanStats))
+	for i := range m.scanStats {
+		log.Println("### ui.stats: i", i)
+		log.Println("### ui.stats: base", m.scanStats[i].base)
+		if done.Base == m.scanStats[i].base {
+			m.scanStats = append(m.scanStats[:i], m.scanStats[i+1:]...)
+			break
+		}
+	}
+	return m.checkDone()
+}
+
+func (m *model) checkDone() (tea.Model, tea.Cmd) {
+	log.Println("### ui.checkDone: stats =", len(m.scanStats))
+	if len(m.scanStats) == 0 {
+		log.Println("### ui.checkDone: quit")
+		return m, tea.Quit
+	}
 	return m, nil
 }
 
 func (m *model) View() string {
 	builder := strings.Builder{}
 	for _, stat := range m.scanStats {
-		barWidth := m.screenWidth - 37
+		barWidth := m.screenWidth - 29
 
-		builder.WriteString("Сканнирование ")
+		builder.WriteString(" Сканнирование              ")
 		builder.WriteString(stat.base)
 		builder.WriteString("\n Имя Файла                  ")
 		builder.WriteString(stat.path)
@@ -110,12 +136,12 @@ func (m *model) View() string {
 		builder.WriteString("\n Время До Завершения        ")
 		builder.WriteString(stat.remaining.Truncate(time.Second).String())
 		builder.WriteString("\n Прогресс Файла             ")
-		builder.WriteString(fmt.Sprintf("%6.2f%% ", stat.fileProgress*100))
+		// builder.WriteString(fmt.Sprintf("%6.2f%% ", stat.fileProgress*100))
 		builder.WriteString(progressBar(barWidth, stat.fileProgress))
 		builder.WriteString("\n Общий Прогресс             ")
-		builder.WriteString(fmt.Sprintf("%6.2f%% ", stat.overallProgress*100))
+		// builder.WriteString(fmt.Sprintf("%6.2f%% ", stat.overallProgress*100))
 		builder.WriteString(progressBar(barWidth, stat.overallProgress))
-		builder.WriteString("\n")
+		builder.WriteString("\n\n")
 	}
 	return builder.String()
 }

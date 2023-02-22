@@ -7,9 +7,10 @@ import (
 
 type model struct {
 	*lifecycle.Lifecycle
+	scanStats    []*scanStats
 	screenHeight int
 	screenWidth  int
-	scanStats    []*scanStats
+	outChan      chan<- any
 }
 
 type scanStats struct {
