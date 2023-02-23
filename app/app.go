@@ -51,7 +51,7 @@ func (a *mainModel) run() {
 }
 
 func (a *mainModel) handleUiMessage(msg any) {
-	log.Println("arch: ui msg =", msg)
+	log.Printf("arch: ui msg = %#v", msg)
 	switch msg := msg.(type) {
 	case api.CmdQuit:
 		close(a.fsIn)

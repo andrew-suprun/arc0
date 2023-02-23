@@ -90,7 +90,7 @@ func (r *runner) scan(base string) {
 		var hashed int
 
 		for {
-			if r.Lifecycle.ShoudStop() {
+			if r.ShoudStop() {
 				return
 			}
 
@@ -135,7 +135,7 @@ func (r *runner) scan(base string) {
 
 	for _, info := range infos {
 		if info.Hash == "" {
-			if r.Lifecycle.ShoudStop() {
+			if r.ShoudStop() {
 				return
 			}
 			hashFile(info)
@@ -146,7 +146,7 @@ func (r *runner) scan(base string) {
 
 func (r *runner) collectMeta(base string) (metas []*api.FileMeta) {
 	filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
-		if r.Lifecycle.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
+		if r.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 

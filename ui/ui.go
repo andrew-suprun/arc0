@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"math"
@@ -67,7 +68,9 @@ func (m *model) Init() tea.Cmd {
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if s := msg.String(); s == "ctrl+c" || s == "esc" {
+		s := msg.String()
+		switch s {
+		case "ctrl+c", "esc":
 			m.outChan <- api.CmdQuit{}
 			return m, nil
 		}
@@ -77,9 +80,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
+		cmd := tea.Cmd(nil)
+		if m.screenWidth > msg.Width {
+			cmd = tea.ClearScreen
+		}
 		m.screenHeight = msg.Height
 		m.screenWidth = msg.Width
-		return m, nil
+		return m, cmd
 
 	case api.CmdScan:
 		m.scanStats = append(m.scanStats, &scanStats{base: msg.Base})
@@ -92,7 +99,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.scanDone(msg)
 	}
 
-	log.Panicf("### received unhandled message: %#v", msg)
+	log.Printf("### ui.Update received unhandled message: %#v", msg)
 	return m, nil
 }
 
@@ -131,12 +138,14 @@ func (m *model) scanDone(done api.ScanDone) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) View() string {
+	if m.screenWidth < 0 {
+		return ""
+	}
 	builder := strings.Builder{}
 	for _, stat := range m.scanStats {
 		barWidth := m.screenWidth - 29
 
-		builder.WriteString(" Архив                      ")
-		builder.WriteString(stat.base)
+		builder.WriteString(header("Архив "+stat.base, m.screenWidth))
 		builder.WriteString("\n Имя Файла                  ")
 		builder.WriteString(stat.path)
 		builder.WriteString("\n Ожидаемое Время Завершения ")
@@ -152,12 +161,32 @@ func (m *model) View() string {
 	return builder.String()
 }
 
-var runes = []rune{' ', '\u258F', '\u258E', '\u258D', '\u258C', '\u258A', '\u258A', '\u2589'}
-
 func progressBar(barWidth int, value float64) string {
+	if barWidth <= 0 {
+		return ""
+	}
 	builder := strings.Builder{}
 	progress := int(math.Round(float64(barWidth*8) * value))
-	builder.WriteString(strings.Repeat("\u2588", progress/8))
-	builder.WriteRune(runes[progress%8])
+	builder.WriteString(strings.Repeat("█", progress/8))
+	builder.WriteRune([]rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8])
 	return builder.String()
+}
+
+func header(text string, width int) string {
+	log.Println("### text", text, "len", len(text), "width", width)
+	if width <= 12 {
+		return text
+	}
+	runes := []rune(text)
+	if len(runes) > width-10 {
+		runes = append(runes[:width-11], '…')
+	}
+	log.Println("### text", text, "len", len(text), "width", width)
+	count := width - len(runes) - 6
+	if width <= 0 {
+		return text
+	}
+	text = fmt.Sprintf("━━━━ %s %s", string(runes), strings.Repeat("━", count))
+	log.Println("### text", text, "len", len(text), "count", count)
+	return text
 }

@@ -6,13 +6,13 @@ import (
 )
 
 type runner struct {
+	*lifecycle.Lifecycle
 	in  <-chan any
 	out chan<- any
-	*lifecycle.Lifecycle
 }
 
 func Run(in <-chan any, out chan<- any) {
-	r := &runner{in: in, out: out, Lifecycle: lifecycle.New()}
+	r := &runner{Lifecycle: lifecycle.New(), in: in, out: out}
 	go r.run()
 }
 
@@ -24,7 +24,7 @@ func (r *runner) run() {
 		}
 		go r.handleCommand(cmd)
 	}
-	r.Lifecycle.Stop()
+	r.Stop()
 }
 
 func (r *runner) handleCommand(cmd any) {
