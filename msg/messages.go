@@ -1,8 +1,14 @@
-package api
+package msg
 
 import (
 	"time"
 )
+
+type CmdScan struct {
+	Base string
+}
+
+type CmdQuit struct{}
 
 type FileMeta struct {
 	Ino     uint64

@@ -1,8 +1,8 @@
 package fs
 
 import (
-	"scanner/api"
-	"scanner/lifecycle"
+	"arch/lifecycle"
+	"arch/msg"
 )
 
 type runner struct {
@@ -29,7 +29,7 @@ func (r *runner) run() {
 
 func (r *runner) handleCommand(cmd any) {
 	switch cmd := cmd.(type) {
-	case api.CmdScan:
+	case msg.CmdScan:
 		r.scan(cmd.Base)
 	}
 }

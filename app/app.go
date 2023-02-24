@@ -1,11 +1,9 @@
 package app
 
 import (
+	"arch/msg"
 	"log"
 	"os"
-	"scanner/api"
-	"scanner/fs"
-	"scanner/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -19,63 +17,51 @@ type mainModel struct {
 	scanned int
 }
 
-func Run() {
-	uiIn := make(chan any)
-	uiOut := make(chan any)
-
-	fsIn := make(chan any)
-	fsOut := make(chan any)
-
+func Run(uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsOut <-chan any) {
 	a := &mainModel{uiIn: uiIn, uiOut: uiOut, fsIn: fsIn, fsOut: fsOut}
-	go a.run()
-	go fs.Run(fsIn, fsOut)
-	ui.Run(uiIn, uiOut)
-}
-
-func (a *mainModel) run() {
 	paths := os.Args[1:]
 	for _, path := range paths {
-		a.uiIn <- api.CmdScan{Base: path}
-		a.fsIn <- api.CmdScan{Base: path}
+		a.uiIn <- msg.CmdScan{Base: path}
+		a.fsIn <- msg.CmdScan{Base: path}
 	}
 	a.toScan = len(paths)
 	for a.scanned < a.toScan {
 		select {
-		case msg := <-a.uiOut:
-			a.handleUiMessage(msg)
-		case msg := <-a.fsOut:
-			a.handleFsMessage(msg)
+		case event := <-a.uiOut:
+			a.handleUiMessage(event)
+		case event := <-a.fsOut:
+			a.handleFsMessage(event)
 		}
 	}
 	a.uiIn <- tea.Quit()
 }
 
-func (a *mainModel) handleUiMessage(msg any) {
-	log.Printf("arch: ui msg = %#v", msg)
-	switch msg := msg.(type) {
-	case api.CmdQuit:
+func (a *mainModel) handleUiMessage(event any) {
+	log.Printf("arch: ui event = %#v", event)
+	switch event := event.(type) {
+	case msg.CmdQuit:
 		close(a.fsIn)
 	default:
-		log.Panicf("### received unhandled ui message: %#v", msg)
+		log.Panicf("### received unhandled ui message: %#v", event)
 	}
 }
 
-func (a *mainModel) handleFsMessage(msg any) {
-	switch msg := msg.(type) {
-	case api.ScanStat:
-		a.uiIn <- msg
+func (a *mainModel) handleFsMessage(event any) {
+	switch event := event.(type) {
+	case msg.ScanStat:
+		a.uiIn <- event
 
-	case api.ScanDone:
+	case msg.ScanDone:
 		a.scanned++
-		a.uiIn <- msg
+		a.uiIn <- event
 
-	case api.FileMeta:
+	case msg.FileMeta:
 		// TODO
 
-	case api.ScanError:
+	case msg.ScanError:
 		// TODO
 
 	default:
-		log.Panicf("### received unhandled fs message: %#v", msg)
+		log.Panicf("### received unhandled fs message: %#v", event)
 	}
 }

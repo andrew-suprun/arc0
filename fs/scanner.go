@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"arch/msg"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
@@ -15,26 +16,24 @@ import (
 	"syscall"
 	"time"
 
-	"scanner/api"
-
 	"golang.org/x/text/unicode/norm"
 )
 
 func (r *runner) scan(base string) {
 	defer func() {
-		r.out <- api.ScanDone{Base: base}
+		r.out <- msg.ScanDone{Base: base}
 	}()
 
 	path, err := filepath.Abs(base)
 	path = norm.NFC.String(path)
 	if err != nil {
-		r.out <- api.ScanError{Base: base, Path: path, Error: err}
+		r.out <- msg.ScanError{Base: base, Path: path, Error: err}
 		return
 	}
 
 	infos := r.collectMeta(base)
 
-	inodes := map[uint64]*api.FileMeta{}
+	inodes := map[uint64]*msg.FileMeta{}
 	for _, meta := range infos {
 		inodes[meta.Ino] = meta
 	}
@@ -72,7 +71,7 @@ func (r *runner) scan(base string) {
 
 	defer storeMeta(path, infos)
 
-	hashFile := func(info *api.FileMeta) {
+	hashFile := func(info *msg.FileMeta) {
 		defer func() {
 			totalHashed += info.Size
 		}()
@@ -81,7 +80,7 @@ func (r *runner) scan(base string) {
 
 		file, err := os.Open(info.Path)
 		if err != nil {
-			r.out <- api.ScanError{Base: base, Path: info.Path, Error: err}
+			r.out <- msg.ScanError{Base: base, Path: info.Path, Error: err}
 			return
 		}
 		defer file.Close()
@@ -98,12 +97,12 @@ func (r *runner) scan(base string) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						r.out <- api.ScanError{Base: base, Path: info.Path, Error: err}
+						r.out <- msg.ScanError{Base: base, Path: info.Path, Error: err}
 						return
 					}
 				}
 				if nr != nw {
-					r.out <- api.ScanError{Base: base, Path: info.Path, Error: io.ErrShortWrite}
+					r.out <- msg.ScanError{Base: base, Path: info.Path, Error: io.ErrShortWrite}
 					return
 				}
 			}
@@ -114,11 +113,11 @@ func (r *runner) scan(base string) {
 				break
 			}
 			if er != nil {
-				r.out <- api.ScanError{Base: base, Path: info.Path, Error: err}
+				r.out <- msg.ScanError{Base: base, Path: info.Path, Error: err}
 				return
 			}
 
-			r.out <- api.ScanStat{
+			r.out <- msg.ScanStat{
 				Base:        base,
 				Path:        info.Path,
 				Size:        info.Size,
@@ -142,24 +141,24 @@ func (r *runner) scan(base string) {
 	}
 }
 
-func (r *runner) collectMeta(base string) (metas []*api.FileMeta) {
+func (r *runner) collectMeta(base string) (metas []*msg.FileMeta) {
 	filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
 		if r.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 
 		if err != nil {
-			r.out <- api.ScanError{Base: base, Path: path, Error: err}
+			r.out <- msg.ScanError{Base: base, Path: path, Error: err}
 			return nil
 		}
 
 		info, err := d.Info()
 		if err != nil {
-			r.out <- api.ScanError{Base: base, Path: path, Error: err}
+			r.out <- msg.ScanError{Base: base, Path: path, Error: err}
 			return nil
 		}
 		sys := info.Sys().(*syscall.Stat_t)
-		metas = append(metas, &api.FileMeta{
+		metas = append(metas, &msg.FileMeta{
 			Ino:     sys.Ino,
 			Base:    base,
 			Path:    path,
@@ -176,7 +175,7 @@ func (r *runner) collectMeta(base string) (metas []*api.FileMeta) {
 
 const HashFileName = ".meta.csv"
 
-func readMeta(basePath string) (result []*api.FileMeta) {
+func readMeta(basePath string) (result []*msg.FileMeta) {
 	absHashFileName := filepath.Join(basePath, HashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
 
@@ -200,7 +199,7 @@ func readMeta(basePath string) (result []*api.FileMeta) {
 		if er1 != nil || er2 != nil || er3 != nil {
 			continue
 		}
-		result = append(result, &api.FileMeta{
+		result = append(result, &msg.FileMeta{
 			Ino:     ino,
 			Path:    norm.NFC.String(record[1]),
 			Size:    int(size),
@@ -212,7 +211,7 @@ func readMeta(basePath string) (result []*api.FileMeta) {
 	return result
 }
 
-func storeMeta(basePath string, metas []*api.FileMeta) error {
+func storeMeta(basePath string, metas []*msg.FileMeta) error {
 	result := make([][]string, len(metas)+1)
 	result[0] = []string{"Inode", "Path", "Size", "ModTime", "Hash"}
 

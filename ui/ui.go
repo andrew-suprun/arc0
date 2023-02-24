@@ -1,12 +1,12 @@
 package ui
 
 import (
+	"arch/msg"
 	"fmt"
 	"image/color"
 	"log"
 	"math"
 	"os"
-	"scanner/api"
 	"strings"
 	"time"
 
@@ -47,9 +47,9 @@ func Run(inChan <-chan any, outChan chan<- any) {
 
 	go func() {
 		for {
-			msg := <-inChan
-			p.Send(msg)
-			if msg == tea.Quit() {
+			event := <-inChan
+			p.Send(event)
+			if event == tea.Quit() {
 				return
 			}
 		}
@@ -67,13 +67,13 @@ func (m *model) Init() tea.Cmd {
 	return nil
 }
 
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
+func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
+	switch event := event.(type) {
 	case tea.KeyMsg:
-		s := msg.String()
+		s := event.String()
 		switch s {
 		case "ctrl+c", "esc":
-			m.outChan <- api.CmdQuit{}
+			m.outChan <- msg.CmdQuit{}
 			return m, nil
 		}
 		return m, nil
@@ -83,31 +83,31 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		cmd := tea.Cmd(nil)
-		if m.screenWidth > msg.Width {
+		if m.screenWidth > event.Width {
 			cmd = tea.ClearScreen
 		}
-		m.screenHeight = msg.Height
-		m.screenWidth = msg.Width
+		m.screenHeight = event.Height
+		m.screenWidth = event.Width
 		return m, cmd
 
-	case api.CmdScan:
-		m.scanStats = append(m.scanStats, &scanStats{base: msg.Base})
+	case msg.CmdScan:
+		m.scanStats = append(m.scanStats, &scanStats{base: event.Base})
 		return m, nil
 
-	case api.ScanStat:
-		return m.scanFileStat(msg)
+	case msg.ScanStat:
+		return m.scanFileStat(event)
 
-	case api.ScanDone:
-		return m.scanDone(msg)
+	case msg.ScanDone:
+		return m.scanDone(event)
 	}
 
-	log.Panicf("### ui.Update received unhandled message: %#v", msg)
+	log.Panicf("### ui.Update received unhandled message: %#v", event)
 	return m, nil
 }
 
 var nilTime time.Time
 
-func (m *model) scanFileStat(stat api.ScanStat) (tea.Model, tea.Cmd) {
+func (m *model) scanFileStat(stat msg.ScanStat) (tea.Model, tea.Cmd) {
 	var newStat *scanStats
 	for i := range m.scanStats {
 		if stat.Base == m.scanStats[i].base {
@@ -129,7 +129,7 @@ func (m *model) scanFileStat(stat api.ScanStat) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) scanDone(done api.ScanDone) (tea.Model, tea.Cmd) {
+func (m *model) scanDone(done msg.ScanDone) (tea.Model, tea.Cmd) {
 	for i := range m.scanStats {
 		if done.Base == m.scanStats[i].base {
 			m.scanStats = append(m.scanStats[:i], m.scanStats[i+1:]...)
