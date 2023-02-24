@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/charmbracelet/bubbletea v0.23.2
+	github.com/charmbracelet/lipgloss v0.6.0
 	github.com/muesli/termenv v0.14.0
 	golang.org/x/text v0.6.0
 )

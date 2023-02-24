@@ -11,6 +11,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/ansi"
 	"github.com/muesli/termenv"
 )
 
@@ -61,7 +63,7 @@ func (m *model) Init() tea.Cmd {
 	p := termenv.ColorProfile()
 	output := termenv.NewOutput(os.Stdout)
 	output.SetBackgroundColor(p.FromColor(color.RGBA{0, 16, 64, 255}))
-	output.SetForegroundColor(p.FromColor(color.RGBA{255, 255, 64, 255}))
+	output.SetForegroundColor(p.FromColor(color.RGBA{255, 255, 205, 255}))
 	return nil
 }
 
@@ -99,7 +101,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.scanDone(msg)
 	}
 
-	log.Printf("### ui.Update received unhandled message: %#v", msg)
+	log.Panicf("### ui.Update received unhandled message: %#v", msg)
 	return m, nil
 }
 
@@ -138,6 +140,7 @@ func (m *model) scanDone(done api.ScanDone) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) View() string {
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#ffffff")).Bold(true)
 	if m.screenWidth < 0 {
 		return ""
 	}
@@ -146,14 +149,14 @@ func (m *model) View() string {
 		barWidth := m.screenWidth - 29
 
 		builder.WriteString(header("Архив "+stat.base, m.screenWidth))
-		builder.WriteString("\n Имя Файла                  ")
-		builder.WriteString(stat.path)
+		builder.WriteString("\n Сканируется Файл           ")
+		builder.WriteString(style.Render(stat.path))
+		// builder.WriteString("\n Прогресс Файла             ")
+		// builder.WriteString(progressBar(barWidth, stat.fileProgress))
 		builder.WriteString("\n Ожидаемое Время Завершения ")
-		builder.WriteString(stat.eta.Format(time.TimeOnly))
+		builder.WriteString(style.Render(stat.eta.Format(time.TimeOnly)))
 		builder.WriteString("\n Время До Завершения        ")
-		builder.WriteString(stat.remaining.Truncate(time.Second).String())
-		builder.WriteString("\n Прогресс Файла             ")
-		builder.WriteString(progressBar(barWidth, stat.fileProgress))
+		builder.WriteString(style.Render(stat.remaining.Truncate(time.Second).String()))
 		builder.WriteString("\n Общий Прогресс             ")
 		builder.WriteString(progressBar(barWidth, stat.overallProgress))
 		builder.WriteString("\n\n")
@@ -168,12 +171,18 @@ func progressBar(barWidth int, value float64) string {
 	builder := strings.Builder{}
 	progress := int(math.Round(float64(barWidth*8) * value))
 	builder.WriteString(strings.Repeat("█", progress/8))
-	builder.WriteRune([]rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8])
-	return builder.String()
+	log.Println("### builder.Len()", builder.Len())
+	if progress%8 > 0 {
+		builder.WriteRune([]rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8])
+	}
+	style := lipgloss.NewStyle().Background(lipgloss.Color("#1f1f9f"))
+	str := builder.String()
+	length := ansi.PrintableRuneWidth(str)
+	log.Println("### value", value, "progress", progress, "width", barWidth, "length", length, "str", str)
+	return style.Render(str + strings.Repeat(" ", barWidth-length))
 }
 
 func header(text string, width int) string {
-	log.Println("### text", text, "len", len(text), "width", width)
 	if width <= 12 {
 		return text
 	}
@@ -181,12 +190,15 @@ func header(text string, width int) string {
 	if len(runes) > width-10 {
 		runes = append(runes[:width-11], '…')
 	}
-	log.Println("### text", text, "len", len(text), "width", width)
-	count := width - len(runes) - 6
-	if width <= 0 {
-		return text
-	}
-	text = fmt.Sprintf("━━━━ %s %s", string(runes), strings.Repeat("━", count))
-	log.Println("### text", text, "len", len(text), "count", count)
+
+	title := lipgloss.Color("#ff7f7f")
+
+	var style = lipgloss.NewStyle().Foreground(title).Bold(true)
+	out := style.Render(string(runes))
+	length := ansi.PrintableRuneWidth(out)
+	left := (width - length - 2) / 2
+	right := width - length - 2 - left
+
+	text = fmt.Sprintf("%s %s %s", strings.Repeat("━", left), out, strings.Repeat("━", right))
 	return text
 }

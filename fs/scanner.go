@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -141,7 +140,6 @@ func (r *runner) scan(base string) {
 			hashFile(info)
 		}
 	}
-	log.Println("### scan: done")
 }
 
 func (r *runner) collectMeta(base string) (metas []*api.FileMeta) {
