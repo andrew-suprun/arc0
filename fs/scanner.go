@@ -20,10 +20,6 @@ import (
 )
 
 func (r *runner) scan(base string) {
-	defer func() {
-		r.out <- msg.ScanDone{Base: base}
-	}()
-
 	path, err := filepath.Abs(base)
 	path = norm.NFC.String(path)
 	if err != nil {
@@ -31,19 +27,23 @@ func (r *runner) scan(base string) {
 		return
 	}
 
-	infos := r.collectMeta(base)
+	metas := r.collectMeta(base)
+	defer func() {
+		storeMeta(path, metas)
+		r.out <- msg.ScanMetas{Base: base, Metas: metas}
+	}()
 
 	inodes := map[uint64]*msg.FileMeta{}
-	for _, meta := range infos {
+	for _, meta := range metas {
 		inodes[meta.Ino] = meta
 	}
 
 	storedMetas := readMeta(path)
 
 	for _, storedInfo := range storedMetas {
-		if info, ok := inodes[storedInfo.Ino]; ok {
-			if storedInfo.Size == info.Size {
-				info.Hash = storedInfo.Hash
+		if meta, ok := inodes[storedInfo.Ino]; ok {
+			if storedInfo.Size == meta.Size {
+				meta.Hash = storedInfo.Hash
 			}
 		} else {
 			fmt.Println("not found", storedInfo.Path)
@@ -58,10 +58,10 @@ func (r *runner) scan(base string) {
 		buf             = make([]byte, 4*1024*1024)
 	)
 
-	for _, info := range infos {
-		totalSize += info.Size
-		if info.Hash == "" {
-			totalSizeToHash += info.Size
+	for _, meta := range metas {
+		totalSize += meta.Size
+		if meta.Hash == "" {
+			totalSizeToHash += meta.Size
 		}
 	}
 
@@ -69,18 +69,16 @@ func (r *runner) scan(base string) {
 		return
 	}
 
-	defer storeMeta(path, infos)
-
-	hashFile := func(info *msg.FileMeta) {
+	hashFile := func(meta *msg.FileMeta) {
 		defer func() {
-			totalHashed += info.Size
+			totalHashed += meta.Size
 		}()
 
 		hash.Reset()
 
-		file, err := os.Open(info.Path)
+		file, err := os.Open(meta.Path)
 		if err != nil {
-			r.out <- msg.ScanError{Base: base, Path: info.Path, Error: err}
+			r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
 			return
 		}
 		defer file.Close()
@@ -97,12 +95,12 @@ func (r *runner) scan(base string) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						r.out <- msg.ScanError{Base: base, Path: info.Path, Error: err}
+						r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
 						return
 					}
 				}
 				if nr != nw {
-					r.out <- msg.ScanError{Base: base, Path: info.Path, Error: io.ErrShortWrite}
+					r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: io.ErrShortWrite}
 					return
 				}
 			}
@@ -113,30 +111,29 @@ func (r *runner) scan(base string) {
 				break
 			}
 			if er != nil {
-				r.out <- msg.ScanError{Base: base, Path: info.Path, Error: err}
+				r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
 				return
 			}
 
 			r.out <- msg.ScanStat{
 				Base:        base,
-				Path:        info.Path,
-				Size:        info.Size,
+				Path:        meta.Path,
+				Size:        meta.Size,
 				Hashed:      hashed,
 				TotalSize:   totalSize,
 				TotalToHash: totalSizeToHash,
 				TotalHashed: totalHashed + hashed,
 			}
 		}
-		info.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
-		r.out <- *info
+		meta.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 	}
 
-	for _, info := range infos {
-		if info.Hash == "" {
+	for _, meta := range metas {
+		if meta.Hash == "" {
 			if r.ShoudStop() {
 				return
 			}
-			hashFile(info)
+			hashFile(meta)
 		}
 	}
 }
@@ -152,18 +149,18 @@ func (r *runner) collectMeta(base string) (metas []*msg.FileMeta) {
 			return nil
 		}
 
-		info, err := d.Info()
+		meta, err := d.Info()
 		if err != nil {
 			r.out <- msg.ScanError{Base: base, Path: path, Error: err}
 			return nil
 		}
-		sys := info.Sys().(*syscall.Stat_t)
+		sys := meta.Sys().(*syscall.Stat_t)
 		metas = append(metas, &msg.FileMeta{
 			Ino:     sys.Ino,
 			Base:    base,
 			Path:    path,
 			Size:    int(sys.Size),
-			ModTime: info.ModTime(),
+			ModTime: meta.ModTime(),
 		})
 		return nil
 	})

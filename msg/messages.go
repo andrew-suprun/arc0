@@ -35,6 +35,11 @@ type ScanStat struct {
 	TotalHashed int
 }
 
+type ScanMetas struct {
+	Base  string
+	Metas []*FileMeta
+}
+
 type ScanDone struct {
 	Base string
 }

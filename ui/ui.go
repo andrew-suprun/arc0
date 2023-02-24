@@ -171,14 +171,12 @@ func progressBar(barWidth int, value float64) string {
 	builder := strings.Builder{}
 	progress := int(math.Round(float64(barWidth*8) * value))
 	builder.WriteString(strings.Repeat("█", progress/8))
-	log.Println("### builder.Len()", builder.Len())
 	if progress%8 > 0 {
 		builder.WriteRune([]rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8])
 	}
 	style := lipgloss.NewStyle().Background(lipgloss.Color("#1f1f9f"))
 	str := builder.String()
 	length := ansi.PrintableRuneWidth(str)
-	log.Println("### value", value, "progress", progress, "width", barWidth, "length", length, "str", str)
 	return style.Render(str + strings.Repeat(" ", barWidth-length))
 }
 
