@@ -99,6 +99,9 @@ func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
 
 	case msg.ScanDone:
 		return m.scanDone(event)
+
+	case msg.QuitApp:
+		return m, tea.Quit
 	}
 
 	log.Panicf("### ui.Update received unhandled message: %#v", event)

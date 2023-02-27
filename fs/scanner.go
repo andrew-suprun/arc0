@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -46,7 +47,7 @@ func (r *runner) scan(base string) {
 				meta.Hash = storedInfo.Hash
 			}
 		} else {
-			fmt.Println("not found", storedInfo.Path)
+			log.Println("not found", storedInfo.Path)
 		}
 	}
 

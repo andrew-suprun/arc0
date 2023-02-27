@@ -4,7 +4,7 @@ import (
 	"arch/app"
 	"arch/fs"
 	"arch/ui"
-	"fmt"
+	"log"
 	"os"
 )
 
@@ -13,7 +13,7 @@ func main() {
 	for _, path := range paths {
 		_, err := os.Stat(path)
 		if err != nil {
-			fmt.Printf("Invalid path: %v", path)
+			log.Printf("Invalid path: %v", path)
 			return
 		}
 	}

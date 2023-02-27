@@ -40,6 +40,8 @@ type ScanMetas struct {
 	Metas []*FileMeta
 }
 
+type Analysis [][]ScanMetas
+
 type ScanDone struct {
 	Base string
 }

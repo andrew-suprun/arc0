@@ -118,7 +118,7 @@ func dedup() {
 			if len(names) == 1 {
 				continue
 			}
-			fmt.Println(hash)
+			log.Println(hash)
 			sort.Strings(names)
 			prevDir := ""
 			for _, name := range names {
@@ -126,10 +126,10 @@ func dedup() {
 				baseName := filepath.Base(name)
 				dirCounts[dir]++
 				if prevDir != dir {
-					fmt.Println("   ", dir)
+					log.Println("   ", dir)
 					prevDir = dir
 				}
-				fmt.Println("       ", baseName)
+				log.Println("       ", baseName)
 			}
 		}
 
@@ -146,9 +146,9 @@ func dedup() {
 		})
 
 		if len(countSlice) > 0 {
-			fmt.Println("\n counts:")
+			log.Println("\n counts:")
 			for _, dirCount := range countSlice {
-				fmt.Printf("%4d %q\n", dirCount.count, dirCount.name)
+				log.Printf("%4d %q\n", dirCount.count, dirCount.name)
 			}
 		}
 	}
@@ -173,8 +173,8 @@ func dedup() {
 					from := filepath.Join(basePath, name)
 					to := filepath.Join(basePath, dupsDir, name)
 
-					fmt.Printf("moving %q\n", from)
-					fmt.Printf("    to %q\n", to)
+					log.Printf("moving %q\n", from)
+					log.Printf("    to %q\n", to)
 					os.MkdirAll(filepath.Dir(to), 0755)
 					os.Rename(from, to)
 					totalRemoved++
@@ -240,13 +240,13 @@ func mirror() {
 	// 		from := filepath.Join(toBase, toName)
 	// 		to := filepath.Join(toBase, fromName)
 
-	// 		fmt.Printf("moving %q\n", from)
-	// 		fmt.Printf("    to %q\n", to)
+	// 		log.Printf("moving %q\n", from)
+	// 		log.Printf("    to %q\n", to)
 
 	// 		os.MkdirAll(filepath.Dir(to), 0755)
 	// 		err = os.Rename(from, to)
 	// 		if err != nil {
-	// 			fmt.Println("###:1", err)
+	// 			log.Println("###:1", err)
 	// 		}
 
 	// 		fromMap[toInfo.Hash] = fromNames[1:]
@@ -268,14 +268,14 @@ func mirror() {
 			break
 		}
 		if toNames, ok := toMap[fromInfo.Hash]; ok && len(toNames) > 0 {
-			fmt.Printf("rename %q\n", toNames[0])
-			fmt.Printf("    as %q\n", name)
+			log.Printf("rename %q\n", toNames[0])
+			log.Printf("    as %q\n", name)
 			toName := filepath.Join(toBase, name)
 			toDir := filepath.Dir(toName)
 			os.MkdirAll(toDir, 0755)
 			err = os.Rename(filepath.Join(toBase, toNames[0]), toName)
 			if err != nil {
-				fmt.Println("###:2", err)
+				log.Println("###:2", err)
 			}
 			delete(fromInfos, name)
 			delete(toInfos, toNames[0])
@@ -291,13 +291,13 @@ func mirror() {
 			break
 		}
 		if toNames, ok := toMap[fromInfo.Hash]; !ok || len(toNames) == 0 {
-			fmt.Printf("copy   %q\n", name)
+			log.Printf("copy   %q\n", name)
 			toName := filepath.Join(toBase, name)
 			toDir := filepath.Dir(toName)
 			os.MkdirAll(toDir, 0755)
 			err = copyFile(filepath.Join(fromBase, name), toName)
 			if err != nil {
-				fmt.Println("###:3", err)
+				log.Println("###:3", err)
 			}
 			delete(toInfos, name)
 			toOriginalInfos[name] = fromInfo
@@ -312,13 +312,13 @@ func mirror() {
 		from := filepath.Join(toBase, toName)
 		to := filepath.Join(toBase, extrasDir, toName)
 
-		fmt.Printf("moving %q\n", from)
-		fmt.Printf("    to %q\n", to)
+		log.Printf("moving %q\n", from)
+		log.Printf("    to %q\n", to)
 
 		os.MkdirAll(filepath.Dir(to), 0755)
 		err = os.Rename(from, to)
 		if err != nil {
-			fmt.Println("###:4", err)
+			log.Println("###:4", err)
 		}
 
 		delete(toOriginalInfos, toName)
@@ -393,14 +393,14 @@ func merge() {
 		os.MkdirAll(filepath.Dir(toFileName), 0755)
 		err = os.Rename(fromFileName, toFileName)
 		if err != nil {
-			fmt.Printf("copy %q\n  to %q\n", fromFileName, toFileName)
+			log.Printf("copy %q\n  to %q\n", fromFileName, toFileName)
 			err = copyFile(fromFileName, toFileName)
 		} else {
-			fmt.Printf("move %q\n  to %q\n", fromFileName, toFileName)
+			log.Printf("move %q\n  to %q\n", fromFileName, toFileName)
 		}
 
 		if err != nil {
-			fmt.Printf("### ERROR: %v\n", err)
+			log.Printf("### ERROR: %v\n", err)
 		} else {
 			toInfos[toName] = fromInfo
 			toInfosChanged = true
@@ -454,7 +454,7 @@ func hashPath(basePath string) map[string]hashInfo {
 		}
 
 		if info.Name() == ".DS_Store" || strings.HasPrefix(info.Name(), "._") {
-			fmt.Printf("removing %q\n", name)
+			log.Printf("removing %q\n", name)
 			os.Remove(name)
 			return nil
 		}
@@ -472,7 +472,7 @@ func hashPath(basePath string) map[string]hashInfo {
 			delete(originalInfoMap, relName)
 			return nil
 		}
-		fmt.Printf(" hashing %q\n", name)
+		log.Printf(" hashing %q\n", name)
 		shoudStore = true
 
 		hash, err := hashFileX(name)
@@ -607,7 +607,7 @@ func setFileModTime(src, dst string) error {
 }
 
 func storeInfos(name string, infoMap map[string]hashInfo) {
-	fmt.Printf("---- Storing file %q ----\n", name)
+	log.Printf("---- Storing file %q ----\n", name)
 
 	buf, err := json.MarshalIndent(infoMap, "", "    ")
 	if err != nil {
