@@ -139,7 +139,7 @@ func (r *runner) scan(base string) {
 	}
 }
 
-func (r *runner) collectMeta(base string) (metas []*msg.FileMeta) {
+func (r *runner) collectMeta(base string) (metas msg.FileMetas) {
 	filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
 		if r.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
@@ -158,7 +158,6 @@ func (r *runner) collectMeta(base string) (metas []*msg.FileMeta) {
 		sys := meta.Sys().(*syscall.Stat_t)
 		metas = append(metas, &msg.FileMeta{
 			Ino:     sys.Ino,
-			Base:    base,
 			Path:    path,
 			Size:    int(sys.Size),
 			ModTime: meta.ModTime(),
@@ -173,7 +172,7 @@ func (r *runner) collectMeta(base string) (metas []*msg.FileMeta) {
 
 const HashFileName = ".meta.csv"
 
-func readMeta(basePath string) (result []*msg.FileMeta) {
+func readMeta(basePath string) (result msg.FileMetas) {
 	absHashFileName := filepath.Join(basePath, HashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
 
@@ -209,7 +208,7 @@ func readMeta(basePath string) (result []*msg.FileMeta) {
 	return result
 }
 
-func storeMeta(basePath string, metas []*msg.FileMeta) error {
+func storeMeta(basePath string, metas msg.FileMetas) error {
 	result := make([][]string, len(metas)+1)
 	result[0] = []string{"Inode", "Path", "Size", "ModTime", "Hash"}
 

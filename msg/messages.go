@@ -1,6 +1,8 @@
 package msg
 
 import (
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -12,7 +14,6 @@ type CmdQuit struct{}
 
 type FileMeta struct {
 	Ino     uint64
-	Base    string
 	Path    string
 	Size    int
 	ModTime time.Time
@@ -35,12 +36,32 @@ type ScanStat struct {
 	TotalHashed int
 }
 
+type FileMetas []*FileMeta
+
 type ScanMetas struct {
 	Base  string
-	Metas []*FileMeta
+	Metas FileMetas
 }
 
-type Analysis [][]ScanMetas
+// keys:          hash       base
+type Analysis map[string]map[string]FileMetas
+
+func (a Analysis) String() string {
+	builder := &strings.Builder{}
+	for hash, byBase := range a {
+		fmt.Fprintln(builder, hash)
+		for base, metas := range byBase {
+			if len(metas) == 0 {
+				continue
+			}
+			fmt.Fprintf(builder, "    %s\n", base)
+			for _, meta := range metas {
+				fmt.Fprintf(builder, "        %s\n", meta.Path)
+			}
+		}
+	}
+	return builder.String()
+}
 
 type ScanDone struct {
 	Base string

@@ -11,31 +11,31 @@ type appModel struct {
 	fsIn    chan<- any
 	fsOut   <-chan any
 	scanned int
-	stats   []scanStats
+	stats   map[string]*scanStats // key: base
+	source  string
 }
 
 type scanStats struct {
-	metas  msg.ScanMetas
+	metas  msg.FileMetas
 	byName map[string]*msg.FileMeta
-	byHash map[string]msg.ScanMetas
+	byHash map[string]msg.FileMetas
 }
 
 func Run(paths []string, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsOut <-chan any) {
-	app := &appModel{uiIn: uiIn, uiOut: uiOut, fsIn: fsIn, fsOut: fsOut}
+	app := &appModel{source: paths[0], uiIn: uiIn, uiOut: uiOut, fsIn: fsIn, fsOut: fsOut}
 
-	app.stats = make([]scanStats, len(paths))
-	for i, path := range paths {
-		app.stats[i] = scanStats{
-			metas:  msg.ScanMetas{Base: path},
+	app.stats = make(map[string]*scanStats)
+	for _, path := range paths {
+		app.stats[path] = &scanStats{
+			metas:  msg.FileMetas{},
 			byName: map[string]*msg.FileMeta{},
-			byHash: map[string]msg.ScanMetas{},
+			byHash: map[string]msg.FileMetas{},
 		}
 		app.uiIn <- msg.CmdScan{Base: path}
 		app.fsIn <- msg.CmdScan{Base: path}
 	}
 
 	for app.scanned < len(paths) {
-		log.Println("Run: wait for event")
 		select {
 		case event := <-app.uiOut:
 			app.handleUiMessage(event)
@@ -43,42 +43,38 @@ func Run(paths []string, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsO
 			app.handleFsMessage(event)
 		}
 	}
-	app.analyze()
 
-	app.uiIn <- msg.QuitApp{}
+	app.uiIn <- app.analyze()
 }
 
-func (app *appModel) analyze() {
+func (app *appModel) analyze() msg.Analysis {
 	hashes := make(map[string]struct{})
 	for _, stats := range app.stats {
-		for _, fileMeta := range stats.metas.Metas {
+		for _, fileMeta := range stats.metas {
 			hashes[fileMeta.Hash] = struct{}{}
 		}
 	}
 
 	result := msg.Analysis{}
 	for hash := range hashes {
-		byHash := make([]msg.ScanMetas, len(app.stats))
+		forHash := make(map[string]msg.FileMetas, len(app.stats))
+		for base, stats := range app.stats {
+			byHash := stats.byHash[hash]
+			if len(byHash) > 0 {
+				forHash[base] = stats.byHash[hash]
+			}
+		}
 		extraFiles := false
-		for i, stats := range app.stats {
-			byHash[i] = stats.byHash[hash]
-			if len(byHash[i].Metas) > len(byHash[0].Metas) {
+		for base := range app.stats {
+			if len(forHash[app.source]) < len(forHash[base]) {
 				extraFiles = true
 			}
 		}
 		if extraFiles {
-			hashResult := []msg.ScanMetas{byHash[0]}
-			for i := 1; i < len(byHash); i++ {
-				if len(byHash[i].Metas) > len(byHash[0].Metas) {
-					hashResult = append(hashResult, byHash[i])
-				}
-			}
-			result = append(result, hashResult)
+			result[hash] = forHash
 		}
 	}
-	log.Println("analyze 1:", result)
-	app.uiIn <- result
-	log.Println("analyze 2")
+	return result
 }
 
 func (app *appModel) handleUiMessage(event any) {
@@ -91,26 +87,18 @@ func (app *appModel) handleUiMessage(event any) {
 }
 
 func (app *appModel) handleFsMessage(event any) {
-	log.Printf("app.handleFsMessage: %#v\n", event)
 	switch event := event.(type) {
 	case msg.ScanStat:
 		app.uiIn <- event
 
 	case msg.ScanMetas:
-		log.Printf("app.ScanMetas\n")
-		for i := range app.stats {
-			stats := &app.stats[i]
-			if stats.metas.Base == event.Base {
-				stats.metas.Metas = event.Metas
-				for _, meta := range event.Metas {
-					stats.byName[meta.Path] = meta
-
-					m := append(stats.byHash[meta.Hash].Metas, meta)
-					stats.byHash[meta.Hash] = msg.ScanMetas{Base: meta.Base, Metas: m}
-				}
-				break
-			}
+		stats := app.stats[event.Base]
+		stats.metas = event.Metas
+		for _, meta := range event.Metas {
+			stats.byName[meta.Path] = meta
+			stats.byHash[meta.Hash] = append(stats.byHash[meta.Hash], meta)
 		}
+
 		app.scanned++
 		app.uiIn <- msg.ScanDone{Base: event.Base}
 
