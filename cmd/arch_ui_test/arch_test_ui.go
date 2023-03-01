@@ -2,6 +2,7 @@ package main
 
 import (
 	"arch/app"
+	"arch/lifecycle"
 	"arch/msg"
 	"arch/ui"
 )
@@ -12,8 +13,9 @@ func main() {
 
 	fsIn := make(chan any)
 	fsOut := make(chan any)
+	lc := lifecycle.New()
 
-	go app.Run([]string{"source", "copy1", "copy2"}, uiIn, uiOut, fsIn, fsOut)
+	go app.Run([]string{"source", "copy1", "copy2"}, lc, uiIn, uiOut, fsIn, fsOut)
 	go fsRun(fsIn, fsOut)
 	ui.Run(uiIn, uiOut)
 }

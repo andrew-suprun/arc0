@@ -38,6 +38,9 @@ func Run(paths []string, lc *lifecycle.Lifecycle, uiIn chan<- any, uiOut <-chan 
 	}
 
 	for {
+		if app.lc.ShoudStop() {
+			break
+		}
 		select {
 		case event := <-app.uiOut:
 			app.handleUiMessage(event)
@@ -103,7 +106,7 @@ func (app *appModel) handleFsMessage(event any) {
 
 		app.scanned++
 		if app.scanned == len(app.paths) {
-			app.analyze()
+			app.uiIn <- app.analyze()
 		}
 		app.uiIn <- msg.ScanDone{Base: event.Base}
 

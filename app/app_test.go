@@ -1,21 +1,21 @@
 package app
 
 import (
+	"arch/lifecycle"
 	"arch/msg"
 	"log"
-	"sync"
 	"testing"
 )
 
 func TestAnalyze(t *testing.T) {
 	log.SetFlags(0)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	uiIn := make(chan any)
 	uiOut := make(chan any)
 
 	fsIn := make(chan any)
 	fsOut := make(chan any)
+
+	lc := lifecycle.New()
 
 	go func() {
 		for {
@@ -23,13 +23,12 @@ func TestAnalyze(t *testing.T) {
 			case event := <-fsIn:
 				go handleFsEvent(t, event, fsOut)
 			case event := <-uiIn:
-				go handleUiEvent(t, &wg, event, uiOut)
+				go handleUiEvent(t, event, uiOut, lc)
 			}
 		}
 	}()
 
-	Run([]string{"source", "copy1", "copy2"}, uiIn, uiOut, fsIn, fsOut)
-	wg.Wait()
+	Run([]string{"source", "copy1", "copy2"}, lc, uiIn, uiOut, fsIn, fsOut)
 }
 
 func handleFsEvent(t *testing.T, event any, out chan any) {
@@ -41,7 +40,8 @@ func handleFsEvent(t *testing.T, event any, out chan any) {
 	}
 }
 
-func handleUiEvent(t *testing.T, wg *sync.WaitGroup, event any, out chan any) {
+func handleUiEvent(t *testing.T, event any, uiIn chan any, lc *lifecycle.Lifecycle) {
+	log.Printf("### ui event %#v\n", event)
 	switch event := event.(type) {
 	case msg.CmdScan:
 	case msg.ScanDone:
@@ -49,7 +49,9 @@ func handleUiEvent(t *testing.T, wg *sync.WaitGroup, event any, out chan any) {
 		if len(event) != 3 || len(event["cccc"]) != 3 || len(event["aaa1"]) != 1 || len(event["aaa2"]) != 1 {
 			t.Fail()
 		}
-		wg.Done()
+
+		lc.Stop()
+		uiIn <- msg.CmdQuit{}
 	default:
 		log.Printf("uiIn: %#v\n", event)
 	}

@@ -68,16 +68,12 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
-	log.Printf("ui event %T\n", event)
 	switch event := event.(type) {
 	case tea.KeyMsg:
-		log.Printf("key event %#v\n", event)
 		s := event.String()
 		switch s {
 		case "ctrl+c", "esc":
-			log.Printf("key event:1 %v\n", event)
 			m.outChan <- msg.CmdQuit{}
-			log.Printf("key event:2 %v\n", event)
 			return m, nil
 		}
 		return m, nil
