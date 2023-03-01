@@ -11,7 +11,7 @@ type runner struct {
 	out chan<- any
 }
 
-func Run(in <-chan any, out chan<- any) {
+func Run(lc *lifecycle.Lifecycle, in <-chan any, out chan<- any) {
 	r := &runner{Lifecycle: lifecycle.New(), in: in, out: out}
 	go r.run()
 }

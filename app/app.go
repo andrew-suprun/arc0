@@ -1,18 +1,20 @@
 package app
 
 import (
+	"arch/lifecycle"
 	"arch/msg"
 	"log"
 )
 
 type appModel struct {
+	lc      *lifecycle.Lifecycle
 	uiIn    chan<- any
 	uiOut   <-chan any
 	fsIn    chan<- any
 	fsOut   <-chan any
+	paths   []string
 	scanned int
 	stats   map[string]*scanStats // key: base
-	source  string
 }
 
 type scanStats struct {
@@ -21,8 +23,8 @@ type scanStats struct {
 	byHash map[string]msg.FileMetas
 }
 
-func Run(paths []string, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsOut <-chan any) {
-	app := &appModel{source: paths[0], uiIn: uiIn, uiOut: uiOut, fsIn: fsIn, fsOut: fsOut}
+func Run(paths []string, lc *lifecycle.Lifecycle, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsOut <-chan any) {
+	app := &appModel{lc: lc, uiIn: uiIn, uiOut: uiOut, fsIn: fsIn, fsOut: fsOut, paths: paths}
 
 	app.stats = make(map[string]*scanStats)
 	for _, path := range paths {
@@ -35,7 +37,7 @@ func Run(paths []string, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsO
 		app.fsIn <- msg.CmdScan{Base: path}
 	}
 
-	for app.scanned < len(paths) {
+	for {
 		select {
 		case event := <-app.uiOut:
 			app.handleUiMessage(event)
@@ -43,8 +45,6 @@ func Run(paths []string, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsO
 			app.handleFsMessage(event)
 		}
 	}
-
-	app.uiIn <- app.analyze()
 }
 
 func (app *appModel) analyze() msg.Analysis {
@@ -66,7 +66,7 @@ func (app *appModel) analyze() msg.Analysis {
 		}
 		extraFiles := false
 		for base := range app.stats {
-			if len(forHash[app.source]) < len(forHash[base]) {
+			if len(forHash[app.paths[0]]) < len(forHash[base]) {
 				extraFiles = true
 			}
 		}
@@ -81,6 +81,8 @@ func (app *appModel) handleUiMessage(event any) {
 	switch event := event.(type) {
 	case msg.CmdQuit:
 		close(app.fsIn)
+		app.lc.Stop()
+		app.uiIn <- msg.QuitApp{}
 	default:
 		log.Panicf("### received unhandled ui message: %#v", event)
 	}
@@ -100,6 +102,9 @@ func (app *appModel) handleFsMessage(event any) {
 		}
 
 		app.scanned++
+		if app.scanned == len(app.paths) {
+			app.analyze()
+		}
 		app.uiIn <- msg.ScanDone{Base: event.Base}
 
 	case msg.ScanError:

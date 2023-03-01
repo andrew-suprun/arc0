@@ -21,6 +21,9 @@ import (
 )
 
 func (r *runner) scan(base string) {
+	r.Started()
+	defer r.Done()
+
 	path, err := filepath.Abs(base)
 	path = norm.NFC.String(path)
 	if err != nil {
@@ -158,6 +161,7 @@ func (r *runner) collectMeta(base string) (metas msg.FileMetas) {
 		sys := meta.Sys().(*syscall.Stat_t)
 		metas = append(metas, &msg.FileMeta{
 			Ino:     sys.Ino,
+			Base:    base,
 			Path:    path,
 			Size:    int(sys.Size),
 			ModTime: meta.ModTime(),
@@ -198,7 +202,6 @@ func readMeta(basePath string) (result msg.FileMetas) {
 		}
 		result = append(result, &msg.FileMeta{
 			Ino:     ino,
-			Path:    norm.NFC.String(record[1]),
 			Size:    int(size),
 			ModTime: modTime,
 			Hash:    record[4],

@@ -14,6 +14,7 @@ type CmdQuit struct{}
 
 type FileMeta struct {
 	Ino     uint64
+	Base    string
 	Path    string
 	Size    int
 	ModTime time.Time

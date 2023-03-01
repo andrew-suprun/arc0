@@ -68,12 +68,16 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
+	log.Printf("ui event %T\n", event)
 	switch event := event.(type) {
 	case tea.KeyMsg:
+		log.Printf("key event %#v\n", event)
 		s := event.String()
 		switch s {
 		case "ctrl+c", "esc":
+			log.Printf("key event:1 %v\n", event)
 			m.outChan <- msg.CmdQuit{}
+			log.Printf("key event:2 %v\n", event)
 			return m, nil
 		}
 		return m, nil
@@ -95,10 +99,15 @@ func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case msg.ScanStat:
-		return m.scanFileStat(event)
+		return m.scanStat(event)
 
 	case msg.ScanDone:
 		return m.scanDone(event)
+
+	case msg.Analysis:
+		// Оригинал
+		// Копия 12
+		return m.analysis(event)
 
 	case msg.QuitApp:
 		return m, tea.Quit
@@ -110,7 +119,7 @@ func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
 
 var nilTime time.Time
 
-func (m *model) scanFileStat(stat msg.ScanStat) (tea.Model, tea.Cmd) {
+func (m *model) scanStat(stat msg.ScanStat) (tea.Model, tea.Cmd) {
 	var newStat *scanStats
 	for i := range m.scanStats {
 		if stat.Base == m.scanStats[i].base {
@@ -139,6 +148,10 @@ func (m *model) scanDone(done msg.ScanDone) (tea.Model, tea.Cmd) {
 			break
 		}
 	}
+	return m, nil
+}
+
+func (m *model) analysis(done msg.Analysis) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
