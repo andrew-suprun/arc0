@@ -4,6 +4,7 @@ import (
 	"arch/lifecycle"
 	"arch/msg"
 	"log"
+	"sort"
 )
 
 type appModel struct {
@@ -13,26 +14,17 @@ type appModel struct {
 	fsIn    chan<- any
 	fsOut   <-chan any
 	paths   []string
+	infos   msg.ArchiveInfo
 	scanned int
-	stats   map[string]*scanStats // key: base
-}
-
-type scanStats struct {
-	metas  msg.FileMetas
-	byName map[string]*msg.FileMeta
-	byHash map[string]msg.FileMetas
 }
 
 func Run(paths []string, lc *lifecycle.Lifecycle, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsOut <-chan any) {
 	app := &appModel{lc: lc, uiIn: uiIn, uiOut: uiOut, fsIn: fsIn, fsOut: fsOut, paths: paths}
+	go app.run()
+}
 
-	app.stats = make(map[string]*scanStats)
-	for _, path := range paths {
-		app.stats[path] = &scanStats{
-			metas:  msg.FileMetas{},
-			byName: map[string]*msg.FileMeta{},
-			byHash: map[string]msg.FileMetas{},
-		}
+func (app *appModel) run() {
+	for _, path := range app.paths {
 		app.uiIn <- msg.CmdScan{Base: path}
 		app.fsIn <- msg.CmdScan{Base: path}
 	}
@@ -50,34 +42,56 @@ func Run(paths []string, lc *lifecycle.Lifecycle, uiIn chan<- any, uiOut <-chan 
 	}
 }
 
-func (app *appModel) analyze() msg.Analysis {
-	hashes := make(map[string]struct{})
-	for _, stats := range app.stats {
-		for _, fileMeta := range stats.metas {
-			hashes[fileMeta.Hash] = struct{}{}
+type state struct {
+}
+
+type fileState int
+
+const (
+	initial fileState = iota
+)
+
+func (app *appModel) analyze() msg.ArchiveInfo {
+	sort.Slice(app.infos, func(i, j int) bool {
+		ii := app.infos[i]
+		jj := app.infos[j]
+		if ii.Hash < jj.Hash {
+			return true
 		}
+		if ii.Hash > jj.Hash {
+			return false
+		}
+		if ii.Base < jj.Base {
+			return true
+		}
+		if ii.Base > jj.Base {
+			return false
+		}
+		return ii.Path < jj.Path
+	})
+	log.Println(app.infos)
+	states := make([]state, len(app.infos))
+	start, end := 0, 0
+	for start < len(app.infos) {
+		for end = start + 1; end < len(app.infos); end++ {
+			if app.infos[start].Hash != app.infos[end].Hash {
+				break
+			}
+		}
+		app.analyzeForHash(states, start, end)
+		start = end
 	}
 
-	result := msg.Analysis{}
-	for hash := range hashes {
-		forHash := make(map[string]msg.FileMetas, len(app.stats))
-		for base, stats := range app.stats {
-			byHash := stats.byHash[hash]
-			if len(byHash) > 0 {
-				forHash[base] = stats.byHash[hash]
-			}
-		}
-		extraFiles := false
-		for base := range app.stats {
-			if len(forHash[app.paths[0]]) < len(forHash[base]) {
-				extraFiles = true
-			}
-		}
-		if extraFiles {
-			result[hash] = forHash
-		}
-	}
+	result := msg.ArchiveInfo{}
 	return result
+}
+
+func (app *appModel) analyzeForHash(states []state, start, end int) {
+	// log.Printf("### %v-%v\n", start, end)
+	// for i := start; i < end; i++ {
+	// 	log.Printf("###     %v/%v\n", app.infos[i].Base, app.infos[i].Path)
+
+	// }
 }
 
 func (app *appModel) handleUiMessage(event any) {
@@ -96,19 +110,15 @@ func (app *appModel) handleFsMessage(event any) {
 	case msg.ScanStat:
 		app.uiIn <- event
 
-	case msg.ScanMetas:
-		stats := app.stats[event.Base]
-		stats.metas = event.Metas
-		for _, meta := range event.Metas {
-			stats.byName[meta.Path] = meta
-			stats.byHash[meta.Hash] = append(stats.byHash[meta.Hash], meta)
-		}
-
+	case msg.ArchiveInfo:
+		app.infos = append(app.infos, event...)
 		app.scanned++
+		log.Printf("app: ArchInfo: len=%d, scanned=%d", len(app.infos), app.scanned)
 		if app.scanned == len(app.paths) {
 			app.uiIn <- app.analyze()
 		}
-		app.uiIn <- msg.ScanDone{Base: event.Base}
+	case msg.ScanDone:
+		app.uiIn <- event
 
 	case msg.ScanError:
 		// TODO

@@ -35,44 +35,30 @@ func fsRun(in <-chan any, out chan<- any) {
 	}
 }
 
-func scanResults(base string) msg.ScanMetas {
+func scanResults(base string) msg.ArchiveInfo {
 	switch base {
 	case "source":
-		return msg.ScanMetas{
-			Base:  base,
-			Metas: source,
+		return msg.ArchiveInfo{
+			{Base: "source", Path: "a", Size: 1, Hash: "aaaa"},
+			{Base: "source", Path: "b1", Size: 2, Hash: "bbbb"},
+			{Base: "source", Path: "b2", Size: 2, Hash: "bbbb"},
+			{Base: "source", Path: "c", Size: 3, Hash: "cccc"},
 		}
+
 	case "copy1":
-		return msg.ScanMetas{
-			Base:  base,
-			Metas: copy1,
+		return msg.ArchiveInfo{
+			{Base: "copy1", Path: "a", Size: 1, Hash: "aaa1"},
+			{Base: "copy1", Path: "b", Size: 2, Hash: "bbbb"},
+			{Base: "copy1", Path: "c", Size: 3, Hash: "cccc"},
+			{Base: "copy1", Path: "d", Size: 3, Hash: "cccc"},
 		}
 	case "copy2":
-		return msg.ScanMetas{
-			Base:  base,
-			Metas: copy2,
+		return msg.ArchiveInfo{
+			{Base: "copy2", Path: "a", Size: 1, Hash: "aaa2"},
+			{Base: "copy2", Path: "b", Size: 2, Hash: "bbbb"},
+			{Base: "copy2", Path: "c1", Size: 3, Hash: "cccc"},
+			{Base: "copy2", Path: "c2", Size: 3, Hash: "cccc"},
 		}
 	}
-	return msg.ScanMetas{}
-}
-
-var source = msg.FileMetas{
-	{Path: "a", Size: 1, Hash: "aaaa"},
-	{Path: "b1", Size: 2, Hash: "bbbb"},
-	{Path: "b2", Size: 2, Hash: "bbbb"},
-	{Path: "c", Size: 3, Hash: "cccc"},
-}
-
-var copy1 = msg.FileMetas{
-	{Path: "a", Size: 1, Hash: "aaa1"},
-	{Path: "b", Size: 2, Hash: "bbbb"},
-	{Path: "c", Size: 3, Hash: "cccc"},
-	{Path: "d", Size: 3, Hash: "cccc"},
-}
-
-var copy2 = msg.FileMetas{
-	{Path: "a", Size: 1, Hash: "aaa2"},
-	{Path: "b", Size: 2, Hash: "bbbb"},
-	{Path: "c1", Size: 3, Hash: "cccc"},
-	{Path: "c2", Size: 3, Hash: "cccc"},
+	return msg.ArchiveInfo{}
 }

@@ -98,14 +98,17 @@ func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
 		return m.scanStat(event)
 
 	case msg.ScanDone:
+		log.Printf("ui: event=%#v\n", event)
 		return m.scanDone(event)
 
-	case msg.Analysis:
+	case msg.ArchiveInfo:
+		log.Printf("ui: event=%#v\n", event)
 		// Оригинал
 		// Копия 12
 		return m.analysis(event)
 
 	case msg.QuitApp:
+		log.Printf("ui: event=%#v\n", event)
 		return m, tea.Quit
 	}
 
@@ -147,7 +150,7 @@ func (m *model) scanDone(done msg.ScanDone) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) analysis(done msg.Analysis) (tea.Model, tea.Cmd) {
+func (m *model) analysis(done msg.ArchiveInfo) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 

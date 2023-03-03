@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -27,26 +26,27 @@ func (r *runner) scan(base string) {
 	path, err := filepath.Abs(base)
 	path = norm.NFC.String(path)
 	if err != nil {
-		r.out <- msg.ScanError{Base: base, Path: path, Error: err}
+		r.send(msg.ScanError{Base: base, Path: path, Error: err})
 		return
 	}
 
 	metas := r.collectMeta(base)
 	defer func() {
 		storeMeta(path, metas)
-		r.out <- msg.ScanMetas{Base: base, Metas: metas}
+		r.send(metas)
+		r.send(msg.ScanDone{Base: base})
 	}()
 
-	inodes := map[uint64]*msg.FileMeta{}
-	for _, meta := range metas {
-		inodes[meta.Ino] = meta
+	inodes := map[uint64]*msg.FileInfo{}
+	for i := range metas {
+		inodes[metas[i].Ino] = &metas[i]
 	}
 
 	storedMetas := readMeta(path)
 
 	for _, storedInfo := range storedMetas {
 		if meta, ok := inodes[storedInfo.Ino]; ok {
-			if storedInfo.Size == meta.Size {
+			if storedInfo.Size == meta.Size && storedInfo.ModTime == meta.ModTime {
 				meta.Hash = storedInfo.Hash
 			}
 		} else {
@@ -73,16 +73,17 @@ func (r *runner) scan(base string) {
 		return
 	}
 
-	hashFile := func(meta *msg.FileMeta) {
+	hashFile := func(meta *msg.FileInfo) {
 		defer func() {
 			totalHashed += meta.Size
 		}()
 
 		hash.Reset()
 
-		file, err := os.Open(meta.Path)
+		fsys := os.DirFS(base)
+		file, err := fsys.Open(meta.Path)
 		if err != nil {
-			r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
+			r.send(msg.ScanError{Base: base, Path: meta.Path, Error: err})
 			return
 		}
 		defer file.Close()
@@ -99,12 +100,12 @@ func (r *runner) scan(base string) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
+						r.send(msg.ScanError{Base: base, Path: meta.Path, Error: err})
 						return
 					}
 				}
 				if nr != nw {
-					r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: io.ErrShortWrite}
+					r.send(msg.ScanError{Base: base, Path: meta.Path, Error: io.ErrShortWrite})
 					return
 				}
 			}
@@ -115,11 +116,11 @@ func (r *runner) scan(base string) {
 				break
 			}
 			if er != nil {
-				r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
+				r.send(msg.ScanError{Base: base, Path: meta.Path, Error: err})
 				return
 			}
 
-			r.out <- msg.ScanStat{
+			r.send(msg.ScanStat{
 				Base:        base,
 				Path:        meta.Path,
 				Size:        meta.Size,
@@ -127,64 +128,70 @@ func (r *runner) scan(base string) {
 				TotalSize:   totalSize,
 				TotalToHash: totalSizeToHash,
 				TotalHashed: totalHashed + hashed,
-			}
+			})
 		}
 		meta.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 	}
 
-	for _, meta := range metas {
-		if meta.Hash == "" {
+	for i := range metas {
+		if metas[i].Hash == "" {
 			if r.ShoudStop() {
 				return
 			}
-			hashFile(meta)
+			hashFile(&metas[i])
 		}
 	}
 }
 
-func (r *runner) collectMeta(base string) (metas msg.FileMetas) {
-	filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+func (r *runner) send(event any) {
+	if !r.ShoudStop() {
+		r.out <- event
+	}
+}
+
+func (r *runner) collectMeta(base string) (infos msg.ArchiveInfo) {
+	fsys := os.DirFS(base)
+	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if r.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 
 		if err != nil {
-			r.out <- msg.ScanError{Base: base, Path: path, Error: err}
+			r.send(msg.ScanError{Base: base, Path: path, Error: err})
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			r.out <- msg.ScanError{Base: base, Path: path, Error: err}
+			r.send(msg.ScanError{Base: base, Path: path, Error: err})
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
-		metas = append(metas, &msg.FileMeta{
+		modTime := meta.ModTime()
+		modTime = modTime.UTC().Round(time.Second)
+
+		infos = append(infos, msg.FileInfo{
 			Ino:     sys.Ino,
 			Base:    base,
 			Path:    path,
 			Size:    int(sys.Size),
-			ModTime: meta.ModTime(),
+			ModTime: modTime,
 		})
 		return nil
 	})
-	sort.Slice(metas, func(i, j int) bool {
-		return strings.ToLower(metas[i].Path) < strings.ToLower(metas[j].Path)
-	})
-	return metas
+	return infos
 }
 
 const HashFileName = ".meta.csv"
 
-func readMeta(basePath string) (result msg.FileMetas) {
+func readMeta(basePath string) (result msg.ArchiveInfo) {
 	absHashFileName := filepath.Join(basePath, HashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
-
 	if err != nil {
 		return nil
 	}
-
 	defer hashInfoFile.Close()
+
 	records, err := csv.NewReader(hashInfoFile).ReadAll()
 	if err != nil {
 		return nil
@@ -197,11 +204,13 @@ func readMeta(basePath string) (result msg.FileMetas) {
 		ino, er1 := strconv.ParseUint(record[0], 10, 64)
 		size, er2 := strconv.ParseInt(record[2], 10, 64)
 		modTime, er3 := time.Parse(time.RFC3339, record[3])
+		modTime = modTime.UTC().Round(time.Second)
 		if er1 != nil || er2 != nil || er3 != nil {
 			continue
 		}
-		result = append(result, &msg.FileMeta{
+		result = append(result, msg.FileInfo{
 			Ino:     ino,
+			Path:    record[1],
 			Size:    int(size),
 			ModTime: modTime,
 			Hash:    record[4],
@@ -211,7 +220,7 @@ func readMeta(basePath string) (result msg.FileMetas) {
 	return result
 }
 
-func storeMeta(basePath string, metas msg.FileMetas) error {
+func storeMeta(basePath string, metas msg.ArchiveInfo) error {
 	result := make([][]string, len(metas)+1)
 	result[0] = []string{"Inode", "Path", "Size", "ModTime", "Hash"}
 

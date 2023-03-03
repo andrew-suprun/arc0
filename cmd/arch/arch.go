@@ -10,6 +10,7 @@ import (
 )
 
 func main() {
+	log.SetFlags(0)
 	paths := os.Args[1:]
 	for _, path := range paths {
 		_, err := os.Stat(path)
@@ -27,7 +28,7 @@ func main() {
 	fsIn := make(chan any)
 	fsOut := make(chan any)
 
-	go app.Run(paths, lc, uiIn, uiOut, fsIn, fsOut)
-	go fs.Run(lc, fsIn, fsOut)
+	app.Run(paths, lc, uiIn, uiOut, fsIn, fsOut)
+	fs.Run(lc, fsIn, fsOut)
 	ui.Run(uiIn, uiOut)
 }

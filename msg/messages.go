@@ -12,13 +12,35 @@ type CmdScan struct {
 
 type CmdQuit struct{}
 
-type FileMeta struct {
+type FileInfo struct {
 	Ino     uint64
 	Base    string
 	Path    string
 	Size    int
 	ModTime time.Time
 	Hash    string
+}
+
+type ArchiveInfo []FileInfo
+
+func (a ArchiveInfo) String() string {
+	hash := ""
+	base := ""
+	builder := &strings.Builder{}
+	fmt.Fprintf(builder, "ArchiveInfo [%d]\n", len(a))
+	for _, info := range a {
+		if hash != info.Hash {
+			hash = info.Hash
+			fmt.Fprintln(builder, hash)
+			base = ""
+		}
+		if base != info.Base {
+			base = info.Base
+			fmt.Fprintf(builder, "    %s\n", base)
+		}
+		fmt.Fprintf(builder, "        %s\n", info.Path)
+	}
+	return builder.String()
 }
 
 type ScanError struct {
@@ -35,33 +57,6 @@ type ScanStat struct {
 	TotalSize   int
 	TotalToHash int
 	TotalHashed int
-}
-
-type FileMetas []*FileMeta
-
-type ScanMetas struct {
-	Base  string
-	Metas FileMetas
-}
-
-// keys:          hash       base
-type Analysis map[string]map[string]FileMetas
-
-func (a Analysis) String() string {
-	builder := &strings.Builder{}
-	for hash, byBase := range a {
-		fmt.Fprintln(builder, hash)
-		for base, metas := range byBase {
-			if len(metas) == 0 {
-				continue
-			}
-			fmt.Fprintf(builder, "    %s\n", base)
-			for _, meta := range metas {
-				fmt.Fprintf(builder, "        %s\n", meta.Path)
-			}
-		}
-	}
-	return builder.String()
 }
 
 type ScanDone struct {
