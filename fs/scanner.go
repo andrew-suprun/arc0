@@ -120,7 +120,7 @@ func (r *runner) scan(base string) {
 				return
 			}
 
-			r.send(msg.ScanStat{
+			r.send(msg.ScanState{
 				Base:        base,
 				Path:        meta.Path,
 				Size:        meta.Size,

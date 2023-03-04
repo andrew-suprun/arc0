@@ -5,27 +5,33 @@ import (
 	"arch/msg"
 	"log"
 	"sort"
+	"time"
 )
 
 type appModel struct {
-	lc      *lifecycle.Lifecycle
-	uiIn    chan<- any
-	uiOut   <-chan any
-	fsIn    chan<- any
-	fsOut   <-chan any
-	paths   []string
-	infos   msg.ArchiveInfo
-	scanned int
+	lc         *lifecycle.Lifecycle
+	uiIn       chan<- any
+	uiOut      <-chan any
+	fsIn       chan<- any
+	fsOut      <-chan any
+	paths      []string
+	infos      msg.ArchiveInfo
+	scanned    int
+	scanStates []msg.ScanState
+	lastUpdate time.Time
 }
 
 func Run(paths []string, lc *lifecycle.Lifecycle, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsOut <-chan any) {
 	app := &appModel{lc: lc, uiIn: uiIn, uiOut: uiOut, fsIn: fsIn, fsOut: fsOut, paths: paths}
+	app.scanStates = make([]msg.ScanState, len(paths))
+	for i, path := range paths {
+		app.scanStates[i] = msg.ScanState{Base: path}
+	}
 	go app.run()
 }
 
 func (app *appModel) run() {
 	for _, path := range app.paths {
-		app.uiIn <- msg.CmdScan{Base: path}
 		app.fsIn <- msg.CmdScan{Base: path}
 	}
 
@@ -107,8 +113,36 @@ func (app *appModel) handleUiMessage(event any) {
 
 func (app *appModel) handleFsMessage(event any) {
 	switch event := event.(type) {
-	case msg.ScanStat:
-		app.uiIn <- event
+	case msg.ScanState:
+		for i := range app.scanStates {
+			if app.scanStates[i].Base == event.Base {
+				app.scanStates[i] = event
+			}
+		}
+		now := time.Now()
+		if now.After(app.lastUpdate.Add(16 * time.Millisecond)) {
+			log.Println("### now", now, "last update", app.lastUpdate)
+			app.uiIn <- app.scanStates
+			app.lastUpdate = now
+		}
+
+	case msg.ScanError:
+		// TODO
+
+	case msg.ScanDone:
+		idx := 0
+		for i := range app.scanStates {
+			if app.scanStates[i].Base == event.Base {
+				idx = i
+				break
+			}
+		}
+		scanStates := make([]msg.ScanState, len(app.scanStates))
+		copy(scanStates, app.scanStates)
+		scanStates = append(scanStates[0:idx], scanStates[idx+1:]...)
+		app.scanStates = scanStates
+
+		app.uiIn <- app.scanStates
 
 	case msg.ArchiveInfo:
 		app.infos = append(app.infos, event...)
@@ -117,11 +151,6 @@ func (app *appModel) handleFsMessage(event any) {
 		if app.scanned == len(app.paths) {
 			app.uiIn <- app.analyze()
 		}
-	case msg.ScanDone:
-		app.uiIn <- event
-
-	case msg.ScanError:
-		// TODO
 
 	default:
 		log.Panicf("### received unhandled fs message: %#v", event)

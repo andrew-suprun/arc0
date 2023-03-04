@@ -49,7 +49,7 @@ type ScanError struct {
 	Error error
 }
 
-type ScanStat struct {
+type ScanState struct {
 	Base        string
 	Path        string
 	Size        int

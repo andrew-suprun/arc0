@@ -17,16 +17,14 @@ import (
 )
 
 type model struct {
-	scanStats    []*scanStats
 	screenHeight int
 	screenWidth  int
 	outChan      chan<- any
+	scanStart    time.Time
+	scanState    []msg.ScanState
 }
 
-type scanStats struct {
-	base            string
-	path            string
-	start           time.Time
+type scanState struct {
 	eta             time.Time
 	remaining       time.Duration
 	fileProgress    float64
@@ -90,16 +88,8 @@ func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
 		m.screenWidth = event.Width
 		return m, cmd
 
-	case msg.CmdScan:
-		m.scanStats = append(m.scanStats, &scanStats{base: event.Base})
-		return m, nil
-
-	case msg.ScanStat:
-		return m.scanStat(event)
-
-	case msg.ScanDone:
-		log.Printf("ui: event=%#v\n", event)
-		return m.scanDone(event)
+	case []msg.ScanState:
+		return m.scanStateEvent(event)
 
 	case msg.ArchiveInfo:
 		log.Printf("ui: event=%#v\n", event)
@@ -118,35 +108,11 @@ func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
 
 var nilTime time.Time
 
-func (m *model) scanStat(stat msg.ScanStat) (tea.Model, tea.Cmd) {
-	var newStat *scanStats
-	for i := range m.scanStats {
-		if stat.Base == m.scanStats[i].base {
-			newStat = m.scanStats[i]
-		}
+func (m *model) scanStateEvent(scanState []msg.ScanState) (tea.Model, tea.Cmd) {
+	if m.scanStart == nilTime {
+		m.scanStart = time.Now()
 	}
-	if newStat.start == nilTime {
-		newStat.start = time.Now()
-	}
-	newStat.path = stat.Path
-	newStat.fileProgress = float64(stat.Hashed) / float64(stat.Size)
-	etaProgress := float64(stat.TotalToHash) / float64(stat.TotalHashed)
-	overallHashed := stat.TotalSize - stat.TotalToHash + stat.TotalHashed
-	newStat.overallProgress = float64(overallHashed) / float64(stat.TotalSize)
-	dur := time.Since(newStat.start)
-	newStat.eta = newStat.start.Add(time.Duration(float64(dur) * etaProgress))
-	newStat.remaining = time.Until(newStat.eta)
-
-	return m, nil
-}
-
-func (m *model) scanDone(done msg.ScanDone) (tea.Model, tea.Cmd) {
-	for i := range m.scanStats {
-		if done.Base == m.scanStats[i].base {
-			m.scanStats = append(m.scanStats[:i], m.scanStats[i+1:]...)
-			break
-		}
-	}
+	m.scanState = scanState
 	return m, nil
 }
 
@@ -160,20 +126,26 @@ func (m *model) View() string {
 		return ""
 	}
 	builder := strings.Builder{}
-	for _, stat := range m.scanStats {
+	log.Println("### scan state", m.scanState)
+	for _, state := range m.scanState {
+		etaProgress := float64(state.TotalToHash) / float64(state.TotalHashed)
+		overallHashed := state.TotalSize - state.TotalToHash + state.TotalHashed
+		overallProgress := float64(overallHashed) / float64(state.TotalSize)
+		dur := time.Since(m.scanStart)
+		eta := m.scanStart.Add(time.Duration(float64(dur) * etaProgress))
+		remaining := time.Until(eta)
+
 		barWidth := m.screenWidth - 29
 
-		builder.WriteString(header("Архив "+stat.base, m.screenWidth))
+		builder.WriteString(header("Архив "+state.Base, m.screenWidth))
 		builder.WriteString("\n Сканируется Файл           ")
-		builder.WriteString(style.Render(stat.path))
-		// builder.WriteString("\n Прогресс Файла             ")
-		// builder.WriteString(progressBar(barWidth, stat.fileProgress))
+		builder.WriteString(style.Render(state.Path))
 		builder.WriteString("\n Ожидаемое Время Завершения ")
-		builder.WriteString(style.Render(stat.eta.Format(time.TimeOnly)))
+		builder.WriteString(style.Render(eta.Format(time.TimeOnly)))
 		builder.WriteString("\n Время До Завершения        ")
-		builder.WriteString(style.Render(stat.remaining.Truncate(time.Second).String()))
+		builder.WriteString(style.Render(remaining.Truncate(time.Second).String()))
 		builder.WriteString("\n Общий Прогресс             ")
-		builder.WriteString(progressBar(barWidth, stat.overallProgress))
+		builder.WriteString(progressBar(barWidth, overallProgress))
 		builder.WriteString("\n\n")
 	}
 	return builder.String()
