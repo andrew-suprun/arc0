@@ -4,6 +4,7 @@ import (
 	"arch/app"
 	"arch/fs"
 	"arch/lifecycle"
+	"arch/msg"
 	"arch/ui"
 	"log"
 	"os"
@@ -27,8 +28,9 @@ func main() {
 
 	fsIn := make(chan any)
 	fsOut := make(chan any)
+	fsScanState := make(chan []msg.ScanState, 1)
 
-	app.Run(paths, lc, uiIn, uiOut, fsIn, fsOut)
-	fs.Run(lc, fsIn, fsOut)
-	ui.Run(uiIn, uiOut)
+	app.Run(paths, lc, uiIn, uiOut, fsIn, fsOut, fsScanState)
+	fs.Run(lc, fsIn, fsOut, fsScanState)
+	ui.Run(lc, uiIn, uiOut)
 }

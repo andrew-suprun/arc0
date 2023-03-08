@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"arch/lifecycle"
 	"arch/msg"
 	"fmt"
 	"image/color"
@@ -17,9 +18,10 @@ import (
 )
 
 type model struct {
+	lc           *lifecycle.Lifecycle
+	outChan      chan<- any
 	screenHeight int
 	screenWidth  int
-	outChan      chan<- any
 	scanStart    time.Time
 	scanState    []msg.ScanState
 }
@@ -31,7 +33,7 @@ type scanState struct {
 	overallProgress float64
 }
 
-func Run(inChan <-chan any, outChan chan<- any) {
+func Run(lc *lifecycle.Lifecycle, inChan <-chan any, outChan chan<- any) {
 	output := termenv.NewOutput(os.Stdout)
 	fg := output.ForegroundColor()
 	bg := output.BackgroundColor()
@@ -41,7 +43,7 @@ func Run(inChan <-chan any, outChan chan<- any) {
 		defer output.SetBackgroundColor(bg)
 	}()
 
-	p := tea.NewProgram(&model{outChan: outChan}, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(&model{lc: lc, outChan: outChan}, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	go func() {
 		for {
@@ -98,7 +100,7 @@ func (m *model) Update(event tea.Msg) (tea.Model, tea.Cmd) {
 		return m.analysis(event)
 
 	case msg.QuitApp:
-		log.Printf("ui: event=%#v\n", event)
+		m.lc.Stop()
 		return m, tea.Quit
 	}
 
@@ -126,8 +128,11 @@ func (m *model) View() string {
 		return ""
 	}
 	builder := strings.Builder{}
-	log.Println("### scan state", m.scanState)
+	builder.WriteString(screenTitle(m.screenWidth))
 	for _, state := range m.scanState {
+		if state.Path == "" {
+			continue
+		}
 		etaProgress := float64(state.TotalToHash) / float64(state.TotalHashed)
 		overallHashed := state.TotalSize - state.TotalToHash + state.TotalHashed
 		overallProgress := float64(overallHashed) / float64(state.TotalSize)
@@ -137,7 +142,8 @@ func (m *model) View() string {
 
 		barWidth := m.screenWidth - 29
 
-		builder.WriteString(header("Архив "+state.Base, m.screenWidth))
+		builder.WriteString("\n Архив                      ")
+		builder.WriteString(style.Render(state.Base))
 		builder.WriteString("\n Сканируется Файл           ")
 		builder.WriteString(style.Render(state.Path))
 		builder.WriteString("\n Ожидаемое Время Завершения ")
@@ -146,7 +152,7 @@ func (m *model) View() string {
 		builder.WriteString(style.Render(remaining.Truncate(time.Second).String()))
 		builder.WriteString("\n Общий Прогресс             ")
 		builder.WriteString(progressBar(barWidth, overallProgress))
-		builder.WriteString("\n\n")
+		builder.WriteString("\n")
 	}
 	return builder.String()
 }
@@ -167,23 +173,11 @@ func progressBar(barWidth int, value float64) string {
 	return style.Render(str + strings.Repeat(" ", barWidth-length))
 }
 
-func header(text string, width int) string {
-	if width <= 12 {
-		return text
+func screenTitle(width int) string {
+	if width == 0 {
+		return ""
 	}
-	runes := []rune(text)
-	if len(runes) > width-10 {
-		runes = append(runes[:width-11], '…')
-	}
-
-	title := lipgloss.Color("#ff7f7f")
-
-	var style = lipgloss.NewStyle().Foreground(title).Bold(true)
-	out := style.Render(string(runes))
-	length := ansi.PrintableRuneWidth(out)
-	left := (width - length - 2) / 2
-	right := width - length - 2 - left
-
-	text = fmt.Sprintf("%s %s %s", strings.Repeat("━", left), out, strings.Repeat("━", right))
-	return text
+	var style = lipgloss.NewStyle().Foreground(lipgloss.Color("#001040")).Background(lipgloss.Color("#7fff7f")).Bold(true)
+	title := fmt.Sprintf(" АРХИВАТОР %s", strings.Repeat(" ", width-11))
+	return style.Render(title)
 }

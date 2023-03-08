@@ -7,7 +7,8 @@ import (
 )
 
 type CmdScan struct {
-	Base string
+	Base  string
+	Index int
 }
 
 type CmdQuit struct{}

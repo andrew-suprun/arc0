@@ -19,22 +19,24 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-func (r *runner) scan(base string) {
+func (r *runner) scan(base string, idx int) {
 	r.Started()
 	defer r.Done()
 
 	path, err := filepath.Abs(base)
 	path = norm.NFC.String(path)
 	if err != nil {
-		r.send(msg.ScanError{Base: base, Path: path, Error: err})
+		r.out <- msg.ScanError{Base: base, Path: path, Error: err}
 		return
 	}
 
 	metas := r.collectMeta(base)
 	defer func() {
 		storeMeta(path, metas)
-		r.send(metas)
-		r.send(msg.ScanDone{Base: base})
+		r.out <- metas
+		state := <-r.scanState
+		state[idx].Path = ""
+		r.scanState <- state
 	}()
 
 	inodes := map[uint64]*msg.FileInfo{}
@@ -59,7 +61,7 @@ func (r *runner) scan(base string) {
 		totalSizeToHash int
 		totalHashed     int
 		hash            = sha256.New()
-		buf             = make([]byte, 4*1024*1024)
+		buf             = make([]byte, 16*1024)
 	)
 
 	for _, meta := range metas {
@@ -83,7 +85,7 @@ func (r *runner) scan(base string) {
 		fsys := os.DirFS(base)
 		file, err := fsys.Open(meta.Path)
 		if err != nil {
-			r.send(msg.ScanError{Base: base, Path: meta.Path, Error: err})
+			r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
 			return
 		}
 		defer file.Close()
@@ -100,12 +102,12 @@ func (r *runner) scan(base string) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						r.send(msg.ScanError{Base: base, Path: meta.Path, Error: err})
+						r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
 						return
 					}
 				}
 				if nr != nw {
-					r.send(msg.ScanError{Base: base, Path: meta.Path, Error: io.ErrShortWrite})
+					r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: io.ErrShortWrite}
 					return
 				}
 			}
@@ -116,11 +118,12 @@ func (r *runner) scan(base string) {
 				break
 			}
 			if er != nil {
-				r.send(msg.ScanError{Base: base, Path: meta.Path, Error: err})
+				r.out <- msg.ScanError{Base: base, Path: meta.Path, Error: err}
 				return
 			}
 
-			r.send(msg.ScanState{
+			state := <-r.scanState
+			state[idx] = msg.ScanState{
 				Base:        base,
 				Path:        meta.Path,
 				Size:        meta.Size,
@@ -128,7 +131,8 @@ func (r *runner) scan(base string) {
 				TotalSize:   totalSize,
 				TotalToHash: totalSizeToHash,
 				TotalHashed: totalHashed + hashed,
-			})
+			}
+			r.scanState <- state
 		}
 		meta.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 	}
@@ -143,12 +147,6 @@ func (r *runner) scan(base string) {
 	}
 }
 
-func (r *runner) send(event any) {
-	if !r.ShoudStop() {
-		r.out <- event
-	}
-}
-
 func (r *runner) collectMeta(base string) (infos msg.ArchiveInfo) {
 	fsys := os.DirFS(base)
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
@@ -157,13 +155,13 @@ func (r *runner) collectMeta(base string) (infos msg.ArchiveInfo) {
 		}
 
 		if err != nil {
-			r.send(msg.ScanError{Base: base, Path: path, Error: err})
+			r.out <- msg.ScanError{Base: base, Path: path, Error: err}
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			r.send(msg.ScanError{Base: base, Path: path, Error: err})
+			r.out <- msg.ScanError{Base: base, Path: path, Error: err}
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)

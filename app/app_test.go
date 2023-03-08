@@ -2,6 +2,7 @@ package app
 
 import (
 	"arch/lifecycle"
+	"arch/msg"
 	"log"
 	"testing"
 )
@@ -13,6 +14,7 @@ func TestAnalyze(t *testing.T) {
 
 	fsIn := make(chan any)
 	fsOut := make(chan any)
+	fsScanState := make(chan []msg.ScanState, 1)
 
 	lc := lifecycle.New()
 
@@ -27,7 +29,7 @@ func TestAnalyze(t *testing.T) {
 		}
 	}()
 
-	Run([]string{"source", "copy1", "copy2"}, lc, uiIn, uiOut, fsIn, fsOut)
+	Run([]string{"source", "copy1", "copy2"}, lc, uiIn, uiOut, fsIn, fsOut, fsScanState)
 }
 
 func handleFsEvent(t *testing.T, event any, out chan any) {

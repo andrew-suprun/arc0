@@ -9,36 +9,51 @@ import (
 )
 
 type appModel struct {
-	lc         *lifecycle.Lifecycle
-	uiIn       chan<- any
-	uiOut      <-chan any
-	fsIn       chan<- any
-	fsOut      <-chan any
-	paths      []string
-	infos      msg.ArchiveInfo
-	scanned    int
-	scanStates []msg.ScanState
-	lastUpdate time.Time
+	paths       []string
+	lc          *lifecycle.Lifecycle
+	uiIn        chan<- any
+	uiOut       <-chan any
+	fsIn        chan<- any
+	fsOut       <-chan any
+	fsScanState chan []msg.ScanState
+	infos       msg.ArchiveInfo
+	scanned     int
+	scanStates  []msg.ScanState
 }
 
-func Run(paths []string, lc *lifecycle.Lifecycle, uiIn chan<- any, uiOut <-chan any, fsIn chan<- any, fsOut <-chan any) {
-	app := &appModel{lc: lc, uiIn: uiIn, uiOut: uiOut, fsIn: fsIn, fsOut: fsOut, paths: paths}
+func Run(
+	paths []string,
+	lc *lifecycle.Lifecycle,
+	uiIn chan<- any,
+	uiOut <-chan any,
+	fsIn chan<- any,
+	fsOut <-chan any,
+	fsScanState chan []msg.ScanState,
+) {
+	app := &appModel{
+		paths:       paths,
+		lc:          lc,
+		uiIn:        uiIn,
+		uiOut:       uiOut,
+		fsIn:        fsIn,
+		fsOut:       fsOut,
+		fsScanState: fsScanState,
+	}
 	app.scanStates = make([]msg.ScanState, len(paths))
 	for i, path := range paths {
 		app.scanStates[i] = msg.ScanState{Base: path}
 	}
+	fsScanState <- make([]msg.ScanState, len(paths))
 	go app.run()
+	go app.updateScanStats()
 }
 
 func (app *appModel) run() {
-	for _, path := range app.paths {
-		app.fsIn <- msg.CmdScan{Base: path}
+	for i, path := range app.paths {
+		app.fsIn <- msg.CmdScan{Base: path, Index: i}
 	}
 
 	for {
-		if app.lc.ShoudStop() {
-			break
-		}
 		select {
 		case event := <-app.uiOut:
 			app.handleUiMessage(event)
@@ -67,15 +82,15 @@ func (app *appModel) analyze() msg.ArchiveInfo {
 		if ii.Hash > jj.Hash {
 			return false
 		}
-		if ii.Base < jj.Base {
+		if app.baseIdx(ii.Base) < app.baseIdx(jj.Base) {
 			return true
 		}
-		if ii.Base > jj.Base {
+		if app.baseIdx(ii.Base) > app.baseIdx(jj.Base) {
 			return false
 		}
 		return ii.Path < jj.Path
 	})
-	log.Println(app.infos)
+
 	states := make([]state, len(app.infos))
 	start, end := 0, 0
 	for start < len(app.infos) {
@@ -92,6 +107,15 @@ func (app *appModel) analyze() msg.ArchiveInfo {
 	return result
 }
 
+func (app *appModel) baseIdx(base string) int {
+	for i, path := range app.paths {
+		if path == base {
+			return i
+		}
+	}
+	return 0
+}
+
 func (app *appModel) analyzeForHash(states []state, start, end int) {
 	// log.Printf("### %v-%v\n", start, end)
 	// for i := start; i < end; i++ {
@@ -103,8 +127,6 @@ func (app *appModel) analyzeForHash(states []state, start, end int) {
 func (app *appModel) handleUiMessage(event any) {
 	switch event := event.(type) {
 	case msg.CmdQuit:
-		close(app.fsIn)
-		app.lc.Stop()
 		app.uiIn <- msg.QuitApp{}
 	default:
 		log.Panicf("### received unhandled ui message: %#v", event)
@@ -113,19 +135,6 @@ func (app *appModel) handleUiMessage(event any) {
 
 func (app *appModel) handleFsMessage(event any) {
 	switch event := event.(type) {
-	case msg.ScanState:
-		for i := range app.scanStates {
-			if app.scanStates[i].Base == event.Base {
-				app.scanStates[i] = event
-			}
-		}
-		now := time.Now()
-		if now.After(app.lastUpdate.Add(16 * time.Millisecond)) {
-			log.Println("### now", now, "last update", app.lastUpdate)
-			app.uiIn <- app.scanStates
-			app.lastUpdate = now
-		}
-
 	case msg.ScanError:
 		// TODO
 
@@ -154,5 +163,14 @@ func (app *appModel) handleFsMessage(event any) {
 
 	default:
 		log.Panicf("### received unhandled fs message: %#v", event)
+	}
+}
+
+func (app *appModel) updateScanStats() {
+	for !app.lc.ShoudStop() {
+		time.Sleep(16 * time.Microsecond)
+		event := <-app.fsScanState
+		app.fsScanState <- event
+		app.uiIn <- event
 	}
 }

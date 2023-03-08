@@ -7,12 +7,13 @@ import (
 
 type runner struct {
 	*lifecycle.Lifecycle
-	in  <-chan any
-	out chan<- any
+	in        <-chan any
+	out       chan<- any
+	scanState chan []msg.ScanState
 }
 
-func Run(lc *lifecycle.Lifecycle, in <-chan any, out chan<- any) {
-	r := &runner{Lifecycle: lc, in: in, out: out}
+func Run(lc *lifecycle.Lifecycle, in <-chan any, out chan<- any, scanState chan []msg.ScanState) {
+	r := &runner{Lifecycle: lc, in: in, out: out, scanState: scanState}
 	go r.run()
 }
 
@@ -29,6 +30,6 @@ func (r *runner) run() {
 func (r *runner) handleCommand(cmd any) {
 	switch cmd := cmd.(type) {
 	case msg.CmdScan:
-		r.scan(cmd.Base)
+		r.scan(cmd.Base, cmd.Index)
 	}
 }
