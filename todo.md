@@ -9,3 +9,4 @@
 * layouts & renderers
 * support themes
 * error reporting
+* analysis
