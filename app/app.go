@@ -3,7 +3,9 @@ package app
 import (
 	"arch/lifecycle"
 	"arch/msg"
+	"arch/ui"
 	"log"
+	"path/filepath"
 	"sort"
 	"time"
 )
@@ -18,7 +20,7 @@ type appModel struct {
 	fsScanState chan []msg.ScanState
 	infos       msg.ArchiveInfo
 	scanned     int
-	scanStates  []msg.ScanState
+	scanStarted time.Time
 }
 
 func Run(
@@ -38,10 +40,6 @@ func Run(
 		fsIn:        fsIn,
 		fsOut:       fsOut,
 		fsScanState: fsScanState,
-	}
-	app.scanStates = make([]msg.ScanState, len(paths))
-	for i, path := range paths {
-		app.scanStates[i] = msg.ScanState{Base: path}
 	}
 	fsScanState <- make([]msg.ScanState, len(paths))
 	go app.run()
@@ -72,7 +70,8 @@ const (
 	initial fileState = iota
 )
 
-func (app *appModel) analyze() msg.ArchiveInfo {
+// TODO: redo
+func (app *appModel) analyze() ui.Archive {
 	sort.Slice(app.infos, func(i, j int) bool {
 		ii := app.infos[i]
 		jj := app.infos[j]
@@ -103,7 +102,7 @@ func (app *appModel) analyze() msg.ArchiveInfo {
 		start = end
 	}
 
-	result := msg.ArchiveInfo{}
+	result := ui.Archive{}
 	return result
 }
 
@@ -138,25 +137,9 @@ func (app *appModel) handleFsMessage(event any) {
 	case msg.ScanError:
 		// TODO
 
-	case msg.ScanDone:
-		idx := 0
-		for i := range app.scanStates {
-			if app.scanStates[i].Base == event.Base {
-				idx = i
-				break
-			}
-		}
-		scanStates := make([]msg.ScanState, len(app.scanStates))
-		copy(scanStates, app.scanStates)
-		scanStates = append(scanStates[0:idx], scanStates[idx+1:]...)
-		app.scanStates = scanStates
-
-		app.uiIn <- app.scanStates
-
 	case msg.ArchiveInfo:
 		app.infos = append(app.infos, event...)
 		app.scanned++
-		log.Printf("app: ArchInfo: len=%d, scanned=%d", len(app.infos), app.scanned)
 		if app.scanned == len(app.paths) {
 			app.uiIn <- app.analyze()
 		}
@@ -166,11 +149,40 @@ func (app *appModel) handleFsMessage(event any) {
 	}
 }
 
+var nilTime time.Time
+
 func (app *appModel) updateScanStats() {
 	for !app.lc.ShoudStop() {
 		time.Sleep(16 * time.Microsecond)
 		event := <-app.fsScanState
+		stats := make(ui.ScanStates, 0, len(event))
+		if app.scanStarted == nilTime {
+			app.scanStarted = time.Now()
+		}
+		for _, state := range event {
+			if state.Path == "" {
+				continue
+			}
+			etaProgress := float64(state.TotalToHash) / float64(state.TotalHashed)
+			hashed := state.TotalSize - state.TotalToHash + state.TotalHashed
+			dur := time.Since(app.scanStarted)
+			eta := app.scanStarted.Add(time.Duration(float64(dur) * etaProgress))
+
+			stats = append(stats, ui.ScanState{
+				Archive:       state.Base,
+				Folder:        filepath.Dir(state.Path),
+				File:          filepath.Base(state.Path),
+				ETA:           eta,
+				RemainingTime: time.Until(eta),
+				Progress:      float64(hashed) / float64(state.TotalSize),
+			})
+		}
+
 		app.fsScanState <- event
-		app.uiIn <- event
+		if app.scanned == len(app.paths) {
+			app.uiIn <- ui.ScanStates{}
+			break
+		}
+		app.uiIn <- stats
 	}
 }

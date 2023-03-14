@@ -60,8 +60,4 @@ type ScanState struct {
 	TotalHashed int
 }
 
-type ScanDone struct {
-	Base string
-}
-
 type QuitApp struct{}

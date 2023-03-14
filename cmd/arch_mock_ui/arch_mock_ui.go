@@ -4,7 +4,7 @@ import (
 	"arch/app"
 	"arch/lifecycle"
 	"arch/msg"
-	"arch/ui"
+	"arch/ui/tcell"
 	"log"
 )
 
@@ -19,7 +19,7 @@ func main() {
 
 	app.Run([]string{"source", "copy1", "copy2"}, lc, uiIn, uiOut, fsIn, fsOut, fsScanState)
 	go fsRun(fsIn, fsOut)
-	ui.Run(lc, uiIn, uiOut)
+	tcell.Run(lc, uiIn, uiOut)
 }
 
 func fsRun(in <-chan any, out chan<- any) {

@@ -5,7 +5,7 @@ import (
 	"arch/fs"
 	"arch/lifecycle"
 	"arch/msg"
-	"arch/ui"
+	"arch/ui/tcell"
 	"log"
 	"os"
 )
@@ -32,5 +32,5 @@ func main() {
 
 	app.Run(paths, lc, uiIn, uiOut, fsIn, fsOut, fsScanState)
 	fs.Run(lc, fsIn, fsOut, fsScanState)
-	ui.Run(lc, uiIn, uiOut)
+	tcell.Run(lc, uiIn, uiOut)
 }
