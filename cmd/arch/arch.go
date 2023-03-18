@@ -1,36 +1,37 @@
 package main
 
 import (
-	"arch/app"
-	"arch/fs"
-	"arch/lifecycle"
-	"arch/msg"
-	"arch/ui/tcell"
+	"arch/files"
+	"arch/files/file_fs"
+	"arch/files/mock_fs"
+	"arch/ui"
 	"log"
 	"os"
 )
 
 func main() {
-	log.SetFlags(0)
-	paths := os.Args[1:]
+	// log.SetFlags(0)
+
+	var fsys files.FS
+	var paths []string
+
+	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
+		fsys = mock_fs.NewFs()
+		paths = os.Args[2:]
+	} else {
+		fsys = file_fs.NewFs()
+		paths = os.Args[1:]
+	}
+
 	for _, path := range paths {
-		_, err := os.Stat(path)
-		if err != nil {
+		if !fsys.IsValid(path) {
 			log.Printf("Invalid path: %v", path)
 			return
 		}
 	}
 
-	lc := lifecycle.New()
-
-	uiIn := make(chan any)
-	uiOut := make(chan any)
-
-	fsIn := make(chan any)
-	fsOut := make(chan any)
-	fsScanState := make(chan []msg.ScanState, 1)
-
-	app.Run(paths, lc, uiIn, uiOut, fsIn, fsOut, fsScanState)
-	fs.Run(lc, fsIn, fsOut, fsScanState)
-	tcell.Run(lc, uiIn, uiOut)
+	runner := ui.NewUi(paths, fsys)
+	log.Println("main.3")
+	runner.Run()
+	log.Println("main.4")
 }
