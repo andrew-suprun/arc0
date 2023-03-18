@@ -1,7 +1,7 @@
 package mock_fs
 
 import (
-	fs "arch/files"
+	"arch/files"
 	"log"
 	"math/rand"
 	"time"
@@ -11,7 +11,7 @@ import (
 
 type mockFs struct{}
 
-func NewFs() fs.FS {
+func NewFs() files.FS {
 	return &mockFs{}
 }
 
@@ -30,26 +30,26 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 	result := make(chan any)
 	go func() {
 		folder := faker.Sentence()
-		files := make([]file, rand.Int()%100+20)
+		scanFiles := make([]file, rand.Int()%100+20)
 		total_size := 0
-		for i := range files {
+		for i := range scanFiles {
 			if i%10 == 0 {
 				folder = faker.Sentence()
 			}
-			files[i].name = faker.Sentence()
-			files[i].size = rand.Int() % 1000000
-			files[i].folder = folder
-			total_size += files[i].size
+			scanFiles[i].name = faker.Sentence()
+			scanFiles[i].size = rand.Int() % 1000000
+			scanFiles[i].folder = folder
+			total_size += scanFiles[i].size
 		}
 
 		total_hashed := 0
-		for _, file := range files {
+		for _, file := range scanFiles {
 			hashed := 0
 			for hashed < file.size {
 				if total_hashed > total_size {
 					total_hashed = total_size
 				}
-				result <- fs.ScanState{
+				result <- files.ScanState{
 					Archive:     path,
 					Folder:      file.folder,
 					Name:        file.name,
@@ -59,11 +59,13 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 					TotalToHash: total_size,
 					TotalHashed: total_hashed,
 				}
-				log.Println(path, file.folder, file.name)
 				hashed += 1000
 				total_hashed += 1000
 				time.Sleep(100 * time.Microsecond)
 			}
+		}
+		result <- &files.ArchiveInfo{
+			Archive: path,
 		}
 		close(result)
 	}()

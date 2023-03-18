@@ -25,13 +25,8 @@ type ui struct {
 	screen      tcell.Screen
 	scanStates  []files.ScanState
 	archives    []*files.ArchiveInfo
-	scanDone    []bool
 	scanStarted time.Time
 	quit        bool
-}
-
-type scanDone struct {
-	archive string
 }
 
 func NewUi(paths []string, fs files.FS) UI {
@@ -40,7 +35,6 @@ func NewUi(paths []string, fs files.FS) UI {
 		fs:         fs,
 		scanStates: make([]files.ScanState, len(paths)),
 		archives:   make([]*files.ArchiveInfo, len(paths)),
-		scanDone:   make([]bool, len(paths)),
 	}
 	return ui
 }
@@ -104,7 +98,6 @@ func (ui *ui) Run() {
 		scanChan := ui.fs.Scan(path)
 		go func() {
 			for scanEvent := range scanChan {
-				log.Printf("scan event: %#v", scanEvent)
 				if ui.scanStarted == nilTime {
 					ui.scanStarted = time.Now()
 				}
@@ -121,9 +114,7 @@ func (ui *ui) Run() {
 
 				inChan <- scanEvent
 			}
-			inChan <- scanDone{archive: path}
 		}()
-
 	}
 
 	for !ui.quit {
@@ -149,15 +140,8 @@ func (ui *ui) handleExternalEvent(event any) {
 			}
 		}
 
-	case scanDone:
-		for i := range ui.paths {
-			if ui.paths[i] == event.archive {
-				ui.scanDone[i] = true
-				break
-			}
-		}
-
 	case *files.ArchiveInfo:
+		log.Println("ArchiveInfo", event.Archive)
 		for i := range ui.paths {
 			if ui.paths[i] == event.Archive {
 				ui.scanStates[i].Name = ""
@@ -197,7 +181,7 @@ func (ui *ui) handleTcellEvent(event tcell.Event) {
 
 	case *tcell.EventMouse:
 		w, h := ev.Position()
-		log.Printf("EventKey: buttons=%v mods=%v [%d:%d]", ev.Buttons(), ev.Modifiers(), w, h)
+		log.Printf("EventMouse: buttons=%v mods=%v [%d:%d]", ev.Buttons(), ev.Modifiers(), w, h)
 	default:
 	}
 }
@@ -212,8 +196,7 @@ func (ui *ui) render() {
 
 	line := 1
 	for i, state := range ui.scanStates {
-		log.Printf("render: i=%d done=%v", i, ui.scanDone[i])
-		if ui.scanDone[i] {
+		if ui.archives[i] != nil {
 			continue
 		}
 		etaProgress := float64(state.TotalToHash) / float64(state.TotalHashed)
@@ -265,6 +248,5 @@ func progressBar(barWidth int, value float64) string {
 	}
 	str := builder.String()
 	length := ansi.PrintableRuneWidth(str)
-	log.Println("value", value, "bar", barWidth, "len", length)
 	return str + strings.Repeat(" ", barWidth-length)
 }

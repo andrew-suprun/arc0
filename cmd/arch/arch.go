@@ -31,7 +31,5 @@ func main() {
 	}
 
 	runner := ui.NewUi(paths, fsys)
-	log.Println("main.3")
 	runner.Run()
-	log.Println("main.4")
 }
