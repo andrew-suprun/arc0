@@ -12,7 +12,6 @@ type FS interface {
 
 type ScanState struct {
 	Archive     string
-	Folder      string
 	Name        string
 	Size        int
 	Hashed      int
@@ -29,7 +28,6 @@ type ArchiveInfo struct {
 type FileInfo struct {
 	Ino     uint64
 	Archive string
-	Folder  string
 	Name    string
 	Size    int
 	ModTime time.Time
@@ -38,7 +36,6 @@ type FileInfo struct {
 
 type ScanError struct {
 	Archive string
-	Folder  string
 	Name    string
 	Error   error
 }

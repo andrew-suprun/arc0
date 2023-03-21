@@ -50,7 +50,7 @@ func (r *file_fs) scan(base string, out chan any) {
 				meta.Hash = storedInfo.Hash
 			}
 		} else {
-			log.Println("not found", storedInfo.Folder, storedInfo.Name)
+			log.Println("not found", storedInfo.Name)
 		}
 	}
 
@@ -81,9 +81,9 @@ func (r *file_fs) scan(base string, out chan any) {
 		hash.Reset()
 
 		fsys := os.DirFS(base)
-		file, err := fsys.Open(filepath.Join(meta.Folder, meta.Name))
+		file, err := fsys.Open(meta.Name)
 		if err != nil {
-			out <- files.ScanError{Archive: base, Folder: meta.Folder, Name: meta.Name, Error: err}
+			out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
 			return
 		}
 		defer file.Close()
@@ -100,12 +100,12 @@ func (r *file_fs) scan(base string, out chan any) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						out <- files.ScanError{Archive: base, Folder: meta.Folder, Name: meta.Name, Error: err}
+						out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
 						return
 					}
 				}
 				if nr != nw {
-					out <- files.ScanError{Archive: base, Folder: meta.Folder, Name: meta.Name, Error: io.ErrShortWrite}
+					out <- files.ScanError{Archive: base, Name: meta.Name, Error: io.ErrShortWrite}
 					return
 				}
 			}
@@ -116,13 +116,12 @@ func (r *file_fs) scan(base string, out chan any) {
 				break
 			}
 			if er != nil {
-				out <- files.ScanError{Archive: base, Folder: meta.Folder, Name: meta.Name, Error: err}
+				out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
 				return
 			}
 
 			out <- files.ScanState{
 				Archive:     base,
-				Folder:      meta.Folder,
 				Name:        meta.Name,
 				Size:        meta.Size,
 				Hashed:      hashed,
@@ -152,13 +151,13 @@ func (f *file_fs) collectMeta(base string, out chan any) (infos []files.FileInfo
 		}
 
 		if err != nil {
-			out <- files.ScanError{Archive: base, Folder: filepath.Dir(path), Name: filepath.Base(path), Error: err}
+			out <- files.ScanError{Archive: base, Name: filepath.Base(path), Error: err}
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			out <- files.ScanError{Archive: base, Folder: filepath.Dir(path), Name: filepath.Base(path), Error: err}
+			out <- files.ScanError{Archive: base, Name: filepath.Base(path), Error: err}
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
@@ -168,8 +167,7 @@ func (f *file_fs) collectMeta(base string, out chan any) (infos []files.FileInfo
 		infos = append(infos, files.FileInfo{
 			Ino:     sys.Ino,
 			Archive: base,
-			Folder:  filepath.Dir(path),
-			Name:    filepath.Base(path),
+			Name:    path,
 			Size:    int(sys.Size),
 			ModTime: modTime,
 		})
@@ -194,7 +192,6 @@ func readMeta(basePath string) (result []files.FileInfo) {
 	}
 
 	for _, record := range records[1:] {
-		// TODO: remove after new format is stored
 		if len(record) == 5 {
 			ino, er1 := strconv.ParseUint(record[0], 10, 64)
 			size, er2 := strconv.ParseInt(record[2], 10, 64)
@@ -205,28 +202,10 @@ func readMeta(basePath string) (result []files.FileInfo) {
 			}
 			result = append(result, files.FileInfo{
 				Ino:     ino,
-				Folder:  filepath.Dir(record[1]),
-				Name:    filepath.Base(record[1]),
+				Name:    record[1],
 				Size:    int(size),
 				ModTime: modTime,
 				Hash:    record[4],
-			})
-		}
-		if len(record) == 6 {
-			ino, er1 := strconv.ParseUint(record[0], 10, 64)
-			size, er2 := strconv.ParseInt(record[3], 10, 64)
-			modTime, er3 := time.Parse(time.RFC3339, record[4])
-			modTime = modTime.UTC().Round(time.Second)
-			if er1 != nil || er2 != nil || er3 != nil {
-				continue
-			}
-			result = append(result, files.FileInfo{
-				Ino:     ino,
-				Folder:  record[1],
-				Name:    record[2],
-				Size:    int(size),
-				ModTime: modTime,
-				Hash:    record[5],
 			})
 		}
 	}
@@ -236,12 +215,11 @@ func readMeta(basePath string) (result []files.FileInfo) {
 
 func storeMeta(basePath string, metas []files.FileInfo) error {
 	result := make([][]string, len(metas)+1)
-	result[0] = []string{"Inode", "Folder", "Name", "Size", "ModTime", "Hash"}
+	result[0] = []string{"Inode", "Name", "Size", "ModTime", "Hash"}
 
 	for i, meta := range metas {
 		result[i+1] = []string{
 			fmt.Sprint(meta.Ino),
-			norm.NFC.String(meta.Folder),
 			norm.NFC.String(meta.Name),
 			fmt.Sprint(meta.Size),
 			meta.ModTime.UTC().Format(time.RFC3339Nano),

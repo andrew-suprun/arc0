@@ -4,6 +4,7 @@ import (
 	"arch/files"
 	"log"
 	"math/rand"
+	"path/filepath"
 	"time"
 
 	"github.com/go-faker/faker/v4"
@@ -20,9 +21,9 @@ func (fs *mockFs) IsValid(path string) bool {
 }
 
 type file struct {
-	folder string
-	name   string
-	size   int
+	name string
+	size int
+	hash string
 }
 
 func (fsys *mockFs) Scan(path string) <-chan any {
@@ -36,9 +37,8 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 			if i%10 == 0 {
 				folder = faker.Sentence()
 			}
-			scanFiles[i].name = faker.Sentence()
+			scanFiles[i].name = filepath.Join(folder, faker.Sentence())
 			scanFiles[i].size = rand.Int() % 1000000
-			scanFiles[i].folder = folder
 			total_size += scanFiles[i].size
 		}
 
@@ -51,7 +51,6 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 				}
 				result <- files.ScanState{
 					Archive:     path,
-					Folder:      file.folder,
 					Name:        file.name,
 					Size:        file.size,
 					Hashed:      hashed,
@@ -64,8 +63,21 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 				time.Sleep(100 * time.Microsecond)
 			}
 		}
+
+		infos := make([]files.FileInfo, len(scanFiles))
+
+		for i := range scanFiles {
+			infos[i] = files.FileInfo{
+				Archive: path,
+				Name:    scanFiles[i].name,
+				Size:    scanFiles[i].size,
+				Hash:    scanFiles[i].hash,
+			}
+		}
+
 		result <- &files.ArchiveInfo{
 			Archive: path,
+			Files:   infos,
 		}
 		close(result)
 	}()
