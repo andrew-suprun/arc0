@@ -34,7 +34,11 @@ func (r *file_fs) scan(base string, out chan any) {
 	metas := r.collectMeta(base, out)
 	defer func() {
 		storeMeta(path, metas)
-		out <- metas
+		out <- &files.ArchiveInfo{
+			Archive: path,
+			Files:   metas,
+		}
+		close(out)
 	}()
 
 	inodes := map[uint64]*files.FileInfo{}

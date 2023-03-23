@@ -2,7 +2,6 @@ package mock_fs
 
 import (
 	"arch/files"
-	"log"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -27,11 +26,10 @@ type file struct {
 }
 
 func (fsys *mockFs) Scan(path string) <-chan any {
-	log.Println("mock scan", path)
 	result := make(chan any)
 	go func() {
 		scanFiles, total_size, total_hashed := genFiles()
-		for _, file := range scanFiles {
+		for i, file := range scanFiles {
 			if file.hash != "" {
 				continue
 			}
@@ -49,10 +47,11 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 					TotalToHash: total_size,
 					TotalHashed: total_hashed,
 				}
-				hashed += 1000
-				total_hashed += 1000
+				hashed += 10000
+				total_hashed += 10000
 				time.Sleep(100 * time.Microsecond)
 			}
+			scanFiles[i].hash = faker.Phonenumber()
 		}
 
 		infos := make([]files.FileInfo, len(scanFiles))
@@ -92,7 +91,7 @@ func genFiles() ([]file, int, int) {
 func genFilesRec(dirs []string, level, pcHashed int, files *[]file, total_size, total_hashed *int) {
 	path := filepath.Join(dirs...)
 	for i := 0; i < nFiles[level]; i++ {
-		size := rand.Int() % 100000
+		size := rand.Int() % 1000000
 		*total_size += size
 		hash := ""
 		if rand.Intn(100) < pcHashed {

@@ -10,3 +10,6 @@
 * support themes
 * error reporting
 * analysis
+
+* open <file>
+* open -R <file>
