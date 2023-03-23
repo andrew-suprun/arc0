@@ -1,7 +1,7 @@
 package file_fs
 
 import (
-	"arch/files"
+	"arch/app"
 	"arch/lifecycle"
 	"os"
 )
@@ -10,7 +10,7 @@ type file_fs struct {
 	lc *lifecycle.Lifecycle
 }
 
-func NewFs() files.FS {
+func NewFs() app.FS {
 	return &file_fs{
 		lc: lifecycle.New(),
 	}

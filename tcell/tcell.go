@@ -1,7 +1,7 @@
-package ui
+package tcell
 
 import (
-	"arch/files"
+	"arch/app"
 	"fmt"
 	"log"
 	"math"
@@ -15,54 +15,19 @@ import (
 	"github.com/muesli/ansi"
 )
 
-type UI interface {
-	Run()
-}
-
 type ui struct {
-	paths       []string
-	fs          files.FS
-	screen      tcell.Screen
-	scanStates  []files.ScanState
-	scanResults []*files.ArchiveInfo
-	scanStarted time.Time
-	archives    []folder
-	archiveIdx  int
-	locations   []location
-	quit        bool
-
+	app       *app.App
+	screen    tcell.Screen
+	locations []location
+	quit      bool
 	width     int
 	height    int
 	lineOffet int
 }
-
-type folder struct {
-	size       int
-	subFolders map[string]folder
-	files      map[string]file
-}
-
-type file struct {
-	size    int
-	modTime time.Time
-	hash    string
-}
-
 type location struct {
 	path       []string
 	file       string
 	lineOffset int
-}
-
-func NewUi(paths []string, fs files.FS) UI {
-	ui := &ui{
-		paths:       paths,
-		fs:          fs,
-		scanStates:  make([]files.ScanState, len(paths)),
-		scanResults: make([]*files.ArchiveInfo, len(paths)),
-		locations:   make([]location, len(paths)),
-	}
-	return ui
 }
 
 var (
@@ -74,9 +39,11 @@ var (
 	styleProgressBar = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x1f1f9f))
 )
 
-var nilTime time.Time
-
-func (ui *ui) Run() {
+func Run(app *app.App) {
+	ui := &ui{
+		app:       app,
+		locations: make([]location, len(app.Paths)),
+	}
 	s, e := tcell.NewScreen()
 	if e != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", e)
@@ -107,73 +74,47 @@ func (ui *ui) Run() {
 		}
 	}()
 
-	inChan := make(chan any, 1)
-
-	for _, path := range ui.paths {
-		path := path
-		scanChan := ui.fs.Scan(path)
-		go func() {
-			for scanEvent := range scanChan {
-				if ui.scanStarted == nilTime {
-					ui.scanStarted = time.Now()
-				}
-				select {
-				case event := <-inChan:
-					switch event.(type) {
-					case files.ScanState:
-						// Drop previous []files.ScanState event, if any
-					default:
-						inChan <- event
-					}
-				default:
-				}
-
-				inChan <- scanEvent
-			}
-		}()
-	}
-
 	for !ui.quit {
 		select {
-		case event := <-inChan:
-			ui.handleExternalEvent(event)
+		case event := <-app.UiInput:
+			ui.handleAppEvent(event)
 		case event := <-tcellChan:
 			ui.handleTcellEvent(event)
 		}
 		ui.render()
 	}
-	ui.fs.Stop()
+	ui.app.Fs.Stop()
 	ui.screen.Fini()
 }
 
-func (ui *ui) handleExternalEvent(event any) {
+func (ui *ui) handleAppEvent(event any) {
 	switch event := event.(type) {
-	case files.ScanState:
-		for i := range ui.paths {
-			if ui.paths[i] == event.Archive {
-				ui.scanStates[i] = event
+	case app.ScanState:
+		for i := range ui.app.Paths {
+			if ui.app.Paths[i] == event.Archive {
+				ui.app.ScanStates[i] = event
 				break
 			}
 		}
 
-	case *files.ArchiveInfo:
+	case *app.ArchiveInfo:
 		log.Println("ArchiveInfo", event.Archive)
-		for i := range ui.paths {
-			if ui.paths[i] == event.Archive {
-				ui.scanStates[i].Name = ""
-				ui.scanResults[i] = event
+		for i := range ui.app.Paths {
+			if ui.app.Paths[i] == event.Archive {
+				ui.app.ScanStates[i].Name = ""
+				ui.app.ScanResults[i] = event
 				break
 			}
 		}
 		doneScanning := true
-		for i := range ui.paths {
-			if ui.scanResults[i] == nil {
+		for i := range ui.app.Paths {
+			if ui.app.ScanResults[i] == nil {
 				doneScanning = false
 				break
 			}
 		}
 		if doneScanning {
-			ui.analize()
+			ui.app.Analize()
 		}
 
 	default:
@@ -195,8 +136,8 @@ func (ui *ui) handleTcellEvent(event tcell.Event) {
 		r := ev.Rune()
 		if r >= '1' && r <= '9' {
 			idx := int(r - '1')
-			if idx < len(ui.paths) {
-				ui.archiveIdx = idx
+			if idx < len(ui.app.Paths) {
+				ui.app.ArchiveIdx = idx
 			}
 		}
 
@@ -206,45 +147,6 @@ func (ui *ui) handleTcellEvent(event tcell.Event) {
 		w, h := ev.Position()
 		log.Printf("EventMouse: buttons=%v mods=%v [%d:%d]", ev.Buttons(), ev.Modifiers(), w, h)
 	default:
-	}
-}
-
-func (ui *ui) analize() {
-	ui.archives = make([]folder, len(ui.paths))
-	for i := range ui.scanResults {
-		archive := &ui.archives[i]
-		archive.subFolders = map[string]folder{}
-		archive.files = map[string]file{}
-		for _, info := range ui.scanResults[i].Files {
-			log.Printf(" INFO: %s [%v]", info.Name, info.Size)
-			path := strings.Split(info.Name, "/")
-			name := path[len(path)-1]
-			path = path[:len(path)-1]
-			current := archive
-			current.size += info.Size
-			for _, dir := range path {
-				sub, ok := current.subFolders[dir]
-				if !ok {
-					sub = folder{subFolders: map[string]folder{}, files: map[string]file{}}
-					current.subFolders[dir] = sub
-				}
-				sub.size += info.Size
-				current.subFolders[dir] = sub
-				current = &sub
-			}
-			current.files[name] = file{size: info.Size, modTime: info.ModTime, hash: info.Hash}
-		}
-		printArchive(archive, "", "")
-	}
-}
-
-func printArchive(archive *folder, name, prefix string) {
-	log.Printf("%sD: %s [%v]", prefix, name, archive.size)
-	for name, sub := range archive.subFolders {
-		printArchive(&sub, name, prefix+"    ")
-	}
-	for name, file := range archive.files {
-		log.Printf("    %sF: %s [%v] %s", prefix, name, file.size, file.hash)
 	}
 }
 
@@ -269,14 +171,14 @@ func (ui *ui) drawTitle() {
 }
 
 func (ui *ui) drawScanStats() {
-	for i, state := range ui.scanStates {
-		if ui.scanResults[i] != nil {
+	for i, state := range ui.app.ScanStates {
+		if ui.app.ScanResults[i] != nil {
 			continue
 		}
 		etaProgress := float64(state.TotalToHash) / float64(state.TotalHashed)
 		hashed := state.TotalSize - state.TotalToHash + state.TotalHashed
-		dur := time.Since(ui.scanStarted)
-		eta := ui.scanStarted.Add(time.Duration(float64(dur) * etaProgress))
+		dur := time.Since(ui.app.ScanStarted)
+		eta := ui.app.ScanStarted.Add(time.Duration(float64(dur) * etaProgress))
 
 		valueWidth := ui.width - 30
 
@@ -298,21 +200,21 @@ func (ui *ui) drawScanStats() {
 
 type renderFolder struct {
 	name string
-	folder
+	app.Folder
 }
 
 func (ui *ui) drawArchive() {
-	if ui.archives == nil {
+	if ui.app.Archives == nil {
 		return
 	}
-	ui.text(11, 0, ui.width-11, styleArchiveBane, ui.paths[ui.archiveIdx])
-	archive := ui.archives[ui.archiveIdx]
-	location := ui.locations[ui.archiveIdx]
+	ui.text(11, 0, ui.width-11, styleArchiveBane, ui.app.Paths[ui.app.ArchiveIdx])
+	archive := ui.app.Archives[ui.app.ArchiveIdx]
+	location := ui.locations[ui.app.ArchiveIdx]
 	for _, dir := range location.path {
-		archive = archive.subFolders[dir]
+		archive = archive.SubFolders[dir]
 	}
-	subFolders := make([]renderFolder, 0, len(archive.subFolders))
-	for name, folder := range archive.subFolders {
+	subFolders := make([]renderFolder, 0, len(archive.SubFolders))
+	for name, folder := range archive.SubFolders {
 		subFolders = append(subFolders, renderFolder{name, folder})
 	}
 	sort.Slice(subFolders, func(i, j int) bool {
@@ -322,7 +224,7 @@ func (ui *ui) drawArchive() {
 	for _, subFolder := range subFolders {
 		ui.text(1, ui.lineOffet, 3, styleWhiteBold, "D:")
 		ui.text(4, ui.lineOffet, w-4, styleWhiteBold, subFolder.name)
-		ui.text(ui.width-18, ui.lineOffet, 18, styleWhiteBold, formatSize(subFolder.size))
+		ui.text(ui.width-18, ui.lineOffet, 18, styleWhiteBold, formatSize(subFolder.Size))
 		if ui.lineOffet >= ui.height-2 {
 			break
 		}

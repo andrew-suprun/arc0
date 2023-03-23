@@ -1,7 +1,7 @@
 package mock_fs
 
 import (
-	"arch/files"
+	"arch/app"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -11,7 +11,7 @@ import (
 
 type mockFs struct{}
 
-func NewFs() files.FS {
+func NewFs() app.FS {
 	return &mockFs{}
 }
 
@@ -38,7 +38,7 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 				if total_hashed > total_size {
 					total_hashed = total_size
 				}
-				result <- files.ScanState{
+				result <- app.ScanState{
 					Archive:     path,
 					Name:        file.name,
 					Size:        file.size,
@@ -54,10 +54,10 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 			scanFiles[i].hash = faker.Phonenumber()
 		}
 
-		infos := make([]files.FileInfo, len(scanFiles))
+		infos := make([]app.FileInfo, len(scanFiles))
 
 		for i := range scanFiles {
-			infos[i] = files.FileInfo{
+			infos[i] = app.FileInfo{
 				Archive: path,
 				Name:    scanFiles[i].name,
 				Size:    scanFiles[i].size,
@@ -65,7 +65,7 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 			}
 		}
 
-		result <- &files.ArchiveInfo{
+		result <- &app.ArchiveInfo{
 			Archive: path,
 			Files:   infos,
 		}

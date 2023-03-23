@@ -1,7 +1,7 @@
 package file_fs
 
 import (
-	"arch/files"
+	"arch/app"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
@@ -27,21 +27,21 @@ func (r *file_fs) scan(base string, out chan any) {
 	path, err := filepath.Abs(base)
 	path = norm.NFC.String(path)
 	if err != nil {
-		out <- files.ScanError{Archive: base, Error: err}
+		out <- app.ScanError{Archive: base, Error: err}
 		return
 	}
 
 	metas := r.collectMeta(base, out)
 	defer func() {
 		storeMeta(path, metas)
-		out <- &files.ArchiveInfo{
+		out <- &app.ArchiveInfo{
 			Archive: path,
 			Files:   metas,
 		}
 		close(out)
 	}()
 
-	inodes := map[uint64]*files.FileInfo{}
+	inodes := map[uint64]*app.FileInfo{}
 	for i := range metas {
 		inodes[metas[i].Ino] = &metas[i]
 	}
@@ -77,7 +77,7 @@ func (r *file_fs) scan(base string, out chan any) {
 		return
 	}
 
-	hashFile := func(meta *files.FileInfo) {
+	hashFile := func(meta *app.FileInfo) {
 		defer func() {
 			totalHashed += meta.Size
 		}()
@@ -87,7 +87,7 @@ func (r *file_fs) scan(base string, out chan any) {
 		fsys := os.DirFS(base)
 		file, err := fsys.Open(meta.Name)
 		if err != nil {
-			out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
+			out <- app.ScanError{Archive: base, Name: meta.Name, Error: err}
 			return
 		}
 		defer file.Close()
@@ -104,12 +104,12 @@ func (r *file_fs) scan(base string, out chan any) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
+						out <- app.ScanError{Archive: base, Name: meta.Name, Error: err}
 						return
 					}
 				}
 				if nr != nw {
-					out <- files.ScanError{Archive: base, Name: meta.Name, Error: io.ErrShortWrite}
+					out <- app.ScanError{Archive: base, Name: meta.Name, Error: io.ErrShortWrite}
 					return
 				}
 			}
@@ -120,11 +120,11 @@ func (r *file_fs) scan(base string, out chan any) {
 				break
 			}
 			if er != nil {
-				out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
+				out <- app.ScanError{Archive: base, Name: meta.Name, Error: err}
 				return
 			}
 
-			out <- files.ScanState{
+			out <- app.ScanState{
 				Archive:     base,
 				Name:        meta.Name,
 				Size:        meta.Size,
@@ -147,7 +147,7 @@ func (r *file_fs) scan(base string, out chan any) {
 	}
 }
 
-func (f *file_fs) collectMeta(base string, out chan any) (infos []files.FileInfo) {
+func (f *file_fs) collectMeta(base string, out chan any) (infos []app.FileInfo) {
 	fsys := os.DirFS(base)
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if f.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
@@ -155,20 +155,20 @@ func (f *file_fs) collectMeta(base string, out chan any) (infos []files.FileInfo
 		}
 
 		if err != nil {
-			out <- files.ScanError{Archive: base, Name: filepath.Base(path), Error: err}
+			out <- app.ScanError{Archive: base, Name: filepath.Base(path), Error: err}
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			out <- files.ScanError{Archive: base, Name: filepath.Base(path), Error: err}
+			out <- app.ScanError{Archive: base, Name: filepath.Base(path), Error: err}
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
 		modTime := meta.ModTime()
 		modTime = modTime.UTC().Round(time.Second)
 
-		infos = append(infos, files.FileInfo{
+		infos = append(infos, app.FileInfo{
 			Ino:     sys.Ino,
 			Archive: base,
 			Name:    path,
@@ -182,7 +182,7 @@ func (f *file_fs) collectMeta(base string, out chan any) (infos []files.FileInfo
 
 const HashFileName = ".meta.csv"
 
-func readMeta(basePath string) (result []files.FileInfo) {
+func readMeta(basePath string) (result []app.FileInfo) {
 	absHashFileName := filepath.Join(basePath, HashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
 	if err != nil {
@@ -204,7 +204,7 @@ func readMeta(basePath string) (result []files.FileInfo) {
 			if er1 != nil || er2 != nil || er3 != nil {
 				continue
 			}
-			result = append(result, files.FileInfo{
+			result = append(result, app.FileInfo{
 				Ino:     ino,
 				Name:    record[1],
 				Size:    int(size),
@@ -217,7 +217,7 @@ func readMeta(basePath string) (result []files.FileInfo) {
 	return result
 }
 
-func storeMeta(basePath string, metas []files.FileInfo) error {
+func storeMeta(basePath string, metas []app.FileInfo) error {
 	result := make([][]string, len(metas)+1)
 	result[0] = []string{"Inode", "Name", "Size", "ModTime", "Hash"}
 

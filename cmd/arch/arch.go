@@ -1,18 +1,18 @@
 package main
 
 import (
-	"arch/files"
+	"arch/app"
 	"arch/files/file_fs"
 	"arch/files/mock_fs"
-	"arch/ui"
+	"arch/tcell"
 	"log"
 	"os"
 )
 
 func main() {
-	// log.SetFlags(0)
+	log.SetFlags(0)
 
-	var fsys files.FS
+	var fsys app.FS
 	var paths []string
 
 	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
@@ -30,6 +30,5 @@ func main() {
 		}
 	}
 
-	runner := ui.NewUi(paths, fsys)
-	runner.Run()
+	tcell.Run(app.NewApp(paths, fsys))
 }
