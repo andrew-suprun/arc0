@@ -1,10 +1,10 @@
 package main
 
 import (
-	"arch/app"
+	"arch/files"
 	"arch/files/file_fs"
 	"arch/files/mock_fs"
-	"arch/tcell"
+	"arch/ui"
 	"log"
 	"os"
 )
@@ -12,23 +12,23 @@ import (
 func main() {
 	log.SetFlags(0)
 
-	var fsys app.FS
+	var fs files.FS
 	var paths []string
 
 	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
-		fsys = mock_fs.NewFs()
+		fs = mock_fs.NewFs()
 		paths = os.Args[2:]
 	} else {
-		fsys = file_fs.NewFs()
+		fs = file_fs.NewFs()
 		paths = os.Args[1:]
 	}
 
 	for _, path := range paths {
-		if !fsys.IsValid(path) {
+		if !fs.IsValid(path) {
 			log.Printf("Invalid path: %v", path)
 			return
 		}
 	}
 
-	tcell.Run(app.NewApp(paths, fsys))
+	ui.Run(paths, fs)
 }

@@ -1,7 +1,7 @@
 package mock_fs
 
 import (
-	"arch/app"
+	"arch/files"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -11,7 +11,7 @@ import (
 
 type mockFs struct{}
 
-func NewFs() app.FS {
+func NewFs() files.FS {
 	return &mockFs{}
 }
 
@@ -28,36 +28,47 @@ type file struct {
 func (fsys *mockFs) Scan(path string) <-chan any {
 	result := make(chan any)
 	go func() {
-		scanFiles, total_size, total_hashed := genFiles()
+		scanStarted := time.Now()
+		scanFiles, totalSize, totalHashed := genFiles()
+		toHash := totalSize - totalHashed
+		newFilesHashed := 0
 		for i, file := range scanFiles {
 			if file.hash != "" {
 				continue
 			}
-			hashed := 0
-			for hashed < file.size {
-				if total_hashed > total_size {
-					total_hashed = total_size
+			fileHashed := 0
+			for fileHashed < file.size {
+				hashSize := 10000
+				if fileHashed+hashSize > file.size {
+					hashSize = file.size - fileHashed
 				}
-				result <- app.ScanState{
-					Archive:     path,
-					Name:        file.name,
-					Size:        file.size,
-					Hashed:      hashed,
-					TotalSize:   total_size,
-					TotalToHash: total_size,
-					TotalHashed: total_hashed,
+				fileHashed += hashSize
+				newFilesHashed += hashSize
+
+				if totalHashed+newFilesHashed > totalSize {
+					totalHashed = totalSize - newFilesHashed
 				}
-				hashed += 10000
-				total_hashed += 10000
+
+				progress := float64(totalHashed+newFilesHashed) / float64(totalSize)
+				dur := time.Since(scanStarted)
+				eta := scanStarted.Add(time.Duration(float64(dur) / float64(newFilesHashed) * float64(toHash)))
+
+				result <- &files.ScanState{
+					Archive:   path,
+					Name:      file.name,
+					Eta:       eta,
+					Remaining: time.Until(eta),
+					Progress:  progress,
+				}
 				time.Sleep(100 * time.Microsecond)
 			}
 			scanFiles[i].hash = faker.Phonenumber()
 		}
 
-		infos := make([]app.FileInfo, len(scanFiles))
+		infos := make([]files.FileInfo, len(scanFiles))
 
 		for i := range scanFiles {
-			infos[i] = app.FileInfo{
+			infos[i] = files.FileInfo{
 				Archive: path,
 				Name:    scanFiles[i].name,
 				Size:    scanFiles[i].size,
@@ -65,7 +76,7 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 			}
 		}
 
-		result <- &app.ArchiveInfo{
+		result <- &files.ArchiveInfo{
 			Archive: path,
 			Files:   infos,
 		}

@@ -1,7 +1,7 @@
-package tcell
+package ui
 
 import (
-	"arch/app"
+	"arch/files"
 	"fmt"
 	"log"
 	"math"
@@ -16,18 +16,37 @@ import (
 )
 
 type ui struct {
-	app       *app.App
-	screen    tcell.Screen
-	locations []location
-	quit      bool
-	width     int
-	height    int
-	lineOffet int
+	paths       []string
+	fs          files.FS
+	screen      tcell.Screen
+	locations   []location
+	quit        bool
+	width       int
+	height      int
+	lineOffet   int
+	scanStates  []*files.ScanState
+	scanResults []*files.ArchiveInfo
+	archives    []Folder
+	ArchiveIdx  int
 }
+
 type location struct {
 	path       []string
 	file       string
 	lineOffset int
+}
+
+type Folder struct {
+	name       string
+	Size       int
+	SubFolders map[string]Folder
+	Files      map[string]File
+}
+
+type File struct {
+	Size    int
+	ModTime time.Time
+	Hash    string
 }
 
 var (
@@ -39,10 +58,13 @@ var (
 	styleProgressBar = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x1f1f9f))
 )
 
-func Run(app *app.App) {
+func Run(paths []string, fs files.FS) {
 	ui := &ui{
-		app:       app,
-		locations: make([]location, len(app.Paths)),
+		paths:       paths,
+		fs:          fs,
+		locations:   make([]location, len(paths)),
+		scanStates:  make([]*files.ScanState, len(paths)),
+		scanResults: make([]*files.ArchiveInfo, len(paths)),
 	}
 	s, e := tcell.NewScreen()
 	if e != nil {
@@ -74,47 +96,95 @@ func Run(app *app.App) {
 		}
 	}()
 
+	fsInput := make(chan any)
+
+	for _, archive := range paths {
+		go func(archive string) {
+			for ev := range fs.Scan(archive) {
+				fsInput <- ev
+			}
+		}(archive)
+	}
+
 	for !ui.quit {
 		select {
-		case event := <-app.UiInput:
-			ui.handleAppEvent(event)
+		case event := <-fsInput:
+			ui.handleFsEvent(event)
 		case event := <-tcellChan:
 			ui.handleTcellEvent(event)
 		}
 		ui.render()
 	}
-	ui.app.Fs.Stop()
+	ui.fs.Stop()
 	ui.screen.Fini()
 }
 
-func (ui *ui) handleAppEvent(event any) {
+func (ui *ui) analize() {
+	ui.archives = make([]Folder, len(ui.paths))
+	for i := range ui.scanResults {
+		archive := &ui.archives[i]
+		archive.SubFolders = map[string]Folder{}
+		archive.Files = map[string]File{}
+		for _, info := range ui.scanResults[i].Files {
+			path := strings.Split(info.Name, "/")
+			name := path[len(path)-1]
+			path = path[:len(path)-1]
+			current := archive
+			current.Size += info.Size
+			for _, dir := range path {
+				sub, ok := current.SubFolders[dir]
+				if !ok {
+					sub = Folder{SubFolders: map[string]Folder{}, Files: map[string]File{}}
+					current.SubFolders[dir] = sub
+				}
+				sub.Size += info.Size
+				current.SubFolders[dir] = sub
+				current = &sub
+			}
+			current.Files[name] = File{Size: info.Size, ModTime: info.ModTime, Hash: info.Hash}
+		}
+		printArchive(archive, "", "")
+	}
+}
+
+func printArchive(archive *Folder, name, prefix string) {
+	log.Printf("%sD: %s [%v]", prefix, name, archive.Size)
+	for name, sub := range archive.SubFolders {
+		printArchive(&sub, name, prefix+"    ")
+	}
+	for name, file := range archive.Files {
+		log.Printf("    %sF: %s [%v] %s", prefix, name, file.Size, file.Hash)
+	}
+}
+
+func (ui *ui) handleFsEvent(event any) {
 	switch event := event.(type) {
-	case app.ScanState:
-		for i := range ui.app.Paths {
-			if ui.app.Paths[i] == event.Archive {
-				ui.app.ScanStates[i] = event
+	case *files.ScanState:
+		for i := range ui.paths {
+			if ui.paths[i] == event.Archive {
+				ui.scanStates[i] = event
 				break
 			}
 		}
 
-	case *app.ArchiveInfo:
+	case *files.ArchiveInfo:
 		log.Println("ArchiveInfo", event.Archive)
-		for i := range ui.app.Paths {
-			if ui.app.Paths[i] == event.Archive {
-				ui.app.ScanStates[i].Name = ""
-				ui.app.ScanResults[i] = event
+		for i := range ui.paths {
+			if ui.paths[i] == event.Archive {
+				ui.scanStates[i] = nil
+				ui.scanResults[i] = event
 				break
 			}
 		}
 		doneScanning := true
-		for i := range ui.app.Paths {
-			if ui.app.ScanResults[i] == nil {
+		for i := range ui.paths {
+			if ui.scanResults[i] == nil {
 				doneScanning = false
 				break
 			}
 		}
 		if doneScanning {
-			ui.app.Analize()
+			ui.analize()
 		}
 
 	default:
@@ -136,8 +206,8 @@ func (ui *ui) handleTcellEvent(event tcell.Event) {
 		r := ev.Rune()
 		if r >= '1' && r <= '9' {
 			idx := int(r - '1')
-			if idx < len(ui.app.Paths) {
-				ui.app.ArchiveIdx = idx
+			if idx < len(ui.paths) {
+				ui.ArchiveIdx = idx
 			}
 		}
 
@@ -171,16 +241,19 @@ func (ui *ui) drawTitle() {
 }
 
 func (ui *ui) drawScanStats() {
-	for i, state := range ui.app.ScanStates {
-		if ui.app.ScanResults[i] != nil {
+	if ui.scanStates == nil {
+		return
+	}
+	for i, state := range ui.scanStates {
+		if ui.scanStates[i] == nil {
 			continue
 		}
-		etaProgress := float64(state.TotalToHash) / float64(state.TotalHashed)
-		hashed := state.TotalSize - state.TotalToHash + state.TotalHashed
-		dur := time.Since(ui.app.ScanStarted)
-		eta := ui.app.ScanStarted.Add(time.Duration(float64(dur) * etaProgress))
 
 		valueWidth := ui.width - 30
+
+		// Eta:       eta.Format(time.TimeOnly),
+		// Remaining: time.Until(eta).Truncate(time.Second).String(),
+		// Progress:  float64(hashed) / float64(totalSize),
 
 		ui.text(1, ui.lineOffet+0, 28, styleWhite, "Архив")
 		ui.text(1, ui.lineOffet+1, 28, styleWhite, "Директория")
@@ -191,31 +264,26 @@ func (ui *ui) drawScanStats() {
 		ui.text(29, ui.lineOffet+0, valueWidth, styleWhite, state.Archive)
 		ui.text(29, ui.lineOffet+1, valueWidth, styleWhite, filepath.Dir(state.Name))
 		ui.text(29, ui.lineOffet+2, valueWidth, styleWhite, filepath.Base(state.Name))
-		ui.text(29, ui.lineOffet+3, valueWidth, styleWhite, eta.Format(time.TimeOnly))
-		ui.text(29, ui.lineOffet+4, valueWidth, styleWhite, time.Until(eta).Truncate(time.Second).String())
-		ui.text(29, ui.lineOffet+5, valueWidth, styleProgressBar, progressBar(valueWidth, float64(hashed)/float64(state.TotalSize)))
+		ui.text(29, ui.lineOffet+3, valueWidth, styleWhite, state.Eta.Format(time.TimeOnly))
+		ui.text(29, ui.lineOffet+4, valueWidth, styleWhite, time.Until(state.Eta).Truncate(time.Second).String())
+		ui.text(29, ui.lineOffet+5, valueWidth, styleProgressBar, progressBar(valueWidth, state.Progress))
 		ui.lineOffet += 7
 	}
 }
 
-type renderFolder struct {
-	name string
-	app.Folder
-}
-
 func (ui *ui) drawArchive() {
-	if ui.app.Archives == nil {
+	if ui.archives == nil {
 		return
 	}
-	ui.text(11, 0, ui.width-11, styleArchiveBane, ui.app.Paths[ui.app.ArchiveIdx])
-	archive := ui.app.Archives[ui.app.ArchiveIdx]
-	location := ui.locations[ui.app.ArchiveIdx]
+	ui.text(11, 0, ui.width-11, styleArchiveBane, ui.paths[ui.ArchiveIdx])
+	archive := ui.archives[ui.ArchiveIdx]
+	location := ui.locations[ui.ArchiveIdx]
 	for _, dir := range location.path {
 		archive = archive.SubFolders[dir]
 	}
-	subFolders := make([]renderFolder, 0, len(archive.SubFolders))
-	for name, folder := range archive.SubFolders {
-		subFolders = append(subFolders, renderFolder{name, folder})
+	subFolders := make([]Folder, 0, len(archive.SubFolders))
+	for _, folder := range archive.SubFolders {
+		subFolders = append(subFolders, folder)
 	}
 	sort.Slice(subFolders, func(i, j int) bool {
 		return subFolders[i].name < subFolders[j].name
