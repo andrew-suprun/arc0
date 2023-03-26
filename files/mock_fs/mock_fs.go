@@ -26,7 +26,7 @@ type file struct {
 }
 
 func (fsys *mockFs) Scan(path string) <-chan any {
-	result := make(chan any)
+	result := make(chan any, 1)
 	go func() {
 		scanStarted := time.Now()
 		scanFiles, totalSize, totalHashed := genFiles()
@@ -38,7 +38,7 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 			}
 			fileHashed := 0
 			for fileHashed < file.size {
-				hashSize := 10000
+				hashSize := 100000
 				if fileHashed+hashSize > file.size {
 					hashSize = file.size - fileHashed
 				}
@@ -47,6 +47,17 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 
 				if totalHashed+newFilesHashed > totalSize {
 					totalHashed = totalSize - newFilesHashed
+				}
+
+				select {
+				case prevEvent := <-result:
+					switch prevEvent.(type) {
+					case *files.ScanState:
+						// Drop previous []files.ScanState msg, if any
+					default:
+						result <- prevEvent
+					}
+				default:
 				}
 
 				progress := float64(totalHashed+newFilesHashed) / float64(totalSize)
@@ -60,7 +71,7 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 					Remaining: time.Until(eta),
 					Progress:  progress,
 				}
-				time.Sleep(100 * time.Microsecond)
+				time.Sleep(time.Millisecond)
 			}
 			scanFiles[i].hash = faker.Phonenumber()
 		}

@@ -47,13 +47,23 @@ func main() {
 func render(s tcell.Screen) {
 	x, y := 0, 0
 	for i := 0; i < 256; i++ {
-		style := tcell.StyleDefault.Background(tcell.PaletteColor(i))
-		emitStr(s, x, y, style, fmt.Sprintf(" %3d ", i))
-		if i%6 == 3 {
+		style := tcell.StyleDefault.Background(tcell.PaletteColor(i)).Bold(true)
+		j := i % 36
+		if j >= 16 && j < 34 || i < 10 || i == 12 || i == 13 {
+			style = style.Foreground(tcell.PaletteColor(231))
+		} else {
+			style = style.Foreground(tcell.PaletteColor(0))
+		}
+
+		emitStr(s, x, y, style, fmt.Sprintf("   %3d   ", i))
+		if i >= 16 && i%6 == 3 || i < 16 && i%4 == 3 {
 			x = 0
 			y += 1
 		} else {
-			x += 5
+			x += 10
+		}
+		if i%36 == 15 {
+			y += 1
 		}
 	}
 	s.Show()
