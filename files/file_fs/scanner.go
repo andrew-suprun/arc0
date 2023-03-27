@@ -146,7 +146,6 @@ func (r *file_fs) scan(base string, out chan any) {
 			out <- &files.ScanState{
 				Archive:   base,
 				Name:      meta.Name,
-				Eta:       scanStarted.Add(remaining),
 				Remaining: remaining,
 				Progress:  float64(totalSize-totalSizeToHash+totalHashed+hashed) / float64(totalSize),
 			}

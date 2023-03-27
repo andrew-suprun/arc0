@@ -11,7 +11,6 @@ type FS interface {
 type ScanState struct {
 	Archive   string
 	Name      string
-	Eta       time.Time
 	Remaining time.Duration
 	Progress  float64
 }

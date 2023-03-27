@@ -5,28 +5,62 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/muesli/ansi"
+)
+
+type Renderer interface {
+	PollEvent() any
+	Render(screen Screen)
+	Exit()
+}
+
+type MouseEvent struct {
+	Col, Line int
+}
+
+type KeyEvent struct {
+	Name string
+	Rune rune
+}
+
+type ResizeEvent struct {
+	Width, Height int
+}
+
+type Screen [][]Char
+
+type Char struct {
+	Style Style
+	Rune  rune
+}
+
+type Style int
+
+const (
+	StyleDefault Style = iota
+	StyleHeader
+	StyleAppTitle
+	StyleArchiveName
+	StyleWhite
+	StyleWhiteBold
+	StyleProgressBar
 )
 
 type ui struct {
 	paths       []string
 	fs          files.FS
-	screen      tcell.Screen
+	renderer    Renderer
+	screen      Screen
 	locations   []location
 	quit        bool
-	width       int
-	height      int
 	lineOffet   int
 	scanStates  []*files.ScanState
 	scanResults []*files.ArchiveInfo
-	archives    []Folder
+	archives    []folder
 	ArchiveIdx  int
 }
 
@@ -36,63 +70,34 @@ type location struct {
 	lineOffset int
 }
 
-type Folder struct {
+type folder struct {
 	name       string
-	Size       int
-	SubFolders map[string]Folder
-	Files      map[string]File
+	size       int
+	subFolders map[string]folder
+	files      map[string]file
 }
 
-type File struct {
-	Size    int
-	ModTime time.Time
-	Hash    string
+type file struct {
+	size    int
+	modTime time.Time
+	hash    string
 }
 
-var (
-	defStyle         = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
-	styleWhite       = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x001040))
-	styleWhiteBold   = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x001040)).Bold(true)
-	styleTitle       = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffff00)).Background(tcell.NewHexColor(0)).Bold(true).Italic(true)
-	styleArchiveBane = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0)).Bold(true)
-	styleProgressBar = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x1f1f9f))
-)
-
-func Run(paths []string, fs files.FS) {
+func Run(paths []string, fs files.FS, renderer Renderer) {
 	ui := &ui{
 		paths:       paths,
 		fs:          fs,
+		renderer:    renderer,
 		locations:   make([]location, len(paths)),
 		scanStates:  make([]*files.ScanState, len(paths)),
 		scanResults: make([]*files.ArchiveInfo, len(paths)),
 	}
-	s, e := tcell.NewScreen()
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		os.Exit(1)
-	}
-	if e := s.Init(); e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
-		os.Exit(1)
-	}
-	s.SetStyle(defStyle)
-	s.EnableMouse()
-	s.EnablePaste()
 
-	ui.screen = s
-
-	tcellChan := make(chan tcell.Event)
+	tcellChan := make(chan any)
 
 	go func() {
 		for {
-			ev := ui.screen.PollEvent()
-			for {
-				if ev, mouseEvent := ev.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
-					break
-				}
-				ev = ui.screen.PollEvent()
-			}
-			tcellChan <- ev
+			tcellChan <- ui.renderer.PollEvent()
 		}
 	}()
 
@@ -111,49 +116,50 @@ func Run(paths []string, fs files.FS) {
 		case event := <-fsInput:
 			ui.handleFsEvent(event)
 		case event := <-tcellChan:
-			ui.handleTcellEvent(event)
+			ui.handleUiEvent(event)
 		}
 		ui.render()
 	}
 	ui.fs.Stop()
-	ui.screen.Fini()
+	ui.renderer.Exit()
 }
 
 func (ui *ui) analize() {
-	ui.archives = make([]Folder, len(ui.paths))
+	ui.archives = make([]folder, len(ui.paths))
 	for i := range ui.scanResults {
 		archive := &ui.archives[i]
-		archive.SubFolders = map[string]Folder{}
-		archive.Files = map[string]File{}
+		archive.name = ui.paths[i]
+		archive.subFolders = map[string]folder{}
+		archive.files = map[string]file{}
 		for _, info := range ui.scanResults[i].Files {
 			path := strings.Split(info.Name, "/")
 			name := path[len(path)-1]
 			path = path[:len(path)-1]
 			current := archive
-			current.Size += info.Size
+			current.size += info.Size
 			for _, dir := range path {
-				sub, ok := current.SubFolders[dir]
+				sub, ok := current.subFolders[dir]
 				if !ok {
-					sub = Folder{SubFolders: map[string]Folder{}, Files: map[string]File{}}
-					current.SubFolders[dir] = sub
+					sub = folder{subFolders: map[string]folder{}, files: map[string]file{}}
+					current.subFolders[dir] = sub
 				}
-				sub.Size += info.Size
-				current.SubFolders[dir] = sub
+				sub.size += info.Size
+				current.subFolders[dir] = sub
 				current = &sub
 			}
-			current.Files[name] = File{Size: info.Size, ModTime: info.ModTime, Hash: info.Hash}
+			current.files[name] = file{size: info.Size, modTime: info.ModTime, hash: info.Hash}
 		}
 		printArchive(archive, "", "")
 	}
 }
 
-func printArchive(archive *Folder, name, prefix string) {
-	log.Printf("%sD: %s [%v]", prefix, name, archive.Size)
-	for name, sub := range archive.SubFolders {
+func printArchive(archive *folder, name, prefix string) {
+	log.Printf("%sD: %s [%v]", prefix, name, archive.size)
+	for name, sub := range archive.subFolders {
 		printArchive(&sub, name, prefix+"    ")
 	}
-	for name, file := range archive.Files {
-		log.Printf("    %sF: %s [%v] %s", prefix, name, file.Size, file.Hash)
+	for name, file := range archive.files {
+		log.Printf("    %sF: %s [%v] %s", prefix, name, file.size, file.hash)
 	}
 }
 
@@ -192,18 +198,20 @@ func (ui *ui) handleFsEvent(event any) {
 	}
 }
 
-func (ui *ui) handleTcellEvent(event tcell.Event) {
+func (ui *ui) handleUiEvent(event any) {
 	switch ev := event.(type) {
-	case *tcell.EventResize:
-		ui.screen.Sync()
-		ui.width, ui.height = ev.Size()
-		log.Printf("EventResize: cols=%d lines=%d", ui.width, ui.height)
-	case *tcell.EventKey:
-		log.Printf("EventKey: name=%s '%c'", ev.Name(), ev.Rune())
-		if ev.Name() == "Ctrl+C" {
+	case ResizeEvent:
+		ui.screen = make([][]Char, ev.Height)
+		for line := range ui.screen {
+			ui.screen[line] = make([]Char, ev.Width)
+		}
+		log.Printf("EventResize: cols=%d lines=%d", ev.Width, ev.Height)
+	case KeyEvent:
+		log.Printf("EventKey: name=%s '%c'", ev.Name, ev.Rune)
+		if ev.Name == "Ctrl+C" {
 			ui.quit = true
 		}
-		r := ev.Rune()
+		r := ev.Rune
 		if r >= '1' && r <= '9' {
 			idx := int(r - '1')
 			if idx < len(ui.paths) {
@@ -211,11 +219,8 @@ func (ui *ui) handleTcellEvent(event tcell.Event) {
 			}
 		}
 
-	case *tcell.EventPaste:
-
-	case *tcell.EventMouse:
-		w, h := ev.Position()
-		log.Printf("EventMouse: buttons=%v mods=%v [%d:%d]", ev.Buttons(), ev.Modifiers(), w, h)
+	case MouseEvent:
+		log.Printf("EventMouse: [%d:%d]", ev.Col, ev.Line)
 	default:
 	}
 }
@@ -225,19 +230,31 @@ func (ui *ui) render() {
 	ui.drawTitle()
 	ui.drawScanStats()
 	ui.drawArchive()
-	ui.screen.Show()
+	ui.renderer.Render(ui.screen)
 }
 
 func (ui *ui) clear() {
-	for line := 1; line < ui.height-1; line++ {
-		ui.text(0, line, ui.width, styleWhite, "")
+	for line := range ui.screen {
+		for col := range ui.screen[line] {
+			ui.screen[line][col] = Char{Rune: ' ', Style: StyleWhite}
+		}
 	}
-	ui.lineOffet = 1
+	ui.lineOffet = 0
 }
 
 func (ui *ui) drawTitle() {
-	ui.text(0, 0, ui.width, styleTitle, " АРХИВАТОР")
-	ui.text(0, ui.height-1, ui.width, styleTitle, " State")
+	ui.layoutLine(
+		field{text: " АРХИВАТОР ", style: StyleAppTitle},
+		field{text: ui.archiveName(), style: StyleArchiveName, flex: true},
+	)
+}
+
+func (ui *ui) archiveName() string {
+	if ui.archives == nil {
+		return ""
+	}
+	log.Println("### Archive", ui.archives[ui.ArchiveIdx].name)
+	return ui.archives[ui.ArchiveIdx].name
 }
 
 func (ui *ui) drawScanStats() {
@@ -249,55 +266,53 @@ func (ui *ui) drawScanStats() {
 			continue
 		}
 
-		valueWidth := ui.width - 30
-
-		// Eta:       eta.Format(time.TimeOnly),
-		// Remaining: time.Until(eta).Truncate(time.Second).String(),
-		// Progress:  float64(hashed) / float64(totalSize),
-
-		ui.text(1, ui.lineOffet+0, 28, styleWhite, "Архив")
-		ui.text(1, ui.lineOffet+1, 28, styleWhite, "Директория")
-		ui.text(1, ui.lineOffet+2, 28, styleWhite, "Файл")
-		ui.text(1, ui.lineOffet+3, 28, styleWhite, "Ожидаемое Время Завершения")
-		ui.text(1, ui.lineOffet+4, 28, styleWhite, "Время До Завершения")
-		ui.text(1, ui.lineOffet+5, 28, styleWhite, "Общий Прогресс")
-		ui.text(29, ui.lineOffet+0, valueWidth, styleWhite, state.Archive)
-		ui.text(29, ui.lineOffet+1, valueWidth, styleWhite, filepath.Dir(state.Name))
-		ui.text(29, ui.lineOffet+2, valueWidth, styleWhite, filepath.Base(state.Name))
-		ui.text(29, ui.lineOffet+3, valueWidth, styleWhite, state.Eta.Format(time.TimeOnly))
-		ui.text(29, ui.lineOffet+4, valueWidth, styleWhite, time.Until(state.Eta).Truncate(time.Second).String())
-		ui.text(29, ui.lineOffet+5, valueWidth, styleProgressBar, progressBar(valueWidth, state.Progress))
-		ui.lineOffet += 7
+		ui.drawFormLine(" Архив                      ", state.Archive)
+		ui.drawFormLine(" Каталог                    ", filepath.Dir(state.Name))
+		ui.drawFormLine(" Документ                   ", filepath.Base(state.Name))
+		ui.drawFormLine(" Ожидаемое Время Завершения ", time.Now().Add(state.Remaining).Format(time.TimeOnly))
+		ui.drawFormLine(" Время До Завершения        ", state.Remaining.Truncate(time.Second).String())
+		ui.layoutLine(
+			field{text: " Общий Прогресс             ", style: StyleWhite},
+			field{text: progressBar(len(ui.screen[ui.lineOffet])-30, state.Progress), style: StyleProgressBar, flex: true},
+		)
+		ui.lineOffet++
 	}
+}
+
+func (ui *ui) drawFormLine(name, value string) {
+	ui.layoutLine(
+		field{text: name, style: StyleWhite},
+		field{text: value, style: StyleWhiteBold, flex: true},
+	)
 }
 
 func (ui *ui) drawArchive() {
 	if ui.archives == nil {
 		return
 	}
-	ui.text(11, 0, ui.width-11, styleArchiveBane, ui.paths[ui.ArchiveIdx])
-	archive := ui.archives[ui.ArchiveIdx]
-	location := ui.locations[ui.ArchiveIdx]
-	for _, dir := range location.path {
-		archive = archive.SubFolders[dir]
-	}
-	subFolders := make([]Folder, 0, len(archive.SubFolders))
-	for _, folder := range archive.SubFolders {
-		subFolders = append(subFolders, folder)
-	}
-	sort.Slice(subFolders, func(i, j int) bool {
-		return subFolders[i].name < subFolders[j].name
-	})
-	w := ui.width - 18
-	for _, subFolder := range subFolders {
-		ui.text(1, ui.lineOffet, 3, styleWhiteBold, "D:")
-		ui.text(4, ui.lineOffet, w-4, styleWhiteBold, subFolder.name)
-		ui.text(ui.width-18, ui.lineOffet, 18, styleWhiteBold, formatSize(subFolder.Size))
-		if ui.lineOffet >= ui.height-2 {
-			break
-		}
-		ui.lineOffet++
-	}
+	// ui.text(11, 0, ui.width-11, styleArchiveName, ui.paths[ui.ArchiveIdx])
+	// archive := ui.archives[ui.ArchiveIdx]
+	// location := ui.locations[ui.ArchiveIdx]
+	// for _, dir := range location.path {
+	// 	archive = archive.subFolders[dir]
+	// }
+	// subFolders := make([]folder, 0, len(archive.subFolders))
+	// for _, folder := range archive.subFolders {
+	// 	subFolders = append(subFolders, folder)
+	// }
+	// sort.Slice(subFolders, func(i, j int) bool {
+	// 	return subFolders[i].name < subFolders[j].name
+	// })
+	// w := ui.width - 18
+	// for _, subFolder := range subFolders {
+	// 	ui.text(1, ui.lineOffet, 3, styleWhiteBold, "D:")
+	// 	ui.text(4, ui.lineOffet, w-4, styleWhiteBold, subFolder.name)
+	// 	ui.text(ui.width-18, ui.lineOffet, 18, styleWhiteBold, formatSize(subFolder.size))
+	// 	if ui.lineOffet >= ui.height-2 {
+	// 		break
+	// 	}
+	// 	ui.lineOffet++
+	// }
 }
 
 func formatSize(size int) string {
@@ -316,19 +331,123 @@ func formatSize(size int) string {
 	return b.String()
 }
 
-func (ui *ui) text(col, line, width int, style tcell.Style, text string) {
-	if width < 1 {
+type alignment byte
+
+const (
+	left alignment = iota
+	right
+)
+
+type field struct {
+	text  string
+	style Style
+	size  int
+	align alignment
+	flex  bool
+}
+
+func (ui *ui) layoutLine(fields ...field) {
+	ui.layout(0, ui.lineOffet, len(ui.screen[ui.lineOffet]), fields)
+	ui.lineOffet++
+}
+
+func (ui *ui) layout(col, line, width int, fields []field) {
+	if len(fields) == 0 || len(fields) > width {
 		return
 	}
-	runes := []rune(text)
-	if len(runes) > width {
-		runes = append(runes[:width-1], '…')
+	layoutWidth := 0
+	for i := range fields {
+		if fields[i].size == 0 {
+			fields[i].size = ansi.PrintableRuneWidth(fields[i].text)
+		}
+		layoutWidth += fields[i].size
 	}
+	for layoutWidth < width {
+		shortestFixedField, shortestFixedFieldIdx := math.MaxInt, -1
+		shortestFlexField, shortestFlexFieldIdx := math.MaxInt, -1
+		for j := range fields {
+			if fields[j].flex {
+				if shortestFlexField > fields[j].size {
+					shortestFlexField = fields[j].size
+					shortestFlexFieldIdx = j
+				}
+			} else {
+				if shortestFixedField > fields[j].size {
+					shortestFixedField = fields[j].size
+					shortestFixedFieldIdx = j
+				}
+			}
+		}
+		if shortestFlexFieldIdx != -1 {
+			fields[shortestFlexFieldIdx].size++
+		} else {
+			fields[shortestFixedFieldIdx].size++
+		}
+		layoutWidth++
+	}
+	for layoutWidth > width {
+		longestFixedField, longestFixedFieldIdx := 0, -1
+		longestFlexField, longestFlexFieldIdx := 0, -1
+		for j := range fields {
+			if fields[j].flex {
+				if longestFlexField < fields[j].size {
+					longestFlexField = fields[j].size
+					longestFlexFieldIdx = j
+				}
+			} else {
+				if longestFixedField < fields[j].size {
+					longestFixedField = fields[j].size
+					longestFixedFieldIdx = j
+				}
+			}
+		}
+
+		if longestFlexFieldIdx != -1 && fields[longestFlexFieldIdx].size > 1 {
+			fields[longestFlexFieldIdx].size--
+		} else if longestFixedFieldIdx == -1 {
+			return
+		} else {
+			if fields[longestFixedFieldIdx].size > 1 {
+				fields[longestFixedFieldIdx].size--
+			}
+		}
+		layoutWidth--
+	}
+	offset := 0
+	for i := range fields {
+		ui.text(col+offset, line, fields[i])
+		offset += fields[i].size
+	}
+}
+
+func (ui *ui) text(col, line int, field field) {
+	if field.size < 1 {
+		return
+	}
+	runes := []rune(field.text)
+	if len(runes) > field.size {
+		runes = append(runes[:field.size-1], '…')
+	}
+
+	diff := field.size - len(field.text)
+	offset := 0
+	if diff > 0 && field.align == right {
+		for i := 0; i < diff; i++ {
+			ui.screen[line][col+offset] = Char{Rune: ' ', Style: field.style}
+			offset++
+		}
+	}
+
 	for i := range runes {
-		ui.screen.SetContent(col+i, line, runes[i], nil, style)
+		ui.screen[line][col+offset] = Char{Rune: runes[i], Style: field.style}
+		offset++
 	}
-	for i := len(runes); i < width; i++ {
-		ui.screen.SetContent(col+i, line, ' ', nil, style)
+
+	if diff > 0 && field.align == left {
+		for i := 0; i < diff; i++ {
+			ui.screen[line][col+offset] = Char{Rune: ' ', Style: field.style}
+			offset++
+		}
 	}
 }
 

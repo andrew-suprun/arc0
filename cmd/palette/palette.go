@@ -58,12 +58,12 @@ func render(s tcell.Screen) {
 		emitStr(s, x, y, style, fmt.Sprintf("   %3d   ", i))
 		if i >= 16 && i%6 == 3 || i < 16 && i%4 == 3 {
 			x = 0
-			y += 1
+			y++
 		} else {
 			x += 10
 		}
 		if i%36 == 15 {
-			y += 1
+			y++
 		}
 	}
 	s.Show()
@@ -72,6 +72,6 @@ func render(s tcell.Screen) {
 func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) {
 	for _, c := range str {
 		s.SetContent(x, y, c, nil, style)
-		x += 1
+		x++
 	}
 }

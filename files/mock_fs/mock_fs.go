@@ -67,7 +67,6 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 				result <- &files.ScanState{
 					Archive:   path,
 					Name:      file.name,
-					Eta:       eta,
 					Remaining: time.Until(eta),
 					Progress:  progress,
 				}

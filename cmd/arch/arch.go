@@ -5,6 +5,7 @@ import (
 	"arch/files/file_fs"
 	"arch/files/mock_fs"
 	"arch/ui"
+	"arch/ui/tcell"
 	"log"
 	"os"
 )
@@ -30,5 +31,11 @@ func main() {
 		}
 	}
 
-	ui.Run(paths, fs)
+	renderer, err := tcell.NewRenderer()
+	if err != nil {
+		log.Printf("Failed to open terminal: %#v", err)
+		return
+	}
+
+	ui.Run(paths, fs, renderer)
 }
