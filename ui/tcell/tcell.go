@@ -46,6 +46,10 @@ func (r *renderer) Render(s ui.Screen) {
 	r.screen.Show()
 }
 
+func (r *renderer) Sync() {
+	r.screen.Sync()
+}
+
 func (r *renderer) Exit() {
 	r.screen.Fini()
 }
@@ -72,13 +76,14 @@ func (r *renderer) uiEvent(ev tcell.Event) any {
 }
 
 var (
-	defStyle         = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
-	styleHeader      = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x001040))
-	styleWhite       = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x001040))
-	styleWhiteBold   = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x001040)).Bold(true)
-	styleAppName     = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffff00)).Background(tcell.NewHexColor(0)).Bold(true).Italic(true)
-	styleArchiveName = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0)).Bold(true)
-	styleProgressBar = tcell.StyleDefault.Foreground(tcell.NewHexColor(0xffffff)).Background(tcell.NewHexColor(0x1f1f9f))
+	defStyle           = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
+	styleHeader        = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
+	styleWhite         = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
+	styleWhiteBold     = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18)).Bold(true)
+	styleAppName       = tcell.StyleDefault.Foreground(tcell.PaletteColor(226)).Background(tcell.PaletteColor(0)).Bold(true).Italic(true)
+	styleArchiveName   = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(0)).Bold(true)
+	styleArchiveHeader = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(8)).Bold(true)
+	styleProgressBar   = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(20)).Italic(true)
 )
 
 func style(uiStyle ui.Style) tcell.Style {
@@ -91,6 +96,8 @@ func style(uiStyle ui.Style) tcell.Style {
 		return styleAppName
 	case ui.StyleArchiveName:
 		return styleArchiveName
+	case ui.StyleArchiveHeader:
+		return styleArchiveHeader
 	case ui.StyleWhite:
 		return styleWhite
 	case ui.StyleWhiteBold:

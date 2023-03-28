@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 type Renderer interface {
 	PollEvent() any
 	Render(screen Screen)
+	Sync()
 	Exit()
 }
 
@@ -34,8 +36,8 @@ type ResizeEvent struct {
 type Screen [][]Char
 
 type Char struct {
-	Style Style
 	Rune  rune
+	Style Style
 }
 
 type Style int
@@ -48,6 +50,7 @@ const (
 	StyleWhite
 	StyleWhiteBold
 	StyleProgressBar
+	StyleArchiveHeader
 )
 
 type ui struct {
@@ -57,7 +60,7 @@ type ui struct {
 	screen      Screen
 	locations   []location
 	quit        bool
-	lineOffet   int
+	lineOffset  int
 	scanStates  []*files.ScanState
 	scanResults []*files.ArchiveInfo
 	archives    []folder
@@ -149,7 +152,7 @@ func (ui *ui) analize() {
 			}
 			current.files[name] = file{size: info.Size, modTime: info.ModTime, hash: info.Hash}
 		}
-		printArchive(archive, "", "")
+		// printArchive(archive, "", "")
 	}
 }
 
@@ -206,6 +209,7 @@ func (ui *ui) handleUiEvent(event any) {
 			ui.screen[line] = make([]Char, ev.Width)
 		}
 		log.Printf("EventResize: cols=%d lines=%d", ev.Width, ev.Height)
+		ui.renderer.Sync()
 	case KeyEvent:
 		log.Printf("EventKey: name=%s '%c'", ev.Name, ev.Rune)
 		if ev.Name == "Ctrl+C" {
@@ -239,13 +243,13 @@ func (ui *ui) clear() {
 			ui.screen[line][col] = Char{Rune: ' ', Style: StyleWhite}
 		}
 	}
-	ui.lineOffet = 0
+	ui.lineOffset = 0
 }
 
 func (ui *ui) drawTitle() {
 	ui.layoutLine(
-		field{text: " АРХИВАТОР ", style: StyleAppTitle},
-		field{text: ui.archiveName(), style: StyleArchiveName, flex: true},
+		text{text: " АРХИВАТОР ", style: StyleAppTitle},
+		text{text: ui.archiveName(), style: StyleArchiveName, flex: true},
 	)
 }
 
@@ -272,47 +276,62 @@ func (ui *ui) drawScanStats() {
 		ui.drawFormLine(" Ожидаемое Время Завершения ", time.Now().Add(state.Remaining).Format(time.TimeOnly))
 		ui.drawFormLine(" Время До Завершения        ", state.Remaining.Truncate(time.Second).String())
 		ui.layoutLine(
-			field{text: " Общий Прогресс             ", style: StyleWhite},
-			field{text: progressBar(len(ui.screen[ui.lineOffet])-30, state.Progress), style: StyleProgressBar, flex: true},
+			text{text: " Общий Прогресс             ", style: StyleWhite},
+			progressBar{value: state.Progress, style: StyleProgressBar},
+			text{text: " ", style: StyleWhite},
 		)
-		ui.lineOffet++
+		ui.lineOffset++
 	}
 }
 
 func (ui *ui) drawFormLine(name, value string) {
 	ui.layoutLine(
-		field{text: name, style: StyleWhite},
-		field{text: value, style: StyleWhiteBold, flex: true},
+		text{text: name, style: StyleWhite},
+		text{text: value, style: StyleWhiteBold, flex: true},
+		text{text: " ", style: StyleWhite},
 	)
 }
+
+// Статус
+// Документ
+// Время Изменения
+// Размер
 
 func (ui *ui) drawArchive() {
 	if ui.archives == nil {
 		return
 	}
-	// ui.text(11, 0, ui.width-11, styleArchiveName, ui.paths[ui.ArchiveIdx])
-	// archive := ui.archives[ui.ArchiveIdx]
-	// location := ui.locations[ui.ArchiveIdx]
-	// for _, dir := range location.path {
-	// 	archive = archive.subFolders[dir]
-	// }
-	// subFolders := make([]folder, 0, len(archive.subFolders))
-	// for _, folder := range archive.subFolders {
-	// 	subFolders = append(subFolders, folder)
-	// }
-	// sort.Slice(subFolders, func(i, j int) bool {
-	// 	return subFolders[i].name < subFolders[j].name
-	// })
-	// w := ui.width - 18
-	// for _, subFolder := range subFolders {
-	// 	ui.text(1, ui.lineOffet, 3, styleWhiteBold, "D:")
-	// 	ui.text(4, ui.lineOffet, w-4, styleWhiteBold, subFolder.name)
-	// 	ui.text(ui.width-18, ui.lineOffet, 18, styleWhiteBold, formatSize(subFolder.size))
-	// 	if ui.lineOffet >= ui.height-2 {
-	// 		break
-	// 	}
-	// 	ui.lineOffet++
-	// }
+	ui.layoutLine(
+		text{text: " Статус ", size: 8, style: StyleArchiveHeader},
+		text{text: "Документ ", flex: true, style: StyleArchiveHeader},
+		text{text: "Время Изменения ", size: 19, style: StyleArchiveHeader},
+		text{text: "Размер", size: 17, align: right, style: StyleArchiveHeader},
+	)
+	archive := ui.archives[ui.ArchiveIdx]
+	location := ui.locations[ui.ArchiveIdx]
+	for _, dir := range location.path {
+		archive = archive.subFolders[dir]
+	}
+	subFolders := make([]folder, 0, len(archive.subFolders))
+	for name, folder := range archive.subFolders {
+		folder.name = name
+		subFolders = append(subFolders, folder)
+	}
+	sort.Slice(subFolders, func(i, j int) bool {
+		return subFolders[i].name < subFolders[j].name
+	})
+	for _, subFolder := range subFolders {
+		ui.layoutLine(
+			text{text: "", size: 8, style: StyleWhite},
+			text{text: subFolder.name, flex: true, style: StyleWhite},
+			text{text: "Каталог", size: 19, style: StyleWhite},
+			text{text: formatSize(subFolder.size), size: 17, align: right, style: StyleWhite},
+		)
+
+		if ui.lineOffset >= len(ui.screen)-2 {
+			break
+		}
+	}
 }
 
 func formatSize(size int) string {
@@ -338,50 +357,49 @@ const (
 	right
 )
 
-type field struct {
-	text  string
-	style Style
-	size  int
-	align alignment
-	flex  bool
-}
-
-func (ui *ui) layoutLine(fields ...field) {
-	ui.layout(0, ui.lineOffet, len(ui.screen[ui.lineOffet]), fields)
-	ui.lineOffet++
-}
-
-func (ui *ui) layout(col, line, width int, fields []field) {
-	if len(fields) == 0 || len(fields) > width {
+func (ui *ui) layoutLine(fields ...segment) {
+	if ui.lineOffset >= len(ui.screen) {
 		return
 	}
+	nChars := len(ui.screen[ui.lineOffset])
+	line := layout(nChars, fields...)
+	for i := 0; i < nChars; i++ {
+		ui.screen[ui.lineOffset][i] = line[i]
+	}
+	ui.lineOffset++
+}
+
+func layout(width int, fields ...segment) []Char {
+	if len(fields) == 0 || len(fields) > width {
+		return nil
+	}
+
+	sizes := make([]int, len(fields))
 	layoutWidth := 0
 	for i := range fields {
-		if fields[i].size == 0 {
-			fields[i].size = ansi.PrintableRuneWidth(fields[i].text)
-		}
-		layoutWidth += fields[i].size
+		layoutWidth += fields[i].getSize()
+		sizes[i] = fields[i].getSize()
 	}
 	for layoutWidth < width {
 		shortestFixedField, shortestFixedFieldIdx := math.MaxInt, -1
 		shortestFlexField, shortestFlexFieldIdx := math.MaxInt, -1
 		for j := range fields {
-			if fields[j].flex {
-				if shortestFlexField > fields[j].size {
-					shortestFlexField = fields[j].size
+			if fields[j].getFlex() {
+				if shortestFlexField > sizes[j] {
+					shortestFlexField = sizes[j]
 					shortestFlexFieldIdx = j
 				}
 			} else {
-				if shortestFixedField > fields[j].size {
-					shortestFixedField = fields[j].size
+				if shortestFixedField > sizes[j] {
+					shortestFixedField = sizes[j]
 					shortestFixedFieldIdx = j
 				}
 			}
 		}
 		if shortestFlexFieldIdx != -1 {
-			fields[shortestFlexFieldIdx].size++
+			sizes[shortestFlexFieldIdx]++
 		} else {
-			fields[shortestFixedFieldIdx].size++
+			sizes[shortestFixedFieldIdx]++
 		}
 		layoutWidth++
 	}
@@ -389,76 +407,125 @@ func (ui *ui) layout(col, line, width int, fields []field) {
 		longestFixedField, longestFixedFieldIdx := 0, -1
 		longestFlexField, longestFlexFieldIdx := 0, -1
 		for j := range fields {
-			if fields[j].flex {
-				if longestFlexField < fields[j].size {
-					longestFlexField = fields[j].size
+			if fields[j].getFlex() {
+				if longestFlexField < sizes[j] {
+					longestFlexField = sizes[j]
 					longestFlexFieldIdx = j
 				}
 			} else {
-				if longestFixedField < fields[j].size {
-					longestFixedField = fields[j].size
+				if longestFixedField < sizes[j] {
+					longestFixedField = sizes[j]
 					longestFixedFieldIdx = j
 				}
 			}
 		}
 
-		if longestFlexFieldIdx != -1 && fields[longestFlexFieldIdx].size > 1 {
-			fields[longestFlexFieldIdx].size--
+		if longestFlexFieldIdx != -1 && sizes[longestFlexFieldIdx] > 1 {
+			sizes[longestFlexFieldIdx]--
 		} else if longestFixedFieldIdx == -1 {
-			return
+			return nil
 		} else {
-			if fields[longestFixedFieldIdx].size > 1 {
-				fields[longestFixedFieldIdx].size--
+			if sizes[longestFixedFieldIdx] > 1 {
+				sizes[longestFixedFieldIdx]--
 			}
 		}
 		layoutWidth--
 	}
-	offset := 0
+	result := []Char{}
 	for i := range fields {
-		ui.text(col+offset, line, fields[i])
-		offset += fields[i].size
+		result = append(result, fields[i].render(sizes[i])...)
 	}
+	return result
 }
 
-func (ui *ui) text(col, line int, field field) {
-	if field.size < 1 {
-		return
+type segment interface {
+	getSize() int
+	getFlex() bool
+	render(width int) []Char
+}
+
+type text struct {
+	text  string
+	style Style
+	size  int
+	align alignment
+	flex  bool
+}
+
+func (t text) getSize() int {
+	if t.size == 0 {
+		return ansi.PrintableRuneWidth(t.text)
 	}
-	runes := []rune(field.text)
-	if len(runes) > field.size {
-		runes = append(runes[:field.size-1], '…')
+	return t.size
+}
+
+func (t text) getFlex() bool {
+	return t.flex
+}
+
+func (t text) render(width int) []Char {
+	if width < 1 {
+		return nil
+	}
+	runes := []rune(t.text)
+	if len(runes) > width {
+		runes = append(runes[:width-1], '…')
 	}
 
-	diff := field.size - len(field.text)
-	offset := 0
-	if diff > 0 && field.align == right {
+	diff := width - len(runes)
+	idx := 0
+	result := make([]Char, width)
+	if diff > 0 && t.align == right {
 		for i := 0; i < diff; i++ {
-			ui.screen[line][col+offset] = Char{Rune: ' ', Style: field.style}
-			offset++
+			result[idx] = Char{Rune: ' ', Style: t.style}
+			idx++
 		}
 	}
 
 	for i := range runes {
-		ui.screen[line][col+offset] = Char{Rune: runes[i], Style: field.style}
-		offset++
+		result[idx] = Char{Rune: runes[i], Style: t.style}
+		idx++
 	}
 
-	if diff > 0 && field.align == left {
+	if diff > 0 && t.align == left {
 		for i := 0; i < diff; i++ {
-			ui.screen[line][col+offset] = Char{Rune: ' ', Style: field.style}
-			offset++
+			result[idx] = Char{Rune: ' ', Style: t.style}
+			idx++
 		}
 	}
+	for ; idx < width; idx++ {
+		result[idx] = Char{Rune: ' ', Style: t.style}
+	}
+
+	return result
 }
 
-func progressBar(barWidth int, value float64) string {
-	builder := strings.Builder{}
-	progress := int(math.Round(float64(barWidth*8) * value))
-	builder.WriteString(strings.Repeat("█", progress/8))
-	if progress%8 > 0 {
-		builder.WriteRune([]rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8])
+type progressBar struct {
+	value float64
+	style Style
+}
+
+func (pb progressBar) getSize() int {
+	return 0
+}
+
+func (pb progressBar) getFlex() bool {
+	return true
+}
+
+func (pb progressBar) render(width int) []Char {
+	result := make([]Char, width)
+	progress := int(math.Round(float64(width*8) * pb.value))
+	idx := 0
+	for ; idx < progress/8; idx++ {
+		result[idx] = Char{Rune: '█', Style: pb.style}
 	}
-	str := builder.String()
-	length := ansi.PrintableRuneWidth(str)
-	return str + strings.Repeat(" ", barWidth-length)
+	if progress%8 > 0 {
+		result[idx] = Char{Rune: []rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8], Style: pb.style}
+		idx++
+	}
+	for ; idx < width; idx++ {
+		result[idx] = Char{Rune: ' ', Style: pb.style}
+	}
+	return result
 }
