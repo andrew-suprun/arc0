@@ -187,27 +187,23 @@ func (app *app) handleUiEvent(event any) {
 }
 
 func (app *app) render() {
-	b := newBuilder(app.width, app.height)
+	b := ui.NewBuilder(app.width, app.height)
 	app.drawTitle(b)
 	app.drawScanStats(b)
 	app.drawArchive(b)
 	app.drawStatusLine(b)
-	app.renderer.Render(b.getScreen())
+	app.renderer.Render(b.GetScreen())
 }
 
-func (app *app) drawTitle(b *builder) {
-	b.setDefaultStyle(ui.StyleAppTitle)
-	b.setLayout(
-		field{size: 11},
-		field{flex: true, style: ui.StyleArchiveName},
-	)
-	b.drawTexts(" АРХИВАТОР ", app.archiveName())
+func (app *app) drawTitle(b *ui.Builder) {
+	b.SetLayout(ui.Field{Size: 11, Style: ui.StyleAppTitle}, ui.Field{Flex: true, Style: ui.StyleArchiveName})
+	b.DrawTexts(" АРХИВАТОР ", app.archiveName())
 }
 
-func (app *app) drawStatusLine(b *builder) {
-	b.setLayout(field{flex: true, style: ui.StyleArchiveName})
-	b.setLine(app.height - 1)
-	b.drawTexts(" Status line will be here...")
+func (app *app) drawStatusLine(b *ui.Builder) {
+	b.SetLayout(ui.Field{Flex: true, Style: ui.StyleArchiveName})
+	b.SetLine(app.height - 1)
+	b.DrawTexts(" Status line will be here...")
 }
 
 func (app *app) archiveName() string {
@@ -218,39 +214,39 @@ func (app *app) archiveName() string {
 	return app.archives[app.archiveIdx].name
 }
 
-func (app *app) drawScanStats(b *builder) {
+func (app *app) drawScanStats(b *ui.Builder) {
 	if app.scanStates == nil {
 		return
 	}
 
-	b.setDefaultStyle(ui.StyleFile)
+	b.SetDefaultStyle(ui.StyleFile)
 
 	for i, state := range app.scanStates {
 		if app.scanStates[i] == nil {
 			continue
 		}
 
-		b.setLayout(field{size: 28}, field{flex: true}, field{size: 1})
-		b.drawTexts(" Архив", state.Archive)
-		b.drawTexts(" Каталог", filepath.Dir(state.Name))
-		b.drawTexts(" Документ", filepath.Base(state.Name))
-		b.drawTexts(" Ожидаемое Время Завершения", time.Now().Add(state.Remaining).Format(time.TimeOnly))
-		b.drawTexts(" Время До Завершения", state.Remaining.Truncate(time.Second).String())
-		b.setLayout(field{size: 28}, field{flex: true, style: ui.StyleProgressBar}, field{size: 1})
-		b.drawLine(text(" Общий Прогресс"), progressBar(state.Progress))
-		b.newLine()
+		b.SetLayout(ui.Field{Size: 28}, ui.Field{Flex: true}, ui.Field{Size: 1})
+		b.DrawTexts(" Архив", state.Archive)
+		b.DrawTexts(" Каталог", filepath.Dir(state.Name))
+		b.DrawTexts(" Документ", filepath.Base(state.Name))
+		b.DrawTexts(" Ожидаемое Время Завершения", time.Now().Add(state.Remaining).Format(time.TimeOnly))
+		b.DrawTexts(" Время До Завершения", state.Remaining.Truncate(time.Second).String())
+		b.SetLayout(ui.Field{Size: 28}, ui.Field{Flex: true, Style: ui.StyleProgressBar}, ui.Field{Size: 1})
+		b.DrawLine(ui.Text(" Общий Прогресс"), ui.ProgressBar(state.Progress))
+		b.NewLine()
 	}
 }
 
-func (app *app) drawArchive(b *builder) {
+func (app *app) drawArchive(b *ui.Builder) {
 	if app.archives == nil {
 		return
 	}
 
-	b.setLayout(field{size: 8}, field{size: 1}, field{flex: true}, field{size: 1}, field{size: 19}, field{size: 1}, field{size: 17, align: right}, field{size: 1})
+	b.SetLayout(ui.Field{Size: 8}, ui.Field{Size: 1}, ui.Field{Flex: true}, ui.Field{Size: 1}, ui.Field{Size: 19}, ui.Field{Size: 1}, ui.Field{Size: 17, Align: ui.Right}, ui.Field{Size: 1})
 
-	b.setDefaultStyle(ui.StyleArchiveHeader)
-	b.drawTexts(" Статус", " ", "Документ", " ", "Время Изменения", " ", "Размер", " ")
+	b.SetDefaultStyle(ui.StyleArchiveHeader)
+	b.DrawTexts(" Статус", " ", "Документ", " ", "Время Изменения", " ", "Размер", " ")
 
 	archive := app.archives[app.archiveIdx]
 	location := app.locations[app.archiveIdx]
@@ -259,7 +255,7 @@ func (app *app) drawArchive(b *builder) {
 	}
 
 	// subfolders
-	b.setDefaultStyle(ui.StyleFolder)
+	b.SetDefaultStyle(ui.StyleFolder)
 	subFolders := make([]folder, 0, len(archive.subFolders))
 	for name, folder := range archive.subFolders {
 		folder.name = name
@@ -269,7 +265,7 @@ func (app *app) drawArchive(b *builder) {
 		return subFolders[i].name < subFolders[j].name
 	})
 	for _, subFolder := range subFolders {
-		b.drawTexts("", "", subFolder.name, " ", "Каталог", " ", formatSize(subFolder.size), " ")
+		b.DrawTexts("", "", subFolder.name, " ", "Каталог", " ", formatSize(subFolder.size), " ")
 
 		if app.lineOffset >= app.height-1 {
 			break
@@ -277,7 +273,7 @@ func (app *app) drawArchive(b *builder) {
 	}
 
 	// files
-	b.setDefaultStyle(ui.StyleFile)
+	b.SetDefaultStyle(ui.StyleFile)
 	files := make([]file, 0, len(archive.files))
 	for name, file := range archive.files {
 		file.name = name
@@ -287,7 +283,7 @@ func (app *app) drawArchive(b *builder) {
 		return files[i].name < files[j].name
 	})
 	for _, file := range files {
-		b.drawTexts("", "", file.name, " ", file.modTime.Format(time.DateTime), " ", formatSize(file.size), " ")
+		b.DrawTexts("", "", file.name, " ", file.modTime.Format(time.DateTime), " ", formatSize(file.size), " ")
 
 		if app.lineOffset >= app.height-1 {
 			break

@@ -6,7 +6,6 @@ require (
 	github.com/gdamore/tcell/v2 v2.6.0
 	github.com/go-faker/faker/v4 v4.1.0
 	github.com/mattn/go-runewidth v0.0.14 // indirect
-	github.com/muesli/ansi v0.0.0-20211018074035-2e021307bc4b
 	golang.org/x/text v0.8.0
 )
 

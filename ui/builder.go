@@ -1,45 +1,44 @@
-package app
+package ui
 
 import (
-	"arch/ui"
 	"math"
 )
 
-type builder struct {
+type Builder struct {
 	width, height int
 	x, y          int
-	defaultStyle  ui.Style
-	screen        ui.Screen
-	fields        []field
+	defaultStyle  Style
+	screen        Screen
+	fields        []Field
 }
 
-type field struct {
-	size  int
-	style ui.Style
-	align alignment
-	flex  bool
+type Field struct {
+	Size  int
+	Style Style
+	Align Alignment
+	Flex  bool
 }
 
-type alignment byte
+type Alignment byte
 
 const (
-	left alignment = iota
-	right
+	Left Alignment = iota
+	Right
 )
 
-type drawable interface {
-	draw(width int, alight alignment) []rune
+type Drawable interface {
+	Draw(width int, alight Alignment) []rune
 }
 
-func newBuilder(width, height int) *builder {
-	return &builder{width: width, height: height}
+func NewBuilder(width, height int) *Builder {
+	return &Builder{width: width, height: height}
 }
 
-func (b *builder) setDefaultStyle(style ui.Style) {
+func (b *Builder) SetDefaultStyle(style Style) {
 	b.defaultStyle = style
 }
 
-func (b *builder) setLayout(fields ...field) {
+func (b *Builder) SetLayout(fields ...Field) {
 	b.fields = fields
 	if len(fields) == 0 || len(fields) > b.width {
 		return
@@ -47,28 +46,28 @@ func (b *builder) setLayout(fields ...field) {
 
 	layoutWidth := 0
 	for i := range fields {
-		layoutWidth += fields[i].size
+		layoutWidth += fields[i].Size
 	}
 	for layoutWidth < b.width {
 		shortestFixedField, shortestFixedFieldIdx := math.MaxInt, -1
 		shortestFlexField, shortestFlexFieldIdx := math.MaxInt, -1
 		for j := range fields {
-			if fields[j].flex {
-				if shortestFlexField > fields[j].size {
-					shortestFlexField = fields[j].size
+			if fields[j].Flex {
+				if shortestFlexField > fields[j].Size {
+					shortestFlexField = fields[j].Size
 					shortestFlexFieldIdx = j
 				}
 			} else {
-				if shortestFixedField > fields[j].size {
-					shortestFixedField = fields[j].size
+				if shortestFixedField > fields[j].Size {
+					shortestFixedField = fields[j].Size
 					shortestFixedFieldIdx = j
 				}
 			}
 		}
 		if shortestFlexFieldIdx != -1 {
-			fields[shortestFlexFieldIdx].size++
+			fields[shortestFlexFieldIdx].Size++
 		} else {
-			fields[shortestFixedFieldIdx].size++
+			fields[shortestFixedFieldIdx].Size++
 		}
 		layoutWidth++
 	}
@@ -76,79 +75,79 @@ func (b *builder) setLayout(fields ...field) {
 		longestFixedField, longestFixedFieldIdx := 0, -1
 		longestFlexField, longestFlexFieldIdx := 0, -1
 		for j := range fields {
-			if fields[j].flex {
-				if longestFlexField < fields[j].size {
-					longestFlexField = fields[j].size
+			if fields[j].Flex {
+				if longestFlexField < fields[j].Size {
+					longestFlexField = fields[j].Size
 					longestFlexFieldIdx = j
 				}
 			} else {
-				if longestFixedField < fields[j].size {
-					longestFixedField = fields[j].size
+				if longestFixedField < fields[j].Size {
+					longestFixedField = fields[j].Size
 					longestFixedFieldIdx = j
 				}
 			}
 		}
 
-		if longestFlexFieldIdx != -1 && fields[longestFlexFieldIdx].size > 1 {
-			fields[longestFlexFieldIdx].size--
+		if longestFlexFieldIdx != -1 && fields[longestFlexFieldIdx].Size > 1 {
+			fields[longestFlexFieldIdx].Size--
 		} else if longestFixedFieldIdx == -1 {
 			return
 		} else {
-			if fields[longestFixedFieldIdx].size > 1 {
-				fields[longestFixedFieldIdx].size--
+			if fields[longestFixedFieldIdx].Size > 1 {
+				fields[longestFixedFieldIdx].Size--
 			}
 		}
 		layoutWidth--
 	}
 }
 
-func (b *builder) drawTexts(texts ...string) {
-	drawables := make([]drawable, len(texts))
+func (b *Builder) DrawTexts(texts ...string) {
+	drawables := make([]Drawable, len(texts))
 	for i := range texts {
-		drawables[i] = text(texts[i])
+		drawables[i] = Text(texts[i])
 	}
-	b.drawLine(drawables...)
+	b.DrawLine(drawables...)
 }
 
-func (b *builder) drawLine(texts ...drawable) {
+func (b *Builder) DrawLine(texts ...Drawable) {
 	for i := range texts {
-		segment := ui.Segment{
+		segment := Segment{
 			X:     b.x,
 			Y:     b.y,
-			Runes: texts[i].draw(b.fields[i].size, b.fields[i].align),
-			Style: b.style(b.fields[i].style),
+			Runes: texts[i].Draw(b.fields[i].Size, b.fields[i].Align),
+			Style: b.style(b.fields[i].Style),
 		}
 
 		b.screen = append(b.screen, segment)
 		b.x += len(segment.Runes)
 	}
-	b.newLine()
+	b.NewLine()
 }
 
-func (b *builder) style(style ui.Style) ui.Style {
-	if style == ui.NoStyle {
+func (b *Builder) style(style Style) Style {
+	if style == NoStyle {
 		return b.defaultStyle
 	}
 	return style
 }
 
-func (b *builder) newLine() {
+func (b *Builder) NewLine() {
 	b.x = 0
 	b.y++
 }
 
-func (b *builder) setLine(y int) {
+func (b *Builder) SetLine(y int) {
 	b.x = 0
 	b.y = y
 }
 
-func (b *builder) getScreen() ui.Screen {
+func (b *Builder) GetScreen() Screen {
 	return b.screen
 }
 
-type text string
+type Text string
 
-func (t text) draw(width int, align alignment) []rune {
+func (t Text) Draw(width int, align Alignment) []rune {
 	if width < 1 {
 		return nil
 	}
@@ -161,7 +160,7 @@ func (t text) draw(width int, align alignment) []rune {
 	diff := width - len(runes)
 	idx := 0
 	result := make([]rune, width)
-	if diff > 0 && align == right {
+	if diff > 0 && align == Right {
 		for i := 0; i < diff; i++ {
 			result[idx] = ' '
 			idx++
@@ -173,7 +172,7 @@ func (t text) draw(width int, align alignment) []rune {
 		idx++
 	}
 
-	if diff > 0 && align == left {
+	if diff > 0 && align == Left {
 		for i := 0; i < diff; i++ {
 			result[idx] = ' '
 			idx++
@@ -186,9 +185,9 @@ func (t text) draw(width int, align alignment) []rune {
 	return result
 }
 
-type progressBar float64
+type ProgressBar float64
 
-func (pb progressBar) draw(width int, _ alignment) []rune {
+func (pb ProgressBar) Draw(width int, _ Alignment) []rune {
 	result := make([]rune, width)
 	progress := int(math.Round(float64(width*8) * float64(pb)))
 	idx := 0
