@@ -19,7 +19,7 @@ func NewRenderer() (ui.Renderer, error) {
 	if err := screen.Init(); err != nil {
 		return nil, err
 	}
-	screen.SetStyle(defStyle)
+	screen.SetStyle(noStyle)
 	screen.EnableMouse()
 	screen.EnablePaste()
 
@@ -38,9 +38,10 @@ func (r *renderer) PollEvent() any {
 }
 
 func (r *renderer) Render(s ui.Screen) {
-	for y, line := range s {
-		for x, char := range line {
-			r.screen.SetContent(x, y, char.Rune, nil, style(char.Style))
+	r.screen.Fill(' ', styleDefault)
+	for _, segment := range s {
+		for i, rune := range segment.Runes {
+			r.screen.SetContent(segment.X+i, segment.Y, rune, nil, style(segment.Style))
 		}
 	}
 	r.screen.Show()
@@ -76,8 +77,8 @@ func (r *renderer) uiEvent(ev tcell.Event) any {
 }
 
 var (
-	defStyle           = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
-	styleHeader        = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
+	noStyle            = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
+	styleDefault       = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
 	styleFolder        = tcell.StyleDefault.Foreground(tcell.PaletteColor(230)).Background(tcell.PaletteColor(18)).Bold(true)
 	styleFile          = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
 	styleAppName       = tcell.StyleDefault.Foreground(tcell.PaletteColor(226)).Background(tcell.PaletteColor(0)).Bold(true).Italic(true)
@@ -88,10 +89,12 @@ var (
 
 func style(uiStyle ui.Style) tcell.Style {
 	switch uiStyle {
+	case ui.NoStyle:
+		return noStyle
 	case ui.StyleDefault:
-		return defStyle
+		return styleDefault
 	case ui.StyleHeader:
-		return styleHeader
+		return styleDefault
 	case ui.StyleAppTitle:
 		return styleAppName
 	case ui.StyleArchiveName:
@@ -105,6 +108,6 @@ func style(uiStyle ui.Style) tcell.Style {
 	case ui.StyleProgressBar:
 		return styleProgressBar
 	default:
-		return defStyle
+		return noStyle
 	}
 }

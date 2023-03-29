@@ -20,17 +20,19 @@ type ResizeEvent struct {
 	Width, Height int
 }
 
-type Screen [][]Char
+type Screen []Segment
 
-type Char struct {
-	Rune  rune
+type Segment struct {
+	X, Y  int
+	Runes []rune
 	Style Style
 }
 
 type Style int
 
 const (
-	StyleDefault Style = iota
+	NoStyle Style = iota
+	StyleDefault
 	StyleHeader
 	StyleAppTitle
 	StyleArchiveName
