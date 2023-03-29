@@ -1,10 +1,10 @@
 package main
 
 import (
+	"arch/app"
 	"arch/files"
 	"arch/files/file_fs"
 	"arch/files/mock_fs"
-	"arch/ui"
 	"arch/ui/tcell"
 	"log"
 	"os"
@@ -37,5 +37,5 @@ func main() {
 		return
 	}
 
-	ui.Run(paths, fs, renderer)
+	app.Run(paths, fs, renderer)
 }

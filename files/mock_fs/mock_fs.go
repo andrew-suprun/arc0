@@ -82,6 +82,7 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 				Archive: path,
 				Name:    scanFiles[i].name,
 				Size:    scanFiles[i].size,
+				ModTime: beginning.Add(time.Duration(rand.Int63n(int64(duration)))),
 				Hash:    scanFiles[i].hash,
 			}
 		}
@@ -94,6 +95,10 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 	}()
 	return result
 }
+
+var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
+var end = time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+var duration = end.Sub(beginning)
 
 func (fs *mockFs) Stop() {
 }

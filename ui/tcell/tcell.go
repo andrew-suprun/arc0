@@ -78,8 +78,8 @@ func (r *renderer) uiEvent(ev tcell.Event) any {
 var (
 	defStyle           = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
 	styleHeader        = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
-	styleWhite         = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
-	styleWhiteBold     = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18)).Bold(true)
+	styleFolder        = tcell.StyleDefault.Foreground(tcell.PaletteColor(230)).Background(tcell.PaletteColor(18)).Bold(true)
+	styleFile          = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
 	styleAppName       = tcell.StyleDefault.Foreground(tcell.PaletteColor(226)).Background(tcell.PaletteColor(0)).Bold(true).Italic(true)
 	styleArchiveName   = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(0)).Bold(true)
 	styleArchiveHeader = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(8)).Bold(true)
@@ -98,10 +98,10 @@ func style(uiStyle ui.Style) tcell.Style {
 		return styleArchiveName
 	case ui.StyleArchiveHeader:
 		return styleArchiveHeader
-	case ui.StyleWhite:
-		return styleWhite
-	case ui.StyleWhiteBold:
-		return styleWhiteBold
+	case ui.StyleFile:
+		return styleFile
+	case ui.StyleFolder:
+		return styleFolder
 	case ui.StyleProgressBar:
 		return styleProgressBar
 	default:
