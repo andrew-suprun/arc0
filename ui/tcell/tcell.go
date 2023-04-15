@@ -84,7 +84,7 @@ var (
 	styleAppName       = tcell.StyleDefault.Foreground(tcell.PaletteColor(226)).Background(tcell.PaletteColor(0)).Bold(true).Italic(true)
 	styleArchiveName   = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(0)).Bold(true)
 	styleArchiveHeader = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(8)).Bold(true)
-	styleProgressBar   = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(20)).Italic(true)
+	styleProgressBar   = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(20))
 )
 
 func style(uiStyle ui.Style) tcell.Style {

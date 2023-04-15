@@ -23,9 +23,10 @@ type ResizeEvent struct {
 type Screen []Segment
 
 type Segment struct {
-	X, Y  int
-	Runes []rune
-	Style Style
+	X, Y        int
+	Runes       []rune
+	Style       Style
+	MouseTarget any
 }
 
 type Style int

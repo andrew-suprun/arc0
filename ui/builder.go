@@ -7,128 +7,94 @@ import (
 type Builder struct {
 	width, height int
 	x, y          int
-	defaultStyle  Style
+	style         Style
+	mouseTarget   any
+	fields        []Drawable
 	screen        Screen
-	fields        []Field
+	sizes         []int
 }
 
 type Field struct {
-	Size  int
-	Style Style
-	Align Alignment
-	Flex  bool
+	Width, Flex int
 }
 
-type Alignment byte
-
-const (
-	Left Alignment = iota
-	Right
-)
-
 type Drawable interface {
-	Draw(width int, alight Alignment) []rune
+	Draw(width int) []rune
+	Style() Style
+	MouseTarget() any
 }
 
 func NewBuilder(width, height int) *Builder {
 	return &Builder{width: width, height: height}
 }
 
-func (b *Builder) SetDefaultStyle(style Style) {
-	b.defaultStyle = style
+func (b *Builder) AddText(txt string) {
+	b.fields = append(b.fields, Text{text: txt, style: b.style, mouseTarget: b.mouseTarget})
+}
+
+func (b *Builder) AddRText(txt string) {
+	b.fields = append(b.fields, RText{text: txt, style: b.style, mouseTarget: b.mouseTarget})
+}
+
+func (b *Builder) AddProgressBar(value float64) {
+	b.fields = append(b.fields, ProgressBar{value: value, style: b.style})
+}
+
+func (b *Builder) SetStyle(style Style) {
+	b.style = style
+}
+
+func (b *Builder) SetMouseTarget(cmd any) {
+	b.mouseTarget = cmd
 }
 
 func (b *Builder) SetLayout(fields ...Field) {
-	b.fields = fields
-	if len(fields) == 0 || len(fields) > b.width {
+	b.sizes = make([]int, len(fields))
+	totalWidth, totalFlex := 0, 0
+	for i, field := range fields {
+		b.sizes[i] = field.Width
+		totalWidth += field.Width
+		totalFlex += field.Flex
+	}
+	diff := b.width - totalWidth
+	if diff <= 0 {
 		return
 	}
 
-	layoutWidth := 0
+	totalInc := 0
+	for i, field := range fields {
+		inc := diff * field.Flex / totalFlex
+		b.sizes[i] += inc
+		totalInc += inc
+	}
+	diff -= totalInc
 	for i := range fields {
-		layoutWidth += fields[i].Size
-	}
-	for layoutWidth < b.width {
-		shortestFixedField, shortestFixedFieldIdx := math.MaxInt, -1
-		shortestFlexField, shortestFlexFieldIdx := math.MaxInt, -1
-		for j := range fields {
-			if fields[j].Flex {
-				if shortestFlexField > fields[j].Size {
-					shortestFlexField = fields[j].Size
-					shortestFlexFieldIdx = j
-				}
-			} else {
-				if shortestFixedField > fields[j].Size {
-					shortestFixedField = fields[j].Size
-					shortestFixedFieldIdx = j
-				}
-			}
+		if fields[i].Flex == 0 {
+			continue
 		}
-		if shortestFlexFieldIdx != -1 {
-			fields[shortestFlexFieldIdx].Size++
-		} else {
-			fields[shortestFixedFieldIdx].Size++
-		}
-		layoutWidth++
-	}
-	for layoutWidth > b.width {
-		longestFixedField, longestFixedFieldIdx := 0, -1
-		longestFlexField, longestFlexFieldIdx := 0, -1
-		for j := range fields {
-			if fields[j].Flex {
-				if longestFlexField < fields[j].Size {
-					longestFlexField = fields[j].Size
-					longestFlexFieldIdx = j
-				}
-			} else {
-				if longestFixedField < fields[j].Size {
-					longestFixedField = fields[j].Size
-					longestFixedFieldIdx = j
-				}
-			}
-		}
-
-		if longestFlexFieldIdx != -1 && fields[longestFlexFieldIdx].Size > 1 {
-			fields[longestFlexFieldIdx].Size--
-		} else if longestFixedFieldIdx == -1 {
+		if diff == 0 {
 			return
-		} else {
-			if fields[longestFixedFieldIdx].Size > 1 {
-				fields[longestFixedFieldIdx].Size--
-			}
 		}
-		layoutWidth--
+		b.sizes[i] += 1
+		diff--
 	}
 }
 
-func (b *Builder) DrawTexts(texts ...string) {
-	drawables := make([]Drawable, len(texts))
-	for i := range texts {
-		drawables[i] = Text(texts[i])
-	}
-	b.DrawLine(drawables...)
-}
-
-func (b *Builder) DrawLine(texts ...Drawable) {
-	for i := range texts {
+func (b *Builder) LayoutLine() {
+	for i, field := range b.fields {
 		segment := Segment{
-			X:     b.x,
-			Y:     b.y,
-			Runes: texts[i].Draw(b.fields[i].Size, b.fields[i].Align),
-			Style: b.style(b.fields[i].Style),
+			X:           b.x,
+			Y:           b.y,
+			Runes:       field.Draw(b.sizes[i]),
+			Style:       field.Style(),
+			MouseTarget: field.MouseTarget(),
 		}
 
 		b.screen = append(b.screen, segment)
 		b.x += len(segment.Runes)
 	}
+	b.fields = b.fields[:0]
 	b.NewLine()
-}
-
-func (b *Builder) style(style Style) Style {
-	if style == NoStyle {
-		return b.defaultStyle
-	}
-	return style
 }
 
 func (b *Builder) NewLine() {
@@ -145,13 +111,17 @@ func (b *Builder) GetScreen() Screen {
 	return b.screen
 }
 
-type Text string
+type Text struct {
+	text        string
+	style       Style
+	mouseTarget any
+}
 
-func (t Text) Draw(width int, align Alignment) []rune {
+func (t Text) Draw(width int) []rune {
 	if width < 1 {
 		return nil
 	}
-	runes := []rune(t)
+	runes := []rune(t.text)
 	if len(runes) > width {
 		runes = append(runes[:width-1], '…')
 		return runes
@@ -160,19 +130,13 @@ func (t Text) Draw(width int, align Alignment) []rune {
 	diff := width - len(runes)
 	idx := 0
 	result := make([]rune, width)
-	if diff > 0 && align == Right {
-		for i := 0; i < diff; i++ {
-			result[idx] = ' '
-			idx++
-		}
-	}
 
 	for i := range runes {
 		result[idx] = runes[i]
 		idx++
 	}
 
-	if diff > 0 && align == Left {
+	if diff > 0 {
 		for i := 0; i < diff; i++ {
 			result[idx] = ' '
 			idx++
@@ -185,11 +149,68 @@ func (t Text) Draw(width int, align Alignment) []rune {
 	return result
 }
 
-type ProgressBar float64
+func (t Text) Style() Style {
+	return t.style
+}
 
-func (pb ProgressBar) Draw(width int, _ Alignment) []rune {
+func (t Text) MouseTarget() any {
+	return t.mouseTarget
+}
+
+type RText struct {
+	text        string
+	style       Style
+	mouseTarget any
+}
+
+func (t RText) Draw(width int) []rune {
+	if width < 1 {
+		return nil
+	}
+	runes := []rune(t.text)
+	if len(runes) > width {
+		runes = append(runes[:width-1], '…')
+		return runes
+	}
+
+	diff := width - len(runes)
+	idx := 0
 	result := make([]rune, width)
-	progress := int(math.Round(float64(width*8) * float64(pb)))
+	if diff > 0 {
+		for i := 0; i < diff; i++ {
+			result[idx] = ' '
+			idx++
+		}
+	}
+
+	for i := range runes {
+		result[idx] = runes[i]
+		idx++
+	}
+
+	for ; idx < width; idx++ {
+		result[idx] = ' '
+	}
+
+	return result
+}
+
+func (t RText) Style() Style {
+	return t.style
+}
+
+func (t RText) MouseTarget() any {
+	return t.mouseTarget
+}
+
+type ProgressBar struct {
+	value float64
+	style Style
+}
+
+func (pb ProgressBar) Draw(width int) []rune {
+	result := make([]rune, width)
+	progress := int(math.Round(float64(width*8) * pb.value))
 	idx := 0
 	for ; idx < progress/8; idx++ {
 		result[idx] = '█'
@@ -202,4 +223,12 @@ func (pb ProgressBar) Draw(width int, _ Alignment) []rune {
 		result[idx] = ' '
 	}
 	return result
+}
+
+func (pb ProgressBar) Style() Style {
+	return pb.style
+}
+
+func (pb ProgressBar) MouseTarget() any {
+	return nil
 }
