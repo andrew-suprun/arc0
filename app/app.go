@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 )
@@ -18,7 +17,6 @@ type app struct {
 	width, height int
 	locations     []location
 	quit          bool
-	lineOffset    int
 	scanStates    []*files.ScanState
 	scanResults   []*files.ArchiveInfo
 	archives      []folder
@@ -187,29 +185,24 @@ func (app *app) handleUiEvent(event any) {
 }
 
 func (app *app) render() {
-	b := ui.NewBuilder(app.width, app.height)
-	app.drawTitle(b)
-	app.drawScanStats(b)
-	app.drawArchive(b)
-	app.drawStatusLine(b)
-	app.renderer.Render(b.GetScreen())
+	app.drawHeaderView()
+	app.drawScanStats()
+	app.drawArchive()
+
+	app.drawStatusLine()
+	app.renderer.Show()
 }
 
-func (app *app) drawTitle(b *ui.Builder) {
-	b.SetLayout(ui.Field{Width: 11}, ui.Field{Flex: 1})
-	b.SetStyle(ui.StyleAppTitle)
-	b.AddText(" АРХИВАТОР ")
-	b.SetStyle(ui.StyleArchiveName)
-	b.AddText(app.archiveName())
-	b.LayoutLine()
-}
-
-func (app *app) drawStatusLine(b *ui.Builder) {
-	b.SetLayout(ui.Field{Flex: 1})
-	b.SetLine(app.height - 1)
-	b.SetStyle(ui.StyleArchiveName)
-	b.AddText(" Status line will be here...")
-	b.LayoutLine()
+func (app *app) drawHeaderView() {
+	view := ui.View(0, 0, app.width, 1,
+		ui.Layout([]ui.Field{ui.Fixed(11), ui.Flex(1)},
+			ui.Line(
+				ui.Styled(ui.StyleAppTitle, ui.Text(" АРХИВАТОР ")),
+				ui.Styled(ui.StyleArchiveName, ui.Text(app.archiveName())),
+			),
+		),
+	)
+	app.renderer.Render(view...)
 }
 
 func (app *app) archiveName() string {
@@ -220,68 +213,50 @@ func (app *app) archiveName() string {
 	return app.archives[app.archiveIdx].name
 }
 
-func (app *app) drawScanStats(b *ui.Builder) {
+func (app *app) drawScanStats() {
 	if app.scanStates == nil {
 		return
 	}
 
+	contents := []ui.Widget{}
 	for i, state := range app.scanStates {
 		if app.scanStates[i] == nil {
 			continue
 		}
 
-		b.SetLayout(ui.Field{Width: 28}, ui.Field{Flex: 1}, ui.Field{Width: 1})
-		b.SetStyle(ui.StyleFile)
-
-		b.AddText(" Архив")
-		b.AddText(state.Archive)
-		b.AddText(" ")
-		b.LayoutLine()
-
-		b.AddText(" Каталог")
-		b.AddText(filepath.Dir(state.Name))
-		b.AddText(" ")
-		b.LayoutLine()
-
-		b.AddText(" Документ")
-		b.AddText(filepath.Base(state.Name))
-		b.AddText(" ")
-		b.LayoutLine()
-
-		b.AddText(" Ожидаемое Время Завершения")
-		b.AddText(time.Now().Add(state.Remaining).Format(time.TimeOnly))
-		b.AddText(" ")
-		b.LayoutLine()
-
-		b.AddText(" Время До Завершения")
-		b.AddText(state.Remaining.Truncate(time.Second).String())
-		b.AddText(" ")
-		b.LayoutLine()
-
-		b.AddText(" Общий Прогресс")
-		b.SetStyle(ui.StyleProgressBar)
-		b.AddProgressBar(state.Progress)
-		b.SetStyle(ui.StyleFile)
-		b.AddText(" ")
-		b.LayoutLine()
-
-		b.NewLine()
+		contents = append(contents,
+			ui.Line(ui.Text("Архив"), ui.Text(state.Archive)),
+			ui.Line(ui.Text("Каталог"), ui.Text(filepath.Dir(state.Name))),
+			ui.Line(ui.Text("Документ"), ui.Text(filepath.Base(state.Name))),
+			ui.Line(ui.Text("Ожидаемое Время Завершения"), ui.Text(time.Now().Add(state.Remaining).Format(time.TimeOnly))),
+			ui.Line(ui.Text("Время До Завершения"), ui.Text(time.Now().Add(state.Remaining.Truncate(time.Second)).String())),
+			ui.Line(ui.Text("Общий Прогресс"), ui.Styled(ui.StyleProgressBar, ui.ProgressBar(state.Progress))),
+			ui.Line(ui.Text(""), ui.Text("")),
+		)
 	}
+
+	for len(contents) < app.height-2 {
+		contents = append(contents, ui.Line(ui.Text(""), ui.Text(""), ui.Text("")))
+	}
+
+	view := ui.View(0, 1, app.width, app.height-2,
+		ui.Styled(
+			ui.StyleDefault,
+			ui.Layout([]ui.Field{ui.Pad(" "), ui.Fixed(26), ui.Pad(" "), ui.Flex(1), ui.Pad(" ")}, contents...)),
+	)
+	app.renderer.Render(view...)
 }
 
-func (app *app) drawArchive(b *ui.Builder) {
+func (app *app) drawArchive() {
 	if app.archives == nil {
 		return
 	}
 
-	b.SetLayout(ui.Field{Width: 8}, ui.Field{Flex: 1}, ui.Field{Width: 20}, ui.Field{Width: 18})
-	b.SetStyle(ui.StyleArchiveHeader)
-
-	b.AddText(" Статус")
-	b.AddText(" Документ")
-	b.AddText(" Время Изменения")
-	b.AddRText("Размер ")
-	b.LayoutLine()
+	contents := []ui.Widget{
+		ui.Styled(ui.StyleArchiveHeader,
+			ui.Line(ui.Text("Статус"), ui.Text("Документ"), ui.Text("Время Изменения"), ui.Text("Размер")),
+		),
+	}
 
 	archive := app.archives[app.archiveIdx]
 	location := app.locations[app.archiveIdx]
@@ -289,50 +264,70 @@ func (app *app) drawArchive(b *ui.Builder) {
 		archive = archive.subFolders[dir]
 	}
 
-	// subfolders
-	b.SetStyle(ui.StyleFolder)
-	subFolders := make([]folder, 0, len(archive.subFolders))
-	for name, folder := range archive.subFolders {
-		folder.name = name
-		subFolders = append(subFolders, folder)
-	}
-	sort.Slice(subFolders, func(i, j int) bool {
-		return subFolders[i].name < subFolders[j].name
-	})
-	for _, subFolder := range subFolders {
-		b.AddText("")
-		b.AddText(" " + subFolder.name)
-		b.AddText(" Каталог")
-		b.AddText(formatSize(subFolder.size))
-		b.LayoutLine()
+	// // subfolders
+	// b.SetStyle(ui.StyleFolder)
+	// subFolders := make([]folder, 0, len(archive.subFolders))
+	// for name, folder := range archive.subFolders {
+	// 	folder.name = name
+	// 	subFolders = append(subFolders, folder)
+	// }
+	// sort.Slice(subFolders, func(i, j int) bool {
+	// 	return subFolders[i].name < subFolders[j].name
+	// })
+	// for _, subFolder := range subFolders {
+	// 	b.AddText("")
+	// 	b.AddText(" " + subFolder.name)
+	// 	b.AddText(" Каталог")
+	// 	b.AddText(formatSize(subFolder.size))
+	// 	b.LayoutLine()
 
-		if app.lineOffset >= app.height-1 {
-			break
-		}
-	}
+	// 	if app.lineOffset >= app.height-1 {
+	// 		break
+	// 	}
+	// }
 
-	// files
-	b.SetStyle(ui.StyleFile)
-	files := make([]file, 0, len(archive.files))
-	for name, file := range archive.files {
-		file.name = name
-		files = append(files, file)
-	}
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].name < files[j].name
-	})
-	for _, file := range files {
-		b.AddText("")
-		b.AddText(" " + file.name)
-		b.AddText(" " + file.modTime.Format(time.DateTime))
-		b.AddText(formatSize(file.size))
-		b.LayoutLine()
+	// // files
+	// b.SetStyle(ui.StyleFile)
+	// files := make([]file, 0, len(archive.files))
+	// for name, file := range archive.files {
+	// 	file.name = name
+	// 	files = append(files, file)
+	// }
+	// sort.Slice(files, func(i, j int) bool {
+	// 	return files[i].name < files[j].name
+	// })
+	// for _, file := range files {
+	// 	b.AddText("")
+	// 	b.AddText(" " + file.name)
+	// 	b.AddText(" " + file.modTime.Format(time.DateTime))
+	// 	b.AddText(formatSize(file.size))
+	// 	b.LayoutLine()
 
-		if app.lineOffset >= app.height-1 {
-			break
-		}
-	}
-	// status line
+	// 	if app.lineOffset >= app.height-1 {
+	// 		break
+	// 	}
+	// }
+
+	view := ui.View(0, 1, app.width, app.height-2,
+		ui.Styled(ui.StyleDefault,
+			ui.Layout([]ui.Field{ui.Pad(" "), ui.Fixed(7), ui.Pad(" "), ui.Flex(1), ui.Pad(" "), ui.Fixed(19), ui.Pad(" "), ui.Fixed(16), ui.Pad(" ")},
+				contents...,
+			),
+		),
+	)
+	app.renderer.Render(view...)
+}
+
+func (app *app) drawStatusLine() {
+	view := ui.View(0, app.height-1, app.width, 1,
+		ui.Styled(ui.StyleArchiveName,
+			ui.Layout([]ui.Field{ui.Pad(" "), ui.Flex(1), ui.Pad(" ")},
+				ui.Line(ui.Text("Status line will be here...")),
+			),
+		),
+	)
+	log.Printf("status line: %#v", view)
+	app.renderer.Render(view...)
 }
 
 func formatSize(size int) string {

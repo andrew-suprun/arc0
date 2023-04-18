@@ -37,13 +37,15 @@ func (r *renderer) PollEvent() any {
 	return r.uiEvent(ev)
 }
 
-func (r *renderer) Render(s ui.Screen) {
-	r.screen.Fill(' ', styleDefault)
+func (r *renderer) Render(s ...ui.Segment) {
 	for _, segment := range s {
 		for i, rune := range segment.Runes {
 			r.screen.SetContent(segment.X+i, segment.Y, rune, nil, style(segment.Style))
 		}
 	}
+}
+
+func (r *renderer) Show() {
 	r.screen.Show()
 }
 

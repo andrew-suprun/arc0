@@ -2,7 +2,8 @@ package ui
 
 type Renderer interface {
 	PollEvent() any
-	Render(screen Screen)
+	Render(view ...Segment)
+	Show()
 	Sync()
 	Exit()
 }
@@ -19,8 +20,6 @@ type KeyEvent struct {
 type ResizeEvent struct {
 	Width, Height int
 }
-
-type Screen []Segment
 
 type Segment struct {
 	X, Y        int
