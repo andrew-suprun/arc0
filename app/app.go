@@ -19,7 +19,7 @@ type app struct {
 	quit          bool
 	scanStates    []*files.ScanState
 	scanResults   []*files.ArchiveInfo
-	archives      []folder
+	archives      []*file
 	archiveIdx    int
 }
 
@@ -29,18 +29,20 @@ type location struct {
 	lineOffset int
 }
 
-type folder struct {
-	name       string
-	size       int
-	subFolders map[string]folder
-	files      map[string]file
-}
+type fileKind int
+
+const (
+	regular fileKind = iota
+	folder
+)
 
 type file struct {
-	name    string
-	size    int
-	modTime time.Time
-	hash    string
+	kind       fileKind
+	name       string
+	size       int
+	modTime    time.Time
+	hash       string
+	subFolders []*file
 }
 
 func Run(paths []string, fs files.FS, renderer ui.Renderer) {
@@ -84,42 +86,58 @@ func Run(paths []string, fs files.FS, renderer ui.Renderer) {
 	app.renderer.Exit()
 }
 
-func (app *app) analize() {
-	app.archives = make([]folder, len(app.paths))
+func (app *app) analizeArchives() {
+	app.archives = make([]*file, len(app.paths))
 	for i := range app.scanResults {
-		archive := &app.archives[i]
-		archive.name = app.paths[i]
-		archive.subFolders = map[string]folder{}
-		archive.files = map[string]file{}
-		for _, info := range app.scanResults[i].Files {
-			path := strings.Split(info.Name, "/")
-			name := path[len(path)-1]
-			path = path[:len(path)-1]
-			current := archive
-			current.size += info.Size
-			for _, dir := range path {
-				sub, ok := current.subFolders[dir]
-				if !ok {
-					sub = folder{subFolders: map[string]folder{}, files: map[string]file{}}
-					current.subFolders[dir] = sub
-				}
-				sub.size += info.Size
-				current.subFolders[dir] = sub
-				current = &sub
-			}
-			current.files[name] = file{size: info.Size, modTime: info.ModTime, hash: info.Hash}
-		}
-		// printArchive(archive, "", "")
+		app.archives[i] = app.analizeArchive(app.scanResults[i].Files)
+		app.archives[i].name = app.paths[i] // ???
 	}
 }
 
-func printArchive(archive *folder, name, prefix string) {
-	log.Printf("%sD: %s [%v]", prefix, name, archive.size)
-	for name, sub := range archive.subFolders {
-		printArchive(&sub, name, prefix+"    ")
+func (app *app) analizeArchive(infos []files.FileInfo) *file {
+	archive := &file{kind: folder}
+	for _, info := range infos {
+		path := strings.Split(info.Name, "/")
+		name := path[len(path)-1]
+		path = path[:len(path)-1]
+		current := archive
+		current.size += info.Size
+		for _, dir := range path {
+			sub := subFolder(current, dir)
+			sub.size += info.Size
+			current = sub
+		}
+		current.subFolders = append(current.subFolders, &file{
+			kind:    regular,
+			name:    name,
+			size:    info.Size,
+			modTime: info.ModTime,
+			hash:    info.Hash,
+		})
 	}
-	for name, file := range archive.files {
-		log.Printf("    %sF: %s [%v] %s", prefix, name, file.size, file.hash)
+	printArchive(archive, "", "")
+	return archive
+}
+
+func subFolder(dir *file, name string) *file {
+	for i := range dir.subFolders {
+		if name == dir.subFolders[i].name {
+			return dir.subFolders[i]
+		}
+	}
+	subFolder := &file{kind: folder, name: name}
+	dir.subFolders = append(dir.subFolders, subFolder)
+	return subFolder
+}
+
+func printArchive(archive *file, name, prefix string) {
+	kind := "D"
+	if archive.kind == regular {
+		kind = "F"
+	}
+	log.Printf("%s%s: %s [%v]", prefix, kind, name, archive.size)
+	for _, file := range archive.subFolders {
+		printArchive(file, file.name, prefix+"│ ")
 	}
 }
 
@@ -150,7 +168,7 @@ func (app *app) handleFsEvent(event any) {
 			}
 		}
 		if doneScanning {
-			app.analize()
+			app.analizeArchives()
 		}
 
 	default:
@@ -258,11 +276,11 @@ func (app *app) drawArchive() {
 		),
 	}
 
-	archive := app.archives[app.archiveIdx]
-	location := app.locations[app.archiveIdx]
-	for _, dir := range location.path {
-		archive = archive.subFolders[dir]
-	}
+	// archive := app.archives[app.archiveIdx]
+	// location := app.locations[app.archiveIdx]
+	// for _, dir := range location.path {
+	// 	archive = archive.subFolders[dir]
+	// }
 
 	// // subfolders
 	// b.SetStyle(ui.StyleFolder)
