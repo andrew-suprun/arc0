@@ -120,7 +120,6 @@ func byHash(archive files.FileInfos) groupByHash {
 }
 
 type analisys struct {
-	conflicts   map[*files.FileInfo]struct{}
 	sourceMap   map[*files.FileInfo]*files.FileInfo
 	copyOnly    map[*files.FileInfo]struct{}
 	extraCopies map[*files.FileInfo]struct{}
@@ -128,12 +127,6 @@ type analisys struct {
 
 func (a *analisys) String() string {
 	b := &strings.Builder{}
-	if len(a.conflicts) > 0 {
-		fmt.Fprintln(b, "Conflicts:")
-		for c := range a.conflicts {
-			fmt.Fprintf(b, "  %s\n", c.Name)
-		}
-	}
 	fmt.Fprintln(b, "Source Map:")
 	for s, c := range a.sourceMap {
 		fmt.Fprintf(b, "  %s -> %s %s\n", s.Name, c.Name, s.Hash)
@@ -155,17 +148,9 @@ func (a *analisys) String() string {
 
 func (app *app) analizeCopy(copyInfos files.FileInfos) *analisys {
 	result := &analisys{
-		conflicts:   map[*files.FileInfo]struct{}{},
 		sourceMap:   map[*files.FileInfo]*files.FileInfo{},
 		copyOnly:    map[*files.FileInfo]struct{}{},
 		extraCopies: map[*files.FileInfo]struct{}{},
-	}
-	for _, copy := range copyInfos {
-		if source, ok := app.sourcesByName[copy.Name]; ok {
-			if source.Hash != copy.Hash {
-				result.conflicts[copy] = struct{}{}
-			}
-		}
 	}
 	for _, copy := range copyInfos {
 		log.Println("copy", copy.Name, copy.Hash)
@@ -181,9 +166,6 @@ func (app *app) analizeCopy(copyInfos files.FileInfos) *analisys {
 			result.copyOnly[copy] = struct{}{}
 		}
 	}
-	for _, copy := range result.sourceMap {
-		delete(result.conflicts, copy)
-	}
 	return result
 }
 
@@ -196,25 +178,24 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 		}
 	}
 
-	var tmpCopy *files.FileInfo
 	for _, source := range sources {
-		tmpCopy = sourceMap[source]
+		tmpCopy := sourceMap[source]
 		sourceBase := filepath.Base(source.Name)
 		if filepath.Base(copy.Name) == sourceBase && (tmpCopy == nil || filepath.Base(tmpCopy.Name) != sourceBase) {
 			log.Printf("    same base: %s -> %s", source.Name, copy.Name)
 			sourceMap[source] = copy
-			copy = nil
+			copy = tmpCopy
 			break
 		}
 	}
 
-	if tmpCopy == nil && copy == nil {
+	if copy == nil {
 		log.Printf("    return 1")
 		return nil
 	}
 
 	for _, source := range sources {
-		tmpCopy = sourceMap[source]
+		tmpCopy := sourceMap[source]
 		sourceBase := filepath.Base(source.Name)
 		sourceDir := filepath.Dir(source.Name)
 		if filepath.Dir(copy.Name) == sourceDir &&
@@ -223,12 +204,12 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 
 			log.Printf("    same dir: %s -> %s", source.Name, copy.Name)
 			sourceMap[source] = copy
-			copy = nil
+			copy = tmpCopy
 			break
 		}
 	}
 
-	if tmpCopy == nil && copy == nil {
+	if copy == nil {
 		log.Printf("    return 2")
 		return nil
 	}
@@ -241,8 +222,8 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 		}
 	}
 
-	log.Printf("    extra: %s", tmpCopy.Name)
-	return tmpCopy
+	log.Printf("    extra: %s", copy.Name)
+	return copy
 }
 
 func (app *app) analizeSource() {

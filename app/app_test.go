@@ -67,7 +67,13 @@ func TestApp(t *testing.T) {
 			Hash:    "gggg",
 		},
 		{
-			Name:    "z.txt",
+			Name:    " a/b/c/x.txt",
+			Size:    200,
+			ModTime: time.Now(),
+			Hash:    "hhhh",
+		},
+		{
+			Name:    "zzzz.txt",
 			Size:    200,
 			ModTime: time.Now(),
 			Hash:    "hhhh",
