@@ -17,8 +17,10 @@ type ScanState struct {
 
 type ArchiveInfo struct {
 	Archive string
-	Files   []FileInfo
+	Files   FileInfos
 }
+
+type ArchiveInfos []*ArchiveInfo
 
 type FileInfo struct {
 	Ino     uint64
@@ -28,6 +30,8 @@ type FileInfo struct {
 	ModTime time.Time
 	Hash    string
 }
+
+type FileInfos []*FileInfo
 
 type ScanError struct {
 	Archive string

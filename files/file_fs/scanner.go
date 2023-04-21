@@ -45,8 +45,8 @@ func (r *file_fs) scan(base string, out chan any) {
 	}()
 
 	inodes := map[uint64]*files.FileInfo{}
-	for i := range metas {
-		inodes[metas[i].Ino] = &metas[i]
+	for _, meta := range metas {
+		inodes[meta.Ino] = meta
 	}
 
 	storedMetas := readMeta(path)
@@ -153,17 +153,17 @@ func (r *file_fs) scan(base string, out chan any) {
 		meta.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 	}
 
-	for i := range metas {
-		if metas[i].Hash == "" {
+	for _, meta := range metas {
+		if meta.Hash == "" {
 			if r.lc.ShoudStop() {
 				return
 			}
-			hashFile(&metas[i])
+			hashFile(meta)
 		}
 	}
 }
 
-func (f *file_fs) collectMeta(base string, out chan any) (infos []files.FileInfo) {
+func (f *file_fs) collectMeta(base string, out chan any) (infos files.FileInfos) {
 	fsys := os.DirFS(base)
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if f.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
@@ -184,7 +184,7 @@ func (f *file_fs) collectMeta(base string, out chan any) (infos []files.FileInfo
 		modTime := meta.ModTime()
 		modTime = modTime.UTC().Round(time.Second)
 
-		infos = append(infos, files.FileInfo{
+		infos = append(infos, &files.FileInfo{
 			Ino:     sys.Ino,
 			Archive: base,
 			Name:    path,
@@ -233,7 +233,7 @@ func readMeta(basePath string) (result []files.FileInfo) {
 	return result
 }
 
-func storeMeta(basePath string, metas []files.FileInfo) error {
+func storeMeta(basePath string, metas files.FileInfos) error {
 	result := make([][]string, len(metas)+1)
 	result[0] = []string{"Inode", "Name", "Size", "ModTime", "Hash"}
 

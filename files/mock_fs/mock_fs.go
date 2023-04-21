@@ -75,15 +75,15 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 			scanFiles[i].hash = faker.Phonenumber()
 		}
 
-		infos := make([]files.FileInfo, len(scanFiles))
+		infos := make(files.FileInfos, len(scanFiles))
 
-		for i := range scanFiles {
-			infos[i] = files.FileInfo{
+		for i, file := range scanFiles {
+			infos[i] = &files.FileInfo{
 				Archive: path,
-				Name:    scanFiles[i].name,
-				Size:    scanFiles[i].size,
+				Name:    file.name,
+				Size:    file.size,
 				ModTime: beginning.Add(time.Duration(rand.Int63n(int64(duration)))),
-				Hash:    scanFiles[i].hash,
+				Hash:    file.hash,
 			}
 		}
 

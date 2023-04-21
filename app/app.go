@@ -18,10 +18,16 @@ type app struct {
 	locations     []location
 	quit          bool
 	scanStates    []*files.ScanState
-	scanResults   []*files.ArchiveInfo
-	archives      []*file
+	scanResults   files.ArchiveInfos
+	archive       *file
 	archiveIdx    int
+	sourcesByName groupByName
+	sourcesByHash groupByHash
+	analisys      []*analisys
 }
+
+type groupByName map[string]*files.FileInfo
+type groupByHash map[string]files.FileInfos
 
 type location struct {
 	path       []string
@@ -52,7 +58,7 @@ func Run(paths []string, fs files.FS, renderer ui.Renderer) {
 		renderer:    renderer,
 		locations:   make([]location, len(paths)),
 		scanStates:  make([]*files.ScanState, len(paths)),
-		scanResults: make([]*files.ArchiveInfo, len(paths)),
+		scanResults: make(files.ArchiveInfos, len(paths)),
 	}
 
 	tcellChan := make(chan any)
@@ -87,20 +93,166 @@ func Run(paths []string, fs files.FS, renderer ui.Renderer) {
 }
 
 func (app *app) analizeArchives() {
-	app.archives = make([]*file, len(app.paths))
-	for i := range app.scanResults {
-		app.archives[i] = app.analizeArchive(app.scanResults[i].Files)
-		app.archives[i].name = app.paths[i] // ???
+	app.sourcesByName = byName(app.scanResults[0].Files)
+	app.sourcesByHash = byHash(app.scanResults[0].Files)
+
+	app.analisys = make([]*analisys, len(app.scanResults)-1)
+	for i, copy := range app.scanResults[1:] {
+		app.analisys[i] = app.analizeCopy(copy.Files)
 	}
+	app.analizeSource()
 }
 
-func (app *app) analizeArchive(infos []files.FileInfo) *file {
-	archive := &file{kind: folder}
+func byName(infos files.FileInfos) groupByName {
+	result := groupByName{}
+	for _, info := range infos {
+		result[info.Name] = info
+	}
+	return result
+}
+
+func byHash(archive files.FileInfos) groupByHash {
+	result := groupByHash{}
+	for _, info := range archive {
+		result[info.Hash] = append(result[info.Hash], info)
+	}
+	return result
+}
+
+type analisys struct {
+	conflicts   map[*files.FileInfo]struct{}
+	sourceMap   map[*files.FileInfo]*files.FileInfo
+	copyOnly    map[*files.FileInfo]struct{}
+	extraCopies map[*files.FileInfo]struct{}
+}
+
+func (a *analisys) String() string {
+	b := &strings.Builder{}
+	if len(a.conflicts) > 0 {
+		fmt.Fprintln(b, "Conflicts:")
+		for c := range a.conflicts {
+			fmt.Fprintf(b, "  %s\n", c.Name)
+		}
+	}
+	fmt.Fprintln(b, "Source Map:")
+	for s, c := range a.sourceMap {
+		fmt.Fprintf(b, "  %s -> %s %s\n", s.Name, c.Name, s.Hash)
+	}
+	if len(a.copyOnly) > 0 {
+		fmt.Fprintln(b, "Copy Only:")
+		for c := range a.copyOnly {
+			fmt.Fprintf(b, "  %s\n", c.Name)
+		}
+	}
+	if len(a.extraCopies) > 0 {
+		fmt.Fprintln(b, "Extra Copies:")
+		for c := range a.extraCopies {
+			fmt.Fprintf(b, "  %s\n", c.Name)
+		}
+	}
+	return b.String()
+}
+
+func (app *app) analizeCopy(copyInfos files.FileInfos) *analisys {
+	result := &analisys{
+		conflicts:   map[*files.FileInfo]struct{}{},
+		sourceMap:   map[*files.FileInfo]*files.FileInfo{},
+		copyOnly:    map[*files.FileInfo]struct{}{},
+		extraCopies: map[*files.FileInfo]struct{}{},
+	}
+	for _, copy := range copyInfos {
+		if source, ok := app.sourcesByName[copy.Name]; ok {
+			if source.Hash != copy.Hash {
+				result.conflicts[copy] = struct{}{}
+			}
+		}
+	}
+	for _, copy := range copyInfos {
+		log.Println("copy", copy.Name, copy.Hash)
+		if sources, ok := app.sourcesByHash[copy.Hash]; ok {
+			for _, source := range sources {
+				log.Println("  source", source.Name, source.Hash)
+			}
+			extraCopy := match(sources, copy, result.sourceMap)
+			if extraCopy != nil {
+				result.extraCopies[extraCopy] = struct{}{}
+			}
+		} else {
+			result.copyOnly[copy] = struct{}{}
+		}
+	}
+	for _, copy := range result.sourceMap {
+		delete(result.conflicts, copy)
+	}
+	return result
+}
+
+func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.FileInfo]*files.FileInfo) *files.FileInfo {
+	for _, source := range sources {
+		if copy.Name == source.Name {
+			sourceMap[source] = copy
+			log.Printf("    same name: %s -> %s", source.Name, copy.Name)
+			return nil
+		}
+	}
+
+	var tmpCopy *files.FileInfo
+	for _, source := range sources {
+		tmpCopy = sourceMap[source]
+		sourceBase := filepath.Base(source.Name)
+		if filepath.Base(copy.Name) == sourceBase && (tmpCopy == nil || filepath.Base(tmpCopy.Name) != sourceBase) {
+			log.Printf("    same base: %s -> %s", source.Name, copy.Name)
+			sourceMap[source] = copy
+			copy = nil
+			break
+		}
+	}
+
+	if tmpCopy == nil && copy == nil {
+		log.Printf("    return 1")
+		return nil
+	}
+
+	for _, source := range sources {
+		tmpCopy = sourceMap[source]
+		sourceBase := filepath.Base(source.Name)
+		sourceDir := filepath.Dir(source.Name)
+		if filepath.Dir(copy.Name) == sourceDir &&
+			(tmpCopy == nil ||
+				(filepath.Base(tmpCopy.Name) != sourceBase && filepath.Dir(tmpCopy.Name) != sourceDir)) {
+
+			log.Printf("    same dir: %s -> %s", source.Name, copy.Name)
+			sourceMap[source] = copy
+			copy = nil
+			break
+		}
+	}
+
+	if tmpCopy == nil && copy == nil {
+		log.Printf("    return 2")
+		return nil
+	}
+
+	for _, source := range sources {
+		if sourceMap[source] == nil {
+			sourceMap[source] = copy
+			log.Printf("    different names: %s -> %s", source.Name, copy.Name)
+			return nil
+		}
+	}
+
+	log.Printf("    extra: %s", tmpCopy.Name)
+	return tmpCopy
+}
+
+func (app *app) analizeSource() {
+	infos := app.scanResults[0].Files
+	app.archive = &file{kind: folder}
 	for _, info := range infos {
 		path := strings.Split(info.Name, "/")
 		name := path[len(path)-1]
 		path = path[:len(path)-1]
-		current := archive
+		current := app.archive
 		current.size += info.Size
 		for _, dir := range path {
 			sub := subFolder(current, dir)
@@ -115,8 +267,7 @@ func (app *app) analizeArchive(infos []files.FileInfo) *file {
 			hash:    info.Hash,
 		})
 	}
-	printArchive(archive, "", "")
-	return archive
+	printArchive(app.archive, "", "")
 }
 
 func subFolder(dir *file, name string) *file {
@@ -213,22 +364,11 @@ func (app *app) render() {
 
 func (app *app) drawHeaderView() {
 	view := ui.View(0, 0, app.width, 1,
-		ui.Layout([]ui.Field{ui.Fixed(11), ui.Flex(1)},
-			ui.Line(
-				ui.Styled(ui.StyleAppTitle, ui.Text(" АРХИВАТОР ")),
-				ui.Styled(ui.StyleArchiveName, ui.Text(app.archiveName())),
-			),
+		ui.Layout([]ui.Field{ui.Flex(1)},
+			ui.Styled(ui.StyleAppTitle, ui.Text(" АРХИВАТОР ")),
 		),
 	)
 	app.renderer.Render(view...)
-}
-
-func (app *app) archiveName() string {
-	if app.archives == nil {
-		return ""
-	}
-	log.Println("### Archive", app.archives[app.archiveIdx].name)
-	return app.archives[app.archiveIdx].name
 }
 
 func (app *app) drawScanStats() {
@@ -266,7 +406,7 @@ func (app *app) drawScanStats() {
 }
 
 func (app *app) drawArchive() {
-	if app.archives == nil {
+	if app.archive == nil {
 		return
 	}
 
