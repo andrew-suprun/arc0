@@ -19,11 +19,20 @@ type app struct {
 	quit          bool
 	scanStates    []*files.ScanState
 	scanResults   files.ArchiveInfos
-	archive       *file
+	fileTree      *file
 	archiveIdx    int
-	sourcesByName groupByName
-	sourcesByHash groupByHash
-	analisys      []*analisys
+	maps          []maps
+	links         []*links
+}
+
+type links struct {
+	sourceLinks  map[*files.FileInfo]*files.FileInfo
+	reverseLinks map[*files.FileInfo]*files.FileInfo
+}
+
+type maps struct {
+	byName groupByName
+	byHash groupByHash
 }
 
 type groupByName map[string]*files.FileInfo
@@ -42,8 +51,35 @@ const (
 	folder
 )
 
+type fileStatus int
+
+const (
+	identical fileStatus = iota
+	sourceOnly
+	copyOnly
+	extraCopy
+	conflict
+)
+
+func (s fileStatus) String() string {
+	switch s {
+	case identical:
+		return "identical"
+	case sourceOnly:
+		return "sourceOnly"
+	case copyOnly:
+		return "copyOnly"
+	case extraCopy:
+		return "extraCopy"
+	case conflict:
+		return "conflict"
+	}
+	return "UNDEFINED"
+}
+
 type file struct {
 	kind       fileKind
+	status     fileStatus
 	name       string
 	size       int
 	modTime    time.Time
@@ -93,14 +129,19 @@ func Run(paths []string, fs files.FS, renderer ui.Renderer) {
 }
 
 func (app *app) analizeArchives() {
-	app.sourcesByName = byName(app.scanResults[0].Files)
-	app.sourcesByHash = byHash(app.scanResults[0].Files)
-
-	app.analisys = make([]*analisys, len(app.scanResults)-1)
-	for i, copy := range app.scanResults[1:] {
-		app.analisys[i] = app.analizeCopy(copy.Files)
+	app.maps = make([]maps, len(app.scanResults))
+	for i, scan := range app.scanResults {
+		app.maps[i] = maps{
+			byName: byName(scan.Files),
+			byHash: byHash(scan.Files),
+		}
 	}
-	app.analizeSource()
+
+	app.links = make([]*links, len(app.scanResults)-1)
+	for i, copy := range app.scanResults[1:] {
+		app.links[i] = app.linkArchives(copy.Files)
+	}
+	app.buildFileTree()
 }
 
 func byName(infos files.FileInfos) groupByName {
@@ -119,53 +160,126 @@ func byHash(archive files.FileInfos) groupByHash {
 	return result
 }
 
-type analisys struct {
-	sourceMap   map[*files.FileInfo]*files.FileInfo
-	copyOnly    map[*files.FileInfo]struct{}
-	extraCopies map[*files.FileInfo]struct{}
+func (app *app) buildFileTree() {
+	app.fileTree = &file{kind: folder}
+	uniqueFileNames := map[string]struct{}{}
+	for _, info := range app.scanResults[0].Files {
+		uniqueFileNames[info.Name] = struct{}{}
+	}
+	for i, copyScan := range app.scanResults[1:] {
+		reverseLinks := app.links[i].reverseLinks
+		for _, info := range copyScan.Files {
+			if _, ok := reverseLinks[info]; !ok {
+				uniqueFileNames[info.Name] = struct{}{}
+			}
+		}
+	}
+
+	for fullName := range uniqueFileNames {
+		log.Println("--- full name", fullName)
+		path := strings.Split(fullName, "/")
+		name := path[len(path)-1]
+		path = path[:len(path)-1]
+		infos := make([]*files.FileInfo, len(app.maps))
+		for i, info := range app.maps {
+			infos[i] = info.byName[fullName]
+		}
+		for i, info := range infos {
+			current := app.fileTree
+			// log.Printf("%d: current %#v", i, current)
+			// log.Printf("%d: info %#v", i, info)
+			if info == nil {
+				// log.Println("skip 1")
+				continue
+			}
+			if i > 0 && infos[0] != nil && infos[0].Hash == info.Hash {
+				// log.Println("skip 1")
+				continue
+			}
+			if i == 0 {
+				current.size += info.Size
+			}
+			for _, dir := range path {
+				sub := subFolder(current, dir)
+				if i == 0 {
+					sub.size += info.Size
+				}
+				current = sub
+			}
+
+			status := identical
+			if i == 0 {
+				for _, links := range app.links {
+					if links.sourceLinks[info] == nil {
+						status = sourceOnly
+					}
+				}
+			} else {
+				if i > 0 && infos[0] != nil {
+					status = conflict
+				} else {
+					status = copyOnly
+				}
+			}
+
+			currentFile := &file{
+				kind:    regular,
+				status:  status,
+				name:    name,
+				size:    info.Size,
+				modTime: info.ModTime,
+				hash:    info.Hash,
+			}
+			current.subFolders = append(current.subFolders, currentFile)
+		}
+		printArchive(app.fileTree, "")
+	}
+
 }
 
-func (a *analisys) String() string {
+func subFolder(dir *file, name string) *file {
+	for i := range dir.subFolders {
+		if name == dir.subFolders[i].name {
+			return dir.subFolders[i]
+		}
+	}
+	subFolder := &file{kind: folder, name: name}
+	dir.subFolders = append(dir.subFolders, subFolder)
+	return subFolder
+}
+
+func (a *links) String() string {
 	b := &strings.Builder{}
 	fmt.Fprintln(b, "Source Map:")
-	for s, c := range a.sourceMap {
+	for s, c := range a.sourceLinks {
 		fmt.Fprintf(b, "  %s -> %s %s\n", s.Name, c.Name, s.Hash)
 	}
-	if len(a.copyOnly) > 0 {
-		fmt.Fprintln(b, "Copy Only:")
-		for c := range a.copyOnly {
-			fmt.Fprintf(b, "  %s\n", c.Name)
-		}
-	}
-	if len(a.extraCopies) > 0 {
-		fmt.Fprintln(b, "Extra Copies:")
-		for c := range a.extraCopies {
-			fmt.Fprintf(b, "  %s\n", c.Name)
-		}
+	fmt.Fprintln(b, "Reverse Map:")
+	for s, c := range a.reverseLinks {
+		fmt.Fprintf(b, "  %s -> %s %s\n", s.Name, c.Name, s.Hash)
 	}
 	return b.String()
 }
 
-func (app *app) analizeCopy(copyInfos files.FileInfos) *analisys {
-	result := &analisys{
-		sourceMap:   map[*files.FileInfo]*files.FileInfo{},
-		copyOnly:    map[*files.FileInfo]struct{}{},
-		extraCopies: map[*files.FileInfo]struct{}{},
+func (app *app) linkArchives(copyInfos files.FileInfos) *links {
+	result := &links{
+		sourceLinks:  map[*files.FileInfo]*files.FileInfo{},
+		reverseLinks: map[*files.FileInfo]*files.FileInfo{},
 	}
 	for _, copy := range copyInfos {
 		log.Println("copy", copy.Name, copy.Hash)
-		if sources, ok := app.sourcesByHash[copy.Hash]; ok {
+		if sources, ok := app.maps[0].byHash[copy.Hash]; ok {
 			for _, source := range sources {
 				log.Println("  source", source.Name, source.Hash)
 			}
-			extraCopy := match(sources, copy, result.sourceMap)
-			if extraCopy != nil {
-				result.extraCopies[extraCopy] = struct{}{}
-			}
-		} else {
-			result.copyOnly[copy] = struct{}{}
+			match(sources, copy, result.sourceLinks)
 		}
 	}
+
+	for source, copy := range result.sourceLinks {
+		result.reverseLinks[copy] = source
+	}
+
 	return result
 }
 
@@ -226,50 +340,14 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 	return copy
 }
 
-func (app *app) analizeSource() {
-	infos := app.scanResults[0].Files
-	app.archive = &file{kind: folder}
-	for _, info := range infos {
-		path := strings.Split(info.Name, "/")
-		name := path[len(path)-1]
-		path = path[:len(path)-1]
-		current := app.archive
-		current.size += info.Size
-		for _, dir := range path {
-			sub := subFolder(current, dir)
-			sub.size += info.Size
-			current = sub
-		}
-		current.subFolders = append(current.subFolders, &file{
-			kind:    regular,
-			name:    name,
-			size:    info.Size,
-			modTime: info.ModTime,
-			hash:    info.Hash,
-		})
-	}
-	printArchive(app.archive, "", "")
-}
-
-func subFolder(dir *file, name string) *file {
-	for i := range dir.subFolders {
-		if name == dir.subFolders[i].name {
-			return dir.subFolders[i]
-		}
-	}
-	subFolder := &file{kind: folder, name: name}
-	dir.subFolders = append(dir.subFolders, subFolder)
-	return subFolder
-}
-
-func printArchive(archive *file, name, prefix string) {
+func printArchive(archive *file, prefix string) {
 	kind := "D"
 	if archive.kind == regular {
 		kind = "F"
 	}
-	log.Printf("%s%s: %s [%v]", prefix, kind, name, archive.size)
+	log.Printf("%s%s: %s status=%v [%v]", prefix, kind, archive.name, archive.status, archive.size)
 	for _, file := range archive.subFolders {
-		printArchive(file, file.name, prefix+"│ ")
+		printArchive(file, prefix+"│ ")
 	}
 }
 
@@ -387,7 +465,7 @@ func (app *app) drawScanStats() {
 }
 
 func (app *app) drawArchive() {
-	if app.archive == nil {
+	if app.fileTree == nil {
 		return
 	}
 

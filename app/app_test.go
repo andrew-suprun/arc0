@@ -12,7 +12,7 @@ func TestApp(t *testing.T) {
 	original := files.FileInfos{
 		{
 			Name:    "a/b/c/x.txt",
-			Size:    100,
+			Size:    150,
 			ModTime: time.Now(),
 			Hash:    "hhhh",
 		},
@@ -33,6 +33,12 @@ func TestApp(t *testing.T) {
 			Size:    400,
 			ModTime: time.Now(),
 			Hash:    "hhhh",
+		},
+		{
+			Name:    "q/w/e/r/t/y.txt",
+			Size:    400,
+			ModTime: time.Now(),
+			Hash:    "qwerty",
 		},
 	}
 	copy := files.FileInfos{
@@ -67,8 +73,8 @@ func TestApp(t *testing.T) {
 			Hash:    "gggg",
 		},
 		{
-			Name:    " a/b/c/x.txt",
-			Size:    200,
+			Name:    "a/b/c/x.txt",
+			Size:    150,
 			ModTime: time.Now(),
 			Hash:    "hhhh",
 		},
@@ -77,6 +83,12 @@ func TestApp(t *testing.T) {
 			Size:    200,
 			ModTime: time.Now(),
 			Hash:    "hhhh",
+		},
+		{
+			Name:    "x/y/z.txt",
+			Size:    200,
+			ModTime: time.Now(),
+			Hash:    "zzzz",
 		},
 	}
 	archives := files.ArchiveInfos{
@@ -94,5 +106,5 @@ func TestApp(t *testing.T) {
 	}
 	app.analizeArchives()
 
-	log.Printf("\n%v", app.analisys[0])
+	log.Printf("\n%v", app.links[0])
 }
