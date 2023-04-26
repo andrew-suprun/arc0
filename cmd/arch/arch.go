@@ -4,6 +4,7 @@ import (
 	"arch/app"
 	"arch/files"
 	"arch/files/file_fs"
+	"arch/files/mock2_fs"
 	"arch/files/mock_fs"
 	"arch/ui/tcell"
 	"log"
@@ -18,7 +19,10 @@ func main() {
 
 	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
 		fs = mock_fs.NewFs()
-		paths = os.Args[2:]
+		paths = []string{"origin", "copy 1", "copy 2"}
+	} else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
+		fs = mock2_fs.NewFs()
+		paths = []string{"origin", "copy 1", "copy 2"}
 	} else {
 		fs = file_fs.NewFs()
 		paths = os.Args[1:]

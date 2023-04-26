@@ -56,10 +56,17 @@ type fileStatus int
 const (
 	identical fileStatus = iota
 	sourceOnly
-	copyOnly
 	extraCopy
+	copyOnly
 	conflict
 )
+
+func (s fileStatus) merge(other fileStatus) fileStatus {
+	if s > other {
+		return s
+	}
+	return other
+}
 
 func (s fileStatus) String() string {
 	switch s {
@@ -78,6 +85,7 @@ func (s fileStatus) String() string {
 }
 
 type file struct {
+	parent     *file
 	kind       fileKind
 	status     fileStatus
 	name       string
@@ -176,7 +184,7 @@ func (app *app) buildFileTree() {
 	}
 
 	for fullName := range uniqueFileNames {
-		log.Println("--- full name", fullName)
+		// log.Println("--- full name", fullName)
 		path := strings.Split(fullName, "/")
 		name := path[len(path)-1]
 		path = path[:len(path)-1]
@@ -223,6 +231,7 @@ func (app *app) buildFileTree() {
 			}
 
 			currentFile := &file{
+				parent:  current,
 				kind:    regular,
 				status:  status,
 				name:    name,
@@ -230,11 +239,16 @@ func (app *app) buildFileTree() {
 				modTime: info.ModTime,
 				hash:    info.Hash,
 			}
+			// log.Println("status", status)
 			current.subFolders = append(current.subFolders, currentFile)
+			for current != nil {
+				current.status = status.merge(current.status)
+				// log.Println("  parent", current.name, current.status)
+				current = current.parent
+			}
 		}
-		printArchive(app.fileTree, "")
 	}
-
+	printArchive(app.fileTree, "")
 }
 
 func subFolder(dir *file, name string) *file {
@@ -243,7 +257,7 @@ func subFolder(dir *file, name string) *file {
 			return dir.subFolders[i]
 		}
 	}
-	subFolder := &file{kind: folder, name: name}
+	subFolder := &file{parent: dir, kind: folder, name: name}
 	dir.subFolders = append(dir.subFolders, subFolder)
 	return subFolder
 }
@@ -267,7 +281,6 @@ func (app *app) linkArchives(copyInfos files.FileInfos) *links {
 		reverseLinks: map[*files.FileInfo]*files.FileInfo{},
 	}
 	for _, copy := range copyInfos {
-		log.Println("copy", copy.Name, copy.Hash)
 		if sources, ok := app.maps[0].byHash[copy.Hash]; ok {
 			for _, source := range sources {
 				log.Println("  source", source.Name, source.Hash)
@@ -345,7 +358,7 @@ func printArchive(archive *file, prefix string) {
 	if archive.kind == regular {
 		kind = "F"
 	}
-	log.Printf("%s%s: %s status=%v [%v]", prefix, kind, archive.name, archive.status, archive.size)
+	log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.name, archive.status, archive.size, archive.hash)
 	for _, file := range archive.subFolders {
 		printArchive(file, prefix+"│ ")
 	}
@@ -543,7 +556,6 @@ func (app *app) drawStatusLine() {
 			),
 		),
 	)
-	log.Printf("status line: %#v", view)
 	app.renderer.Render(view...)
 }
 

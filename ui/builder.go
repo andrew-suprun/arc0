@@ -106,7 +106,6 @@ func (v *view) drawLayout(l layout) {
 			continue
 		}
 		if diff == 0 {
-			log.Printf("layout: %#v", v.layout)
 			return
 		}
 		v.layout[i].Width += 1
