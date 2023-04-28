@@ -12,7 +12,7 @@ type view struct {
 	layoutIdx     int
 	style         Style
 	mouseTarget   any
-	layout        []Field
+	layout        Fields
 	segments      []Segment
 }
 
@@ -57,7 +57,7 @@ func (v *view) draw(content Widget) {
 }
 
 type layout struct {
-	layout   []Field
+	layout   Fields
 	contents []Widget
 }
 
@@ -68,6 +68,8 @@ type Field struct {
 	Flex  int
 	Text  string
 }
+
+type Fields []Field
 
 func (v *view) drawLayout(l layout) {
 	currentLayout := v.layout
@@ -224,7 +226,7 @@ func Pad(text string) Field {
 	return Field{Text: text}
 }
 
-func Layout(fields []Field, contents ...Widget) layout {
+func Layout(fields Fields, contents ...Widget) layout {
 	return layout{fields, contents}
 }
 

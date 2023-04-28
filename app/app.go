@@ -15,14 +15,25 @@ type app struct {
 	fs            files.FS
 	renderer      ui.Renderer
 	width, height int
-	locations     []location
 	quit          bool
 	scanStates    []*files.ScanState
 	scanResults   files.ArchiveInfos
-	fileTree      *file
-	archiveIdx    int
-	maps          []maps
-	links         []*links
+	maps          []maps   // source, copy1, copy2, ...
+	links         []*links // copy1, copy2, ...
+
+	// rendering state
+	root     *file
+	location location
+}
+
+type file struct {
+	parent     *file
+	info       *files.FileInfo
+	kind       kind
+	status     status
+	name       string
+	size       int
+	subFolders []*file
 }
 
 type links struct {
@@ -39,36 +50,36 @@ type groupByName map[string]*files.FileInfo
 type groupByHash map[string]files.FileInfos
 
 type location struct {
-	path       []string
-	file       string
+	folder     *file
+	file       *file
 	lineOffset int
 }
 
-type fileKind int
+type kind int
 
 const (
-	regular fileKind = iota
+	regular kind = iota
 	folder
 )
 
-type fileStatus int
+type status int
 
 const (
-	identical fileStatus = iota
+	identical status = iota
 	sourceOnly
 	extraCopy
 	copyOnly
-	conflict
+	discrepancy // расхождение
 )
 
-func (s fileStatus) merge(other fileStatus) fileStatus {
+func (s status) merge(other status) status {
 	if s > other {
 		return s
 	}
 	return other
 }
 
-func (s fileStatus) String() string {
+func (s status) String() string {
 	switch s {
 	case identical:
 		return "identical"
@@ -78,21 +89,10 @@ func (s fileStatus) String() string {
 		return "copyOnly"
 	case extraCopy:
 		return "extraCopy"
-	case conflict:
-		return "conflict"
+	case discrepancy:
+		return "discrepancy"
 	}
 	return "UNDEFINED"
-}
-
-type file struct {
-	parent     *file
-	kind       fileKind
-	status     fileStatus
-	name       string
-	size       int
-	modTime    time.Time
-	hash       string
-	subFolders []*file
 }
 
 func Run(paths []string, fs files.FS, renderer ui.Renderer) {
@@ -100,7 +100,6 @@ func Run(paths []string, fs files.FS, renderer ui.Renderer) {
 		paths:       paths,
 		fs:          fs,
 		renderer:    renderer,
-		locations:   make([]location, len(paths)),
 		scanStates:  make([]*files.ScanState, len(paths)),
 		scanResults: make(files.ArchiveInfos, len(paths)),
 	}
@@ -150,6 +149,7 @@ func (app *app) analizeArchives() {
 		app.links[i] = app.linkArchives(copy.Files)
 	}
 	app.buildFileTree()
+	app.location.file = app.root
 }
 
 func byName(infos files.FileInfos) groupByName {
@@ -169,7 +169,7 @@ func byHash(archive files.FileInfos) groupByHash {
 }
 
 func (app *app) buildFileTree() {
-	app.fileTree = &file{kind: folder}
+	app.root = &file{kind: folder}
 	uniqueFileNames := map[string]struct{}{}
 	for _, info := range app.scanResults[0].Files {
 		uniqueFileNames[info.Name] = struct{}{}
@@ -193,7 +193,7 @@ func (app *app) buildFileTree() {
 			infos[i] = info.byName[fullName]
 		}
 		for i, info := range infos {
-			current := app.fileTree
+			current := app.root
 			// log.Printf("%d: current %#v", i, current)
 			// log.Printf("%d: info %#v", i, info)
 			if info == nil {
@@ -224,20 +224,19 @@ func (app *app) buildFileTree() {
 				}
 			} else {
 				if i > 0 && infos[0] != nil {
-					status = conflict
+					status = discrepancy
 				} else {
 					status = copyOnly
 				}
 			}
 
 			currentFile := &file{
-				parent:  current,
-				kind:    regular,
-				status:  status,
-				name:    name,
-				size:    info.Size,
-				modTime: info.ModTime,
-				hash:    info.Hash,
+				parent: current,
+				info:   info,
+				kind:   regular,
+				status: status,
+				name:   name,
+				size:   info.Size,
 			}
 			// log.Println("status", status)
 			current.subFolders = append(current.subFolders, currentFile)
@@ -248,7 +247,7 @@ func (app *app) buildFileTree() {
 			}
 		}
 	}
-	printArchive(app.fileTree, "")
+	printArchive(app.root, "")
 }
 
 func subFolder(dir *file, name string) *file {
@@ -282,9 +281,6 @@ func (app *app) linkArchives(copyInfos files.FileInfos) *links {
 	}
 	for _, copy := range copyInfos {
 		if sources, ok := app.maps[0].byHash[copy.Hash]; ok {
-			for _, source := range sources {
-				log.Println("  source", source.Name, source.Hash)
-			}
 			match(sources, copy, result.sourceLinks)
 		}
 	}
@@ -309,7 +305,6 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 		tmpCopy := sourceMap[source]
 		sourceBase := filepath.Base(source.Name)
 		if filepath.Base(copy.Name) == sourceBase && (tmpCopy == nil || filepath.Base(tmpCopy.Name) != sourceBase) {
-			log.Printf("    same base: %s -> %s", source.Name, copy.Name)
 			sourceMap[source] = copy
 			copy = tmpCopy
 			break
@@ -317,7 +312,6 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 	}
 
 	if copy == nil {
-		log.Printf("    return 1")
 		return nil
 	}
 
@@ -329,7 +323,6 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 			(tmpCopy == nil ||
 				(filepath.Base(tmpCopy.Name) != sourceBase && filepath.Dir(tmpCopy.Name) != sourceDir)) {
 
-			log.Printf("    same dir: %s -> %s", source.Name, copy.Name)
 			sourceMap[source] = copy
 			copy = tmpCopy
 			break
@@ -337,19 +330,16 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 	}
 
 	if copy == nil {
-		log.Printf("    return 2")
 		return nil
 	}
 
 	for _, source := range sources {
 		if sourceMap[source] == nil {
 			sourceMap[source] = copy
-			log.Printf("    different names: %s -> %s", source.Name, copy.Name)
 			return nil
 		}
 	}
 
-	log.Printf("    extra: %s", copy.Name)
 	return copy
 }
 
@@ -358,7 +348,11 @@ func printArchive(archive *file, prefix string) {
 	if archive.kind == regular {
 		kind = "F"
 	}
-	log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.name, archive.status, archive.size, archive.hash)
+	if archive.kind == regular {
+		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.name, archive.status, archive.size, archive.info.Hash)
+	} else {
+		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.name, archive.status, archive.size)
+	}
 	for _, file := range archive.subFolders {
 		printArchive(file, prefix+"│ ")
 	}
@@ -375,7 +369,6 @@ func (app *app) handleFsEvent(event any) {
 		}
 
 	case *files.ArchiveInfo:
-		log.Println("ArchiveInfo", event.Archive)
 		for i := range app.paths {
 			if app.paths[i] == event.Archive {
 				app.scanStates[i] = nil
@@ -411,13 +404,6 @@ func (app *app) handleUiEvent(event any) {
 		if ev.Name == "Ctrl+C" {
 			app.quit = true
 		}
-		r := ev.Rune
-		if r >= '1' && r <= '9' {
-			idx := int(r - '1')
-			if idx < len(app.paths) {
-				app.archiveIdx = idx
-			}
-		}
 
 	case ui.MouseEvent:
 		log.Printf("EventMouse: [%d:%d]", ev.Col, ev.Line)
@@ -436,7 +422,7 @@ func (app *app) render() {
 
 func (app *app) drawHeaderView() {
 	view := ui.View(0, 0, app.width, 1,
-		ui.Layout([]ui.Field{ui.Flex(1)},
+		ui.Layout(ui.Fields{ui.Flex(1)},
 			ui.Styled(ui.StyleAppTitle, ui.Text(" АРХИВАТОР ")),
 		),
 	)
@@ -472,19 +458,24 @@ func (app *app) drawScanStats() {
 	view := ui.View(0, 1, app.width, app.height-2,
 		ui.Styled(
 			ui.StyleDefault,
-			ui.Layout([]ui.Field{ui.Pad(" "), ui.Fixed(26), ui.Pad(" "), ui.Flex(1), ui.Pad(" ")}, contents...)),
+			ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(26), ui.Pad(" "), ui.Flex(1), ui.Pad(" ")}, contents...)),
 	)
 	app.renderer.Render(view...)
 }
 
 func (app *app) drawArchive() {
-	if app.fileTree == nil {
+	if app.root == nil {
 		return
 	}
 
+	// idx := app.location.lineOffset
+
 	contents := []ui.Widget{
-		ui.Styled(ui.StyleArchiveHeader,
-			ui.Line(ui.Text("Статус"), ui.Text("Документ"), ui.Text("Время Изменения"), ui.Text("Размер")),
+
+		ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(6), ui.Pad(" "), ui.Flex(1), ui.Pad(" "), ui.Fixed(19), ui.Pad(" "), ui.Fixed(20), ui.Pad(" ")},
+			ui.Styled(ui.StyleArchiveHeader,
+				ui.Line(ui.Text("Статус"), ui.Text("Документ"), ui.Text("Время Изменения"), ui.RText("Размер")),
+			),
 		),
 	}
 
@@ -540,7 +531,7 @@ func (app *app) drawArchive() {
 
 	view := ui.View(0, 1, app.width, app.height-2,
 		ui.Styled(ui.StyleDefault,
-			ui.Layout([]ui.Field{ui.Pad(" "), ui.Fixed(7), ui.Pad(" "), ui.Flex(1), ui.Pad(" "), ui.Fixed(19), ui.Pad(" "), ui.Fixed(16), ui.Pad(" ")},
+			ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(7), ui.Pad(" "), ui.Flex(1), ui.Pad(" "), ui.Fixed(19), ui.Pad(" "), ui.Fixed(16), ui.Pad(" ")},
 				contents...,
 			),
 		),
@@ -551,7 +542,7 @@ func (app *app) drawArchive() {
 func (app *app) drawStatusLine() {
 	view := ui.View(0, app.height-1, app.width, 1,
 		ui.Styled(ui.StyleArchiveName,
-			ui.Layout([]ui.Field{ui.Pad(" "), ui.Flex(1), ui.Pad(" ")},
+			ui.Layout(ui.Fields{ui.Pad(" "), ui.Flex(1), ui.Pad(" ")},
 				ui.Line(ui.Text("Status line will be here...")),
 			),
 		),
