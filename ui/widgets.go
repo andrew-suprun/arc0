@@ -5,82 +5,80 @@ import (
 )
 
 type Widget interface {
-	Size() Size
-	Render(position Position, size Size, attributes *Attributes) Segments
-}
-
-type SizeKind int
-
-const (
-	Width SizeKind = iota
-	Height
-	Flex
-)
-
-type Size struct {
-	Kind  SizeKind
-	Value int
+	Constraints() Constraints
+	Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes)
 }
 
 // *** Text ***
 type text struct {
-	runes []rune
-	size  Size
-}
-
-func FlexText(txt string, flex int) text {
-	return text{[]rune(txt), Size{Flex, flex}}
+	runes       []rune
+	constraints Constraints
 }
 
 func Text(txt string) text {
 	runes := []rune(txt)
-	return text{runes, Size{Width, len(runes)}}
+	return text{runes, MakeConstraints(W(len(runes)), 0, H(1), 0)}
 }
 
-func (t text) Size() Size {
-	return t.size
+func FixedText(txt string, width W, flex Flex) text {
+	runes := []rune(txt)
+	return text{runes, MakeConstraints(W(width), 0, H(1), 0)}
 }
 
-func (t text) Render(position Position, size Size, attributes *Attributes) Segments {
-	if size.Value < 1 {
-		return nil
+func FlexText(txt string, flex Flex) text {
+	runes := []rune(txt)
+	return text{runes, MakeConstraints(W(len(runes)), flex, H(1), 0)}
+}
+
+func (t text) Constraints() Constraints {
+	return t.constraints
+}
+
+func (t text) Render(renderer Renderer, x X, y Y, width W, _ H, attributes *Attributes) {
+	if width < 1 {
+		return
 	}
-	if len(t.runes) > size.Value {
-		t.runes = append(t.runes[:size.Value-1], '…')
+	if len(t.runes) > int(width) {
+		t.runes = append(t.runes[:width-1], '…')
 	}
-	diff := size.Value - len(t.runes)
+	diff := int(width) - len(t.runes)
 	for diff > 0 {
 		t.runes = append(t.runes, ' ')
 		diff--
 	}
-	return Segments{{
-		Position:   position,
-		Runes:      t.runes,
-		Attributes: attributes,
-	}}
+
+	renderer.Write(t.runes, x, y, attributes)
 }
 
-type progressBar float64
-
-func ProgressBar(value float64) progressBar {
-	return progressBar(value)
+type progressBar struct {
+	value float64
+	width W
+	flex  Flex
 }
 
-func (pb progressBar) Size() Size {
-	return Size{Width, math.MaxInt}
+func ProgressBar(value float64, width W, flex Flex) progressBar {
+	return progressBar{
+		value: value,
+		width: width,
+		flex:  flex,
+	}
+}
+
+func (pb progressBar) Constraints() Constraints {
+	return MakeConstraints(pb.width, pb.flex, 1, 0)
 }
 
 func (pb progressBar) Flex() int {
 	return 2
 }
 
-func (pb progressBar) Render(position Position, size Size, attributes *Attributes) Segments {
-	if size.Value < 1 {
-		return nil
+func (pb progressBar) Render(renderer Renderer, x X, y Y, width W, _ H, attributes *Attributes) {
+	if width < 1 {
+		return
 	}
 
-	runes := make([]rune, size.Value)
-	progress := int(math.Round(float64(size.Value*8) * float64(pb)))
+	runes := make([]rune, width)
+	progress := int(math.Round(float64(width*8) * float64(pb.value)))
 	idx := 0
 	for ; idx < progress/8; idx++ {
 		runes[idx] = '█'
@@ -89,15 +87,11 @@ func (pb progressBar) Render(position Position, size Size, attributes *Attribute
 		runes[idx] = []rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8]
 		idx++
 	}
-	for ; idx < size.Value; idx++ {
+	for ; idx < int(width); idx++ {
 		runes[idx] = ' '
 	}
 
-	return Segments{{
-		Position:   position,
-		Runes:      runes,
-		Attributes: attributes,
-	}}
+	renderer.Write(runes, x, y, attributes)
 }
 
 // *** Styled ***
@@ -110,12 +104,12 @@ func Styled(style Style, widget Widget) Widget {
 	return styled{style: style, widget: widget}
 }
 
-func (s styled) Size() Size {
-	return s.widget.Size()
+func (s styled) Constraints() Constraints {
+	return s.widget.Constraints()
 }
 
-func (s styled) Render(position Position, size Size, attributes *Attributes) Segments {
-	return s.widget.Render(position, size, attributes.Style(s.style))
+func (s styled) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
+	s.widget.Render(renderer, x, y, width, height, attributes.Style(s.style))
 }
 
 // *** row ***
@@ -127,368 +121,97 @@ func Row(ws ...Widget) Widget {
 	return row{ws}
 }
 
-func (r row) Size() Size {
-	width, flex := 0, 0
-	for _, w := range r.widgets {
-		s := w.Size()
-		if s.Kind == Flex && flex < s.Value {
-			flex = s.Value
-		} else if s.Kind == Width {
-			width += w.Size().Value
-		}
+func (r row) Constraints() Constraints {
+	width, flex := W(0), Flex(0)
+	for _, widget := range r.widgets {
+		c := widget.Constraints()
+		width += c.Width.Size
+		flex += c.Width.Flex
 	}
-	if flex > 0 {
-		return Size{Flex, flex}
-	}
-	return Size{Width, width}
+	return MakeConstraints(width, flex, 1, 0)
 }
 
-func (r row) Render(position Position, size Size, attributes *Attributes) Segments {
-	result := Segments{}
-	widths := calcSizes(size.Value, r.widgets)
-	for i, w := range r.widgets {
-		result = append(result, w.Render(position, Size{Width, widths[i]}, attributes)...)
-		position.X += widths[i]
+func (r row) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
+	sizes := make([]Constraint[W], len(r.widgets))
+	for i, widget := range r.widgets {
+		sizes[i] = widget.Constraints().Width
 	}
-
-	return result
+	widths := calcSizes(width, sizes)
+	for i, widget := range r.widgets {
+		widget.Render(renderer, x, y, width, height, attributes)
+		x = x.Inc(widths[i])
+	}
 }
 
-func calcSizes(size int, widgets []Widget) []int {
-	result := make([]int, len(widgets))
-	sizes := make([]Size, len(widgets))
-	for i, w := range widgets {
-		sizes[i] = w.Size()
-	}
-
-	totalSize, fixedFields, totalFlex := 0, 0, 0
-	for i, widgetSize := range sizes {
-		if widgetSize.Kind != Flex {
-			totalSize += widgetSize.Value
-			fixedFields++
-			result[i] = widgetSize.Value
-		} else {
-			totalFlex += widgetSize.Value
-		}
+func calcSizes[S ~int](size S, constraints []Constraint[S]) []S {
+	result := make([]S, len(constraints))
+	totalSize, totalFlex := S(0), Flex(0)
+	for i, constraint := range constraints {
+		result[i] = constraint.Size
+		totalSize += constraint.Size
+		totalFlex += constraint.Flex
 	}
 	if totalSize >= size {
 		rate := float64(size) / float64(totalSize)
-		for i, widgetSize := range sizes {
-			if widgetSize.Kind != Flex {
-				newSize := int(float64(result[i]) * rate)
-				totalSize += newSize - result[i]
-				result[i] = newSize
-			} else {
-				result[i] = 0
-			}
+		for i, constraint := range constraints {
+			result[i] = S(float64(constraint.Size) * rate)
 		}
-		for i, widgetSize := range sizes {
-			if totalSize == size {
-				break
-			}
-			if widgetSize.Kind != Flex {
-				result[i]++
-				totalSize++
-			}
-		}
-	} else {
-		rate := float64(size-totalSize) / float64(totalFlex)
-		for i, widgetSize := range sizes {
-			if widgetSize.Kind == Flex {
-				newWidth := int(rate * float64(widgetSize.Value))
-				totalSize += newWidth - result[i]
-				result[i] = newWidth
-			}
-		}
-		for i, widgetSize := range sizes {
-			if totalSize == size {
-				break
-			}
-			if widgetSize.Kind == Flex {
-				result[i]++
-				totalSize++
-			}
-		}
+		expand(result, size)
+		return result
 	}
 
-	newWidth := 0
-	for i := range result {
-		newWidth += result[i]
+	if totalFlex == 0 {
+		return result
 	}
 
+	rate := float64(size-totalSize) / float64(totalFlex)
+	for i, widgetSize := range result {
+		result[i] += S(rate * float64(widgetSize))
+	}
+	expand(result, size)
 	return result
+}
+
+func expand[S ~int](sizes []S, size S) {
+	totalSize := S(0)
+	for _, size := range sizes {
+		totalSize += size
+	}
+	for i := range sizes {
+		if totalSize == size {
+			break
+		}
+		sizes[i]++
+		totalSize++
+	}
 }
 
 // *** column ***
 type column struct {
-	widgets []Widget
+	constraint Constraint[H]
+	widgets    []Widget
 }
 
-func Column(widgets ...Widget) Widget {
-	return column{widgets}
-}
-
-func (c column) Size() Size {
-	height, flex := 0, 0
-	for _, w := range c.widgets {
-		s := w.Size()
-		if s.Kind == Flex && flex < s.Value {
-			flex = s.Value
-		} else if s.Kind == Height {
-			height += w.Size().Value
-		}
+func Column(flex Flex, widgets ...Widget) Widget {
+	height := H(0)
+	for _, widget := range widgets {
+		height += widget.Constraints().Height.Size
 	}
-	if flex > 0 {
-		return Size{Flex, flex}
-	}
-	return Size{Height, height}
+	return column{Constraint[H]{height, flex}, widgets}
 }
 
-func (c column) Render(position Position, size Size, attributes *Attributes) Segments {
-	result := Segments{}
-	heights := calcSizes(size.Value, c.widgets)
-	for i, w := range c.widgets {
-		result = append(result, w.Render(position, Size{Width, heights[i]}, attributes)...)
-		position.Y += heights[i]
-	}
-
-	return result
+func (c column) Constraints() Constraints {
+	return Constraints{Width: Constraint[W]{0, 1}, Height: c.constraint}
 }
 
-// ################
-
-// type view struct {
-// 	width, height int
-// 	col, line     int
-// 	x, y          int
-// 	layoutIdx     int
-// 	style         Style
-// 	mouseTarget   any
-// 	layout        Fields
-// 	segments      Segments
-// }
-
-// func View(leftCol, topLine, width, height int, contents ...Widget) Segments {
-// 	view := &view{
-// 		col:    leftCol,
-// 		line:   topLine,
-// 		width:  width,
-// 		height: height,
-// 	}
-// 	for _, content := range contents {
-// 		view.draw(content)
-// 	}
-// 	return view.segments
-// }
-
-// func (v *view) draw(content Widget) {
-// 	switch content := content.(type) {
-// 	case layout:
-// 		v.drawLayout(content)
-
-// 	case drawable:
-// 		v.drawDrawable(content)
-
-// 	case line:
-// 		v.drawLine(content)
-
-// 	case style:
-// 		v.drawStyle(content)
-
-// 	case mouseTarget:
-// 		v.drawMouseTarget(content)
-
-// 	default:
-// 		log.Printf("UNHANDLED: [%T] %#v\n", content, content)
-// 		panic("UNHANDLED")
-// 	}
-// }
-
-// type layout struct {
-// 	layout   Fields
-// 	contents []Widget
-// }
-
-// type Field struct {
-// 	Width int
-// 	Flex  int
-// 	Text  string
-// }
-
-// type Fields []Field
-
-// func (v *view) drawLayout(l layout) {
-// 	currentLayout := v.layout
-// 	defer func() {
-// 		for _, child := range l.contents {
-// 			v.draw(child)
-// 		}
-// 		v.layout = currentLayout
-// 	}()
-
-// 	v.layout = l.layout
-// 	totalWidth, totalFlex := 0, 0
-// 	for i, field := range v.layout {
-// 		if field.Text != "" {
-// 			runes := []rune(field.Text)
-// 			v.layout[i].Width = len(runes)
-// 			field.Flex = 0
-// 		}
-// 		totalWidth += v.layout[i].Width
-// 		totalFlex += field.Flex
-// 	}
-// 	diff := v.width - totalWidth
-// 	if diff <= 0 {
-// 		return
-// 	}
-
-// 	totalInc := 0
-// 	for i, field := range v.layout {
-// 		inc := diff * field.Flex / totalFlex
-// 		v.layout[i].Width += inc
-// 		totalInc += inc
-// 	}
-// 	diff -= totalInc
-// 	for i := range l.layout {
-// 		if l.layout[i].Flex == 0 {
-// 			continue
-// 		}
-// 		if diff == 0 {
-// 			return
-// 		}
-// 		v.layout[i].Width += 1
-// 		diff--
-// 	}
-// }
-
-// type drawable interface {
-// 	Widget
-// 	runes(width int) []rune
-// }
-
-// func (v *view) drawDrawable(content drawable) {
-// 	if len(v.layout) <= v.layoutIdx {
-// 		return
-// 	}
-
-// 	runes := content.runes(v.layout[v.layoutIdx].Width)
-// 	v.segments = append(v.segments, Segment{
-// 		X:           v.x + v.col,
-// 		Y:           v.y + v.line,
-// 		Runes:       runes,
-// 		Style:       v.style,
-// 		MouseTarget: v.mouseTarget,
-// 	})
-// 	v.x += len(runes)
-// }
-
-// type line []Widget
-
-// func Line(contents ...Widget) line {
-// 	return contents
-// }
-
-// func (v *view) drawLine(content line) {
-// 	if v.y >= v.height {
-// 		return
-// 	}
-
-// 	i := 0
-// 	field := Field{}
-// 	for v.layoutIdx, field = range v.layout {
-// 		if field.Text != "" {
-// 			v.draw(Text(field.Text))
-// 		} else {
-// 			v.draw(content[i])
-// 			i++
-// 		}
-// 	}
-
-// 	v.x = 0
-// 	v.y++
-// }
-
-// type style struct {
-// 	style    Style
-// 	contents []Widget
-// }
-
-// func Styled(styl Style, contents ...Widget) style {
-// 	return style{
-// 		style:    styl,
-// 		contents: contents,
-// 	}
-// }
-
-// func (v *view) drawStyle(content style) {
-// 	currentStyle := v.style
-// 	v.style = content.style
-// 	for _, child := range content.contents {
-// 		v.draw(child)
-// 	}
-// 	v.style = currentStyle
-// }
-
-// type mouseTarget struct {
-// 	command  any
-// 	contents []Widget
-// }
-
-// func MouseTarget(command any, contents ...Widget) mouseTarget {
-// 	return mouseTarget{
-// 		command:  command,
-// 		contents: contents,
-// 	}
-// }
-
-// func (v *view) drawMouseTarget(content mouseTarget) {
-// 	currentCommand := v.mouseTarget
-// 	v.mouseTarget = content.command
-// 	for _, child := range content.contents {
-// 		v.draw(child)
-// 	}
-// 	v.mouseTarget = currentCommand
-// }
-
-// func Fixed(width int) Field {
-// 	return Field{Width: width}
-// }
-
-// func Flex(flex int) Field {
-// 	return Field{Flex: flex, Width: 4}
-// }
-
-// func Spacer(flex int) Field {
-// 	return Field{Flex: flex, Width: 0}
-// }
-
-// func Pad(text string) Field {
-// 	return Field{Text: text}
-// }
-
-// func Layout(fields Fields, contents ...Widget) layout {
-// 	return layout{fields, contents}
-// }
-
-// type progressBar float64
-
-// func ProgressBar(value float64) progressBar {
-// 	return progressBar(value)
-// }
-
-// func (pb progressBar) runes(width int) []rune {
-// 	result := make([]rune, width)
-// 	progress := int(math.Round(float64(width*8) * float64(pb)))
-// 	idx := 0
-// 	for ; idx < progress/8; idx++ {
-// 		result[idx] = '█'
-// 	}
-// 	if progress%8 > 0 {
-// 		result[idx] = []rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8]
-// 		idx++
-// 	}
-// 	for ; idx < width; idx++ {
-// 		result[idx] = ' '
-// 	}
-// 	return result
-// }
+func (c column) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
+	sizes := make([]Constraint[H], len(c.widgets))
+	for i, widget := range c.widgets {
+		sizes[i] = widget.Constraints().Height
+	}
+	heights := calcSizes(height, sizes)
+	for i, widget := range c.widgets {
+		widget.Render(renderer, x, y, width, height, attributes)
+		y = y.Inc(heights[i])
+	}
+}
