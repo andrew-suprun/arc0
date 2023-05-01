@@ -412,6 +412,15 @@ func (app *app) handleUiEvent(event any) {
 }
 
 func (app *app) render() {
+	// TODO
+	screen := ui.Column(
+		ui.Row(
+			ui.Styled(ui.StyleAppTitle, ui.FlexText(" АРХИВАТОР", 1)),
+			ui.Styled(),
+		),
+	)
+	app.renderer.Render(screen.Render(ui.Position{}, ui.Size{ui.Height, app.height}, ui.DefaultAttributes())...)
+
 	app.drawHeaderView()
 	app.drawScanStats()
 	app.drawArchive()

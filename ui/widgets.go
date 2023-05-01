@@ -6,7 +6,6 @@ import (
 
 type Widget interface {
 	Size() Size
-	Flex() int
 	Render(position Position, size Size, attributes *Attributes) Segments
 }
 
@@ -26,19 +25,20 @@ type Size struct {
 // *** Text ***
 type text struct {
 	runes []rune
-	flex  int
+	size  Size
 }
 
-func Text(txt string, flex int) text {
-	return text{[]rune(txt), flex}
+func FlexText(txt string, flex int) text {
+	return text{[]rune(txt), Size{Flex, flex}}
+}
+
+func Text(txt string) text {
+	runes := []rune(txt)
+	return text{runes, Size{Width, len(runes)}}
 }
 
 func (t text) Size() Size {
-	return Size{Width, len(t.runes)}
-}
-
-func (t text) Flex() int {
-	return t.flex
+	return t.size
 }
 
 func (t text) Render(position Position, size Size, attributes *Attributes) Segments {
@@ -114,10 +114,6 @@ func (s styled) Size() Size {
 	return s.widget.Size()
 }
 
-func (s styled) Flex() int {
-	return s.widget.Flex()
-}
-
 func (s styled) Render(position Position, size Size, attributes *Attributes) Segments {
 	return s.widget.Render(position, size, attributes.Style(s.style))
 }
@@ -132,21 +128,19 @@ func Row(ws ...Widget) Widget {
 }
 
 func (r row) Size() Size {
-	width := 0
+	width, flex := 0, 0
 	for _, w := range r.widgets {
-		width += w.Size().Value
-	}
-	return Size{Width, width}
-}
-
-func (r row) Flex() int {
-	flex := 0
-	for _, w := range r.widgets {
-		if flex < w.Flex() {
-			flex = w.Flex()
+		s := w.Size()
+		if s.Kind == Flex && flex < s.Value {
+			flex = s.Value
+		} else if s.Kind == Width {
+			width += w.Size().Value
 		}
 	}
-	return flex
+	if flex > 0 {
+		return Size{Flex, flex}
+	}
+	return Size{Width, width}
 }
 
 func (r row) Render(position Position, size Size, attributes *Attributes) Segments {
@@ -161,95 +155,96 @@ func (r row) Render(position Position, size Size, attributes *Attributes) Segmen
 }
 
 func calcSizes(size int, widgets []Widget) []int {
-	sizes := make([]int, len(widgets))
-
-	totalSize, totalFlex := 0, 0
-	fixedSize, fixedFields := 0, 0
+	result := make([]int, len(widgets))
+	sizes := make([]Size, len(widgets))
 	for i, w := range widgets {
-		widgetSize := w.Size().Value
-		if w.Flex() == 0 {
-			fixedSize += widgetSize
-			fixedFields++
-		}
-		totalFlex += w.Flex()
-		sizes[i] = widgetSize
-		totalSize += widgetSize
+		sizes[i] = w.Size()
 	}
-	if fixedSize >= size {
-		rate := float64(size) / float64(fixedSize)
-		for i, w := range widgets {
-			if w.Flex() == 0 {
-				newSize := int(float64(sizes[i]) * rate)
-				fixedSize += newSize - sizes[i]
-				sizes[i] = newSize
+
+	totalSize, fixedFields, totalFlex := 0, 0, 0
+	for i, widgetSize := range sizes {
+		if widgetSize.Kind != Flex {
+			totalSize += widgetSize.Value
+			fixedFields++
+			result[i] = widgetSize.Value
+		} else {
+			totalFlex += widgetSize.Value
+		}
+	}
+	if totalSize >= size {
+		rate := float64(size) / float64(totalSize)
+		for i, widgetSize := range sizes {
+			if widgetSize.Kind != Flex {
+				newSize := int(float64(result[i]) * rate)
+				totalSize += newSize - result[i]
+				result[i] = newSize
 			} else {
-				sizes[i] = 0
+				result[i] = 0
 			}
 		}
-		for i, w := range widgets {
-			if fixedSize == size {
-				break
-			}
-			if w.Flex() == 0 {
-				sizes[i]++
-				fixedSize++
-			}
-		}
-	} else {
-		rate := float64(size-fixedSize) / float64(totalFlex)
-		for i, w := range widgets {
-			if w.Flex() > 0 {
-				newWidth := int(rate * float64(w.Flex()))
-				totalSize += newWidth - sizes[i] // ???
-				sizes[i] = newWidth
-			}
-		}
-		for i, w := range widgets {
+		for i, widgetSize := range sizes {
 			if totalSize == size {
 				break
 			}
-			if w.Flex() > 0 {
-				sizes[i]++
+			if widgetSize.Kind != Flex {
+				result[i]++
+				totalSize++
+			}
+		}
+	} else {
+		rate := float64(size-totalSize) / float64(totalFlex)
+		for i, widgetSize := range sizes {
+			if widgetSize.Kind == Flex {
+				newWidth := int(rate * float64(widgetSize.Value))
+				totalSize += newWidth - result[i]
+				result[i] = newWidth
+			}
+		}
+		for i, widgetSize := range sizes {
+			if totalSize == size {
+				break
+			}
+			if widgetSize.Kind == Flex {
+				result[i]++
 				totalSize++
 			}
 		}
 	}
 
 	newWidth := 0
-	for i := range sizes {
-		newWidth += sizes[i]
+	for i := range result {
+		newWidth += result[i]
 	}
 
-	return sizes
+	return result
 }
 
-// *** Column ***
-type Column struct {
+// *** column ***
+type column struct {
 	widgets []Widget
 }
 
-func (c Column) Size() Size {
-	width, height := 0, 0
-	for _, w := range c.widgets {
-		if width < w.Size().Value {
-			width = w.Size().Value
-		}
-		height += w.Size().Value
-	}
-	return Size{Width, width}
+func Column(widgets ...Widget) Widget {
+	return column{widgets}
 }
 
-func (c Column) Flex() int {
-	flex := 0
+func (c column) Size() Size {
+	height, flex := 0, 0
 	for _, w := range c.widgets {
-		if flex < w.Flex() {
-			flex = w.Flex()
+		s := w.Size()
+		if s.Kind == Flex && flex < s.Value {
+			flex = s.Value
+		} else if s.Kind == Height {
+			height += w.Size().Value
 		}
 	}
-	return flex
+	if flex > 0 {
+		return Size{Flex, flex}
+	}
+	return Size{Height, height}
 }
 
-func (c Column) Render(position Position, size Size, attributes *Attributes) Segments {
+func (c column) Render(position Position, size Size, attributes *Attributes) Segments {
 	result := Segments{}
 	heights := calcSizes(size.Value, c.widgets)
 	for i, w := range c.widgets {
