@@ -6,7 +6,7 @@ import (
 
 func TestCalcWidths(t *testing.T) {
 	for w := 0; w <= 60; w++ {
-		widths := calcWidths(w, []Widget{
+		widths := calcSizes(w, []Widget{
 			Text("foofoofoofoofoo", 0),
 			Text("barbarbarbarbar", 2),
 			Text("bazbazbazbazbaz", 3),
@@ -31,7 +31,7 @@ func TestRow(t *testing.T) {
 			Text("quuzquuz", 0),
 		)
 
-		segments := row.Render(Position{}, Size{w, 1}, DefaultAttributes().MouseTarget("FOO"))
+		segments := row.Render(Position{}, Size{Width, w}, DefaultAttributes().MouseTarget("FOO"))
 		total := 0
 		for _, segment := range segments {
 			total += len(segment.Runes)

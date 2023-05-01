@@ -10,8 +10,17 @@ type Widget interface {
 	Render(position Position, size Size, attributes *Attributes) Segments
 }
 
+type SizeKind int
+
+const (
+	Width SizeKind = iota
+	Height
+	Flex
+)
+
 type Size struct {
-	Width, Height int
+	Kind  SizeKind
+	Value int
 }
 
 // *** Text ***
@@ -25,7 +34,7 @@ func Text(txt string, flex int) text {
 }
 
 func (t text) Size() Size {
-	return Size{Width: len(t.runes), Height: 1}
+	return Size{Width, len(t.runes)}
 }
 
 func (t text) Flex() int {
@@ -33,13 +42,13 @@ func (t text) Flex() int {
 }
 
 func (t text) Render(position Position, size Size, attributes *Attributes) Segments {
-	if size.Width < 1 {
+	if size.Value < 1 {
 		return nil
 	}
-	if len(t.runes) > size.Width {
-		t.runes = append(t.runes[:size.Width-1], '…')
+	if len(t.runes) > size.Value {
+		t.runes = append(t.runes[:size.Value-1], '…')
 	}
-	diff := size.Width - len(t.runes)
+	diff := size.Value - len(t.runes)
 	for diff > 0 {
 		t.runes = append(t.runes, ' ')
 		diff--
@@ -58,7 +67,7 @@ func ProgressBar(value float64) progressBar {
 }
 
 func (pb progressBar) Size() Size {
-	return Size{Width: math.MaxInt, Height: 1}
+	return Size{Width, math.MaxInt}
 }
 
 func (pb progressBar) Flex() int {
@@ -66,12 +75,12 @@ func (pb progressBar) Flex() int {
 }
 
 func (pb progressBar) Render(position Position, size Size, attributes *Attributes) Segments {
-	if size.Width < 1 {
+	if size.Value < 1 {
 		return nil
 	}
 
-	runes := make([]rune, size.Width)
-	progress := int(math.Round(float64(size.Width*8) * float64(pb)))
+	runes := make([]rune, size.Value)
+	progress := int(math.Round(float64(size.Value*8) * float64(pb)))
 	idx := 0
 	for ; idx < progress/8; idx++ {
 		runes[idx] = '█'
@@ -80,7 +89,7 @@ func (pb progressBar) Render(position Position, size Size, attributes *Attribute
 		runes[idx] = []rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8]
 		idx++
 	}
-	for ; idx < size.Width; idx++ {
+	for ; idx < size.Value; idx++ {
 		runes[idx] = ' '
 	}
 
@@ -125,9 +134,9 @@ func Row(ws ...Widget) Widget {
 func (r row) Size() Size {
 	width := 0
 	for _, w := range r.widgets {
-		width += w.Size().Width
+		width += w.Size().Value
 	}
-	return Size{Width: width, Height: 1}
+	return Size{Width, width}
 }
 
 func (r row) Flex() int {
@@ -142,75 +151,76 @@ func (r row) Flex() int {
 
 func (r row) Render(position Position, size Size, attributes *Attributes) Segments {
 	result := Segments{}
-	widths := calcWidths(size.Width, r.widgets)
+	widths := calcSizes(size.Value, r.widgets)
 	for i, w := range r.widgets {
-		result = append(result, w.Render(position, Size{Width: widths[i], Height: 1}, attributes)...)
+		result = append(result, w.Render(position, Size{Width, widths[i]}, attributes)...)
 		position.X += widths[i]
 	}
 
 	return result
 }
 
-func calcWidths(width int, widgets []Widget) []int {
-	widths := make([]int, len(widgets))
+func calcSizes(size int, widgets []Widget) []int {
+	sizes := make([]int, len(widgets))
 
-	totalWidth, totalFlex := 0, 0
-	fixedWidth, fixedFields := 0, 0
+	totalSize, totalFlex := 0, 0
+	fixedSize, fixedFields := 0, 0
 	for i, w := range widgets {
+		widgetSize := w.Size().Value
 		if w.Flex() == 0 {
-			fixedWidth += w.Size().Width
+			fixedSize += widgetSize
 			fixedFields++
 		}
 		totalFlex += w.Flex()
-		widths[i] = w.Size().Width
-		totalWidth += w.Size().Width
+		sizes[i] = widgetSize
+		totalSize += widgetSize
 	}
-	if fixedWidth >= width {
-		rate := float64(width) / float64(fixedWidth)
-		for i := range widgets {
-			if widgets[i].Flex() == 0 {
-				newWidth := int(float64(widths[i]) * rate)
-				fixedWidth += newWidth - widths[i]
-				widths[i] = newWidth
+	if fixedSize >= size {
+		rate := float64(size) / float64(fixedSize)
+		for i, w := range widgets {
+			if w.Flex() == 0 {
+				newSize := int(float64(sizes[i]) * rate)
+				fixedSize += newSize - sizes[i]
+				sizes[i] = newSize
 			} else {
-				widths[i] = 0
+				sizes[i] = 0
 			}
 		}
 		for i, w := range widgets {
-			if fixedWidth == width {
+			if fixedSize == size {
 				break
 			}
 			if w.Flex() == 0 {
-				widths[i]++
-				fixedWidth++
+				sizes[i]++
+				fixedSize++
 			}
 		}
 	} else {
-		rate := float64(width-fixedWidth) / float64(totalFlex)
+		rate := float64(size-fixedSize) / float64(totalFlex)
 		for i, w := range widgets {
 			if w.Flex() > 0 {
 				newWidth := int(rate * float64(w.Flex()))
-				totalWidth += newWidth - widths[i] // ???
-				widths[i] = newWidth
+				totalSize += newWidth - sizes[i] // ???
+				sizes[i] = newWidth
 			}
 		}
 		for i, w := range widgets {
-			if totalWidth == width {
+			if totalSize == size {
 				break
 			}
 			if w.Flex() > 0 {
-				widths[i]++
-				totalWidth++
+				sizes[i]++
+				totalSize++
 			}
 		}
 	}
 
 	newWidth := 0
-	for i := range widths {
-		newWidth += widths[i]
+	for i := range sizes {
+		newWidth += sizes[i]
 	}
 
-	return widths
+	return sizes
 }
 
 // *** Column ***
@@ -221,12 +231,12 @@ type Column struct {
 func (c Column) Size() Size {
 	width, height := 0, 0
 	for _, w := range c.widgets {
-		if width < w.Size().Width {
-			width = w.Size().Width
+		if width < w.Size().Value {
+			width = w.Size().Value
 		}
-		height += w.Size().Height
+		height += w.Size().Value
 	}
-	return Size{Width: width, Height: height}
+	return Size{Width, width}
 }
 
 func (c Column) Flex() int {
@@ -240,8 +250,14 @@ func (c Column) Flex() int {
 }
 
 func (c Column) Render(position Position, size Size, attributes *Attributes) Segments {
-	// TODO
-	return nil
+	result := Segments{}
+	heights := calcSizes(size.Value, c.widgets)
+	for i, w := range c.widgets {
+		result = append(result, w.Render(position, Size{Width, heights[i]}, attributes)...)
+		position.Y += heights[i]
+	}
+
+	return result
 }
 
 // ################
