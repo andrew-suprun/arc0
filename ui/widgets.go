@@ -138,7 +138,7 @@ func (r row) Render(renderer Renderer, x X, y Y, width W, height H, attributes *
 	}
 	widths := calcSizes(width, sizes)
 	for i, widget := range r.widgets {
-		widget.Render(renderer, x, y, width, height, attributes)
+		widget.Render(renderer, x, y, widths[i], height, attributes)
 		x = x.Inc(widths[i])
 	}
 }
@@ -151,39 +151,56 @@ func calcSizes[S ~int](size S, constraints []Constraint[S]) []S {
 		totalSize += constraint.Size
 		totalFlex += constraint.Flex
 	}
-	if totalSize >= size {
-		rate := float64(size) / float64(totalSize)
-		for i, constraint := range constraints {
-			result[i] = S(float64(constraint.Size) * rate)
+	for totalSize > size {
+		idx := 0
+		maxSize := result[0]
+		for i, size := range result {
+			if maxSize < size {
+				maxSize = size
+				idx = i
+			}
 		}
-		expand(result, size)
-		return result
+		result[idx]--
+		totalSize--
 	}
 
 	if totalFlex == 0 {
 		return result
 	}
 
-	rate := float64(size-totalSize) / float64(totalFlex)
-	for i, widgetSize := range result {
-		result[i] += S(rate * float64(widgetSize))
-	}
-	expand(result, size)
-	return result
-}
-
-func expand[S ~int](sizes []S, size S) {
-	totalSize := S(0)
-	for _, size := range sizes {
-		totalSize += size
-	}
-	for i := range sizes {
-		if totalSize == size {
-			break
+	if totalSize < size {
+		diff := size - totalSize
+		remainders := make([]float64, len(constraints))
+		for i, constraint := range constraints {
+			rate := float64(Flex(diff)*constraint.Flex) / float64(totalFlex)
+			remainders[i] = rate - math.Floor(rate)
+			result[i] += S(rate)
 		}
-		sizes[i]++
-		totalSize++
+		totalSize := S(0)
+		for _, size := range result {
+			totalSize += size
+		}
+		for i := range result {
+			if totalSize == size {
+				break
+			}
+			if constraints[i].Flex > 0 {
+				result[i]++
+				totalSize++
+			}
+		}
+		for i := range result {
+			if totalSize == size {
+				break
+			}
+			if constraints[i].Flex == 0 {
+				result[i]++
+				totalSize++
+			}
+		}
 	}
+
+	return result
 }
 
 // *** column ***
