@@ -50,30 +50,30 @@ type ResizeEvent struct {
 }
 
 type Attributes struct {
-	style        Style
-	mouseTarget  any
-	scrollTarget any
+	Style        Style
+	MouseTarget  any
+	ScrollTarget any
 }
 
 func DefaultAttributes() *Attributes {
 	return &Attributes{}
 }
 
-func (a *Attributes) Style(style Style) *Attributes {
+func (a *Attributes) WithStyle(style Style) *Attributes {
 	result := *a
-	result.style = style
+	result.Style = style
 	return &result
 }
 
-func (a *Attributes) MouseTarget(command any) *Attributes {
+func (a *Attributes) WithMouseTarget(command any) *Attributes {
 	result := *a
-	result.mouseTarget = command
+	result.MouseTarget = command
 	return &result
 }
 
-func (a *Attributes) ScrollTarget(command any) *Attributes {
+func (a *Attributes) WithScrollTarget(command any) *Attributes {
 	result := *a
-	result.scrollTarget = command
+	result.ScrollTarget = command
 	return &result
 }
 

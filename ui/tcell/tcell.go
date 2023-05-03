@@ -26,6 +26,12 @@ func NewRenderer() (ui.Renderer, error) {
 	return &renderer{screen: screen}, nil
 }
 
+func (r *renderer) Write(runes []rune, x ui.X, y ui.Y, attributes *ui.Attributes) {
+	for i, rune := range runes {
+		r.screen.SetContent(int(x)+i, int(y), rune, nil, style(attributes.Style))
+	}
+}
+
 func (r *renderer) PollEvent() any {
 	ev := r.screen.PollEvent()
 	for {
@@ -35,14 +41,6 @@ func (r *renderer) PollEvent() any {
 		ev = r.screen.PollEvent()
 	}
 	return r.uiEvent(ev)
-}
-
-func (r *renderer) Render(s ...ui.Segment) {
-	for _, segment := range s {
-		for i, rune := range segment.Runes {
-			r.screen.SetContent(segment.X+i, segment.Y, rune, nil, style(segment.Style))
-		}
-	}
 }
 
 func (r *renderer) Show() {

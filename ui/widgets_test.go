@@ -31,7 +31,7 @@ func TestRow(t *testing.T) {
 			Text("quuzquuz"),
 		)
 		r := &TestRenderer{}
-		row.Render(r, 0, 0, W(w), 1, DefaultAttributes().MouseTarget("FOO"))
+		row.Render(r, 0, 0, W(w), 1, DefaultAttributes().WithMouseTarget("FOO"))
 		if r.width != w {
 			t.Fail()
 		}

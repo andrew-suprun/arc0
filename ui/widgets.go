@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"log"
 	"math"
 )
 
@@ -109,7 +110,7 @@ func (s styled) Constraints() Constraints {
 }
 
 func (s styled) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
-	s.widget.Render(renderer, x, y, width, height, attributes.Style(s.style))
+	s.widget.Render(renderer, x, y, width, height, attributes.WithStyle(s.style))
 }
 
 // *** row ***
@@ -231,4 +232,32 @@ func (c column) Render(renderer Renderer, x X, y Y, width W, height H, attribute
 		widget.Render(renderer, x, y, width, height, attributes)
 		y = y.Inc(heights[i])
 	}
+}
+
+// *** VSpacer ***
+type VSpacer struct{}
+
+func (w VSpacer) Constraints() Constraints {
+	return Constraints{Width: Constraint[W]{0, 1}, Height: Constraint[H]{0, 1}}
+}
+
+func (w VSpacer) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
+	log.Println("VSpacer", x, y, width, height)
+	runes := make([]rune, width)
+	for i := range runes {
+		runes[i] = ' '
+	}
+	for i := 0; i < int(height); i++ {
+		renderer.Write(runes, x, y+Y(i), attributes)
+	}
+}
+
+// *** NullWidget ***
+type NullWidget struct{}
+
+func (w NullWidget) Constraints() Constraints {
+	return Constraints{Width: Constraint[W]{0, 0}, Height: Constraint[H]{0, 0}}
+}
+
+func (w NullWidget) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
 }

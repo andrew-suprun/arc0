@@ -3,37 +3,23 @@ package app
 import (
 	"arch/files"
 	"arch/ui"
+	"arch/view"
 	"fmt"
 	"log"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 type app struct {
 	paths         []string
 	fs            files.FS
-	renderer      ui.Renderer
-	width, height int
-	quit          bool
-	scanStates    []*files.ScanState
 	scanResults   files.ArchiveInfos
 	maps          []maps   // source, copy1, copy2, ...
 	links         []*links // copy1, copy2, ...
-
-	// rendering state
-	root     *file
-	location location
-}
-
-type file struct {
-	parent     *file
-	info       *files.FileInfo
-	kind       kind
-	status     status
-	name       string
-	size       int
-	subFolders []*file
+	model         view.Model
+	renderer      ui.Renderer
+	width, height int
+	quit          bool
 }
 
 type links struct {
@@ -49,59 +35,13 @@ type maps struct {
 type groupByName map[string]*files.FileInfo
 type groupByHash map[string]files.FileInfos
 
-type location struct {
-	folder     *file
-	file       *file
-	lineOffset int
-}
-
-type kind int
-
-const (
-	regular kind = iota
-	folder
-)
-
-type status int
-
-const (
-	identical status = iota
-	sourceOnly
-	extraCopy
-	copyOnly
-	discrepancy // расхождение
-)
-
-func (s status) merge(other status) status {
-	if s > other {
-		return s
-	}
-	return other
-}
-
-func (s status) String() string {
-	switch s {
-	case identical:
-		return "identical"
-	case sourceOnly:
-		return "sourceOnly"
-	case copyOnly:
-		return "copyOnly"
-	case extraCopy:
-		return "extraCopy"
-	case discrepancy:
-		return "discrepancy"
-	}
-	return "UNDEFINED"
-}
-
 func Run(paths []string, fs files.FS, renderer ui.Renderer) {
 	app := &app{
 		paths:       paths,
 		fs:          fs,
 		renderer:    renderer,
-		scanStates:  make([]*files.ScanState, len(paths)),
 		scanResults: make(files.ArchiveInfos, len(paths)),
+		model:       view.Model{ScanStates: make([]*files.ScanState, len(paths))},
 	}
 
 	tcellChan := make(chan any)
@@ -149,7 +89,7 @@ func (app *app) analizeArchives() {
 		app.links[i] = app.linkArchives(copy.Files)
 	}
 	app.buildFileTree()
-	app.location.file = app.root
+	app.model.Location.File = app.model.Root
 }
 
 func byName(infos files.FileInfos) groupByName {
@@ -169,7 +109,7 @@ func byHash(archive files.FileInfos) groupByHash {
 }
 
 func (app *app) buildFileTree() {
-	app.root = &file{kind: folder}
+	app.model.Root = &view.File{Kind: view.Folder}
 	uniqueFileNames := map[string]struct{}{}
 	for _, info := range app.scanResults[0].Files {
 		uniqueFileNames[info.Name] = struct{}{}
@@ -184,7 +124,6 @@ func (app *app) buildFileTree() {
 	}
 
 	for fullName := range uniqueFileNames {
-		// log.Println("--- full name", fullName)
 		path := strings.Split(fullName, "/")
 		name := path[len(path)-1]
 		path = path[:len(path)-1]
@@ -193,71 +132,65 @@ func (app *app) buildFileTree() {
 			infos[i] = info.byName[fullName]
 		}
 		for i, info := range infos {
-			current := app.root
-			// log.Printf("%d: current %#v", i, current)
-			// log.Printf("%d: info %#v", i, info)
+			current := app.model.Root
 			if info == nil {
-				// log.Println("skip 1")
 				continue
 			}
 			if i > 0 && infos[0] != nil && infos[0].Hash == info.Hash {
-				// log.Println("skip 1")
 				continue
 			}
 			if i == 0 {
-				current.size += info.Size
+				current.Size += info.Size
 			}
 			for _, dir := range path {
 				sub := subFolder(current, dir)
 				if i == 0 {
-					sub.size += info.Size
+					sub.Size += info.Size
 				}
 				current = sub
 			}
 
-			status := identical
+			status := view.Identical
 			if i == 0 {
 				for _, links := range app.links {
 					if links.sourceLinks[info] == nil {
-						status = sourceOnly
+						status = view.SourceOnly
 					}
 				}
 			} else {
 				if i > 0 && infos[0] != nil {
-					status = discrepancy
+					status = view.Discrepancy
 				} else {
-					status = copyOnly
+					status = view.CopyOnly
 				}
 			}
 
-			currentFile := &file{
-				parent: current,
-				info:   info,
-				kind:   regular,
-				status: status,
-				name:   name,
-				size:   info.Size,
+			currentFile := &view.File{
+				Parent: current,
+				Info:   info,
+				Kind:   view.RegularFile,
+				Status: status,
+				Name:   name,
+				Size:   info.Size,
 			}
-			// log.Println("status", status)
-			current.subFolders = append(current.subFolders, currentFile)
+			current.SubFolders = append(current.SubFolders, currentFile)
 			for current != nil {
-				current.status = status.merge(current.status)
-				// log.Println("  parent", current.name, current.status)
-				current = current.parent
+				current.Status = status.Merge(current.Status)
+				current = current.Parent
 			}
 		}
 	}
-	printArchive(app.root, "")
+	printArchive(app.model.Root, "")
 }
 
-func subFolder(dir *file, name string) *file {
-	for i := range dir.subFolders {
-		if name == dir.subFolders[i].name {
-			return dir.subFolders[i]
+func subFolder(dir *view.File, name string) *view.File {
+	for i := range dir.SubFolders {
+		if name == dir.SubFolders[i].Name {
+			return dir.SubFolders[i]
 		}
 	}
-	subFolder := &file{parent: dir, kind: folder, name: name}
-	dir.subFolders = append(dir.subFolders, subFolder)
+	subFolder := &view.File{Parent: dir, Kind: view.Folder, Name: name}
+	dir.SubFolders = append(dir.SubFolders, subFolder)
 	return subFolder
 }
 
@@ -343,17 +276,17 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 	return copy
 }
 
-func printArchive(archive *file, prefix string) {
+func printArchive(archive *view.File, prefix string) {
 	kind := "D"
-	if archive.kind == regular {
+	if archive.Kind == view.RegularFile {
 		kind = "F"
 	}
-	if archive.kind == regular {
-		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.name, archive.status, archive.size, archive.info.Hash)
+	if archive.Kind == view.RegularFile {
+		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.Name, archive.Status, archive.Size, archive.Info.Hash)
 	} else {
-		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.name, archive.status, archive.size)
+		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.Name, archive.Status, archive.Size)
 	}
-	for _, file := range archive.subFolders {
+	for _, file := range archive.SubFolders {
 		printArchive(file, prefix+"│ ")
 	}
 }
@@ -363,7 +296,7 @@ func (app *app) handleFsEvent(event any) {
 	case *files.ScanState:
 		for i := range app.paths {
 			if app.paths[i] == event.Archive {
-				app.scanStates[i] = event
+				app.model.ScanStates[i] = event
 				break
 			}
 		}
@@ -371,7 +304,7 @@ func (app *app) handleFsEvent(event any) {
 	case *files.ArchiveInfo:
 		for i := range app.paths {
 			if app.paths[i] == event.Archive {
-				app.scanStates[i] = nil
+				app.model.ScanStates[i] = nil
 				app.scanResults[i] = event
 				break
 			}
@@ -413,164 +346,122 @@ func (app *app) handleUiEvent(event any) {
 
 func (app *app) render() {
 	// TODO
-	screen := ui.Column(
-		ui.Row(
-			ui.Styled(ui.StyleAppTitle, ui.FlexText(" АРХИВАТОР", 1)),
-			ui.Styled(),
-		),
-	)
-	app.renderer.Render(screen.Render(ui.Position{}, ui.Size{ui.Height, app.height}, ui.DefaultAttributes())...)
-
-	app.drawHeaderView()
-	app.drawScanStats()
-	app.drawArchive()
-
-	app.drawStatusLine()
+	screen := app.model.View()
+	screen.Render(app.renderer, ui.X(0), ui.Y(0), ui.W(app.width), ui.H(app.height), ui.DefaultAttributes())
 	app.renderer.Show()
 }
 
-func (app *app) drawHeaderView() {
-	view := ui.View(0, 0, app.width, 1,
-		ui.Layout(ui.Fields{ui.Flex(1)},
-			ui.Styled(ui.StyleAppTitle, ui.Text(" АРХИВАТОР ")),
-		),
-	)
-	app.renderer.Render(view...)
-}
+// 	for len(contents) < app.height-2 {
+// 		contents = append(contents, ui.Line(ui.Text(""), ui.Text(""), ui.Text("")))
+// 	}
 
-func (app *app) drawScanStats() {
-	if app.scanStates == nil {
-		return
-	}
+// 	view := ui.View(0, 1, app.width, app.height-2,
+// 		ui.Styled(
+// 			ui.StyleDefault,
+// 			ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(26), ui.Pad(" "), ui.Flex(1), ui.Pad(" ")}, contents...)),
+// 	)
+// 	app.renderer.Render(view...)
+// }
 
-	contents := []ui.Widget{}
-	for i, state := range app.scanStates {
-		if app.scanStates[i] == nil {
-			continue
-		}
+// func (app *app) drawArchive() {
+// 	if app.root == nil {
+// 		return
+// 	}
 
-		contents = append(contents,
-			ui.Line(ui.Text("Архив"), ui.Text(state.Archive)),
-			ui.Line(ui.Text("Каталог"), ui.Text(filepath.Dir(state.Name))),
-			ui.Line(ui.Text("Документ"), ui.Text(filepath.Base(state.Name))),
-			ui.Line(ui.Text("Ожидаемое Время Завершения"), ui.Text(time.Now().Add(state.Remaining).Format(time.TimeOnly))),
-			ui.Line(ui.Text("Время До Завершения"), ui.Text(time.Now().Add(state.Remaining.Truncate(time.Second)).String())),
-			ui.Line(ui.Text("Общий Прогресс"), ui.Styled(ui.StyleProgressBar, ui.ProgressBar(state.Progress))),
-			ui.Line(ui.Text(""), ui.Text("")),
-		)
-	}
+// 	// idx := app.location.lineOffset
 
-	for len(contents) < app.height-2 {
-		contents = append(contents, ui.Line(ui.Text(""), ui.Text(""), ui.Text("")))
-	}
+// 	contents := []ui.Widget{
 
-	view := ui.View(0, 1, app.width, app.height-2,
-		ui.Styled(
-			ui.StyleDefault,
-			ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(26), ui.Pad(" "), ui.Flex(1), ui.Pad(" ")}, contents...)),
-	)
-	app.renderer.Render(view...)
-}
+// 		ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(6), ui.Pad(" "), ui.Flex(1), ui.Pad(" "), ui.Fixed(19), ui.Pad(" "), ui.Fixed(20), ui.Pad(" ")},
+// 			ui.Styled(ui.StyleArchiveHeader,
+// 				ui.Line(ui.Text("Статус"), ui.Text("Документ"), ui.Text("Время Изменения"), ui.RText("Размер")),
+// 			),
+// 		),
+// 	}
 
-func (app *app) drawArchive() {
-	if app.root == nil {
-		return
-	}
+// 	// archive := app.archives[app.archiveIdx]
+// 	// location := app.locations[app.archiveIdx]
+// 	// for _, dir := range location.path {
+// 	// 	archive = archive.subFolders[dir]
+// 	// }
 
-	// idx := app.location.lineOffset
+// 	// // subfolders
+// 	// b.SetStyle(ui.StyleFolder)
+// 	// subFolders := make([]folder, 0, len(archive.subFolders))
+// 	// for name, folder := range archive.subFolders {
+// 	// 	folder.name = name
+// 	// 	subFolders = append(subFolders, folder)
+// 	// }
+// 	// sort.Slice(subFolders, func(i, j int) bool {
+// 	// 	return subFolders[i].name < subFolders[j].name
+// 	// })
+// 	// for _, subFolder := range subFolders {
+// 	// 	b.AddText("")
+// 	// 	b.AddText(" " + subFolder.name)
+// 	// 	b.AddText(" Каталог")
+// 	// 	b.AddText(formatSize(subFolder.size))
+// 	// 	b.LayoutLine()
 
-	contents := []ui.Widget{
+// 	// 	if app.lineOffset >= app.height-1 {
+// 	// 		break
+// 	// 	}
+// 	// }
 
-		ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(6), ui.Pad(" "), ui.Flex(1), ui.Pad(" "), ui.Fixed(19), ui.Pad(" "), ui.Fixed(20), ui.Pad(" ")},
-			ui.Styled(ui.StyleArchiveHeader,
-				ui.Line(ui.Text("Статус"), ui.Text("Документ"), ui.Text("Время Изменения"), ui.RText("Размер")),
-			),
-		),
-	}
+// 	// // files
+// 	// b.SetStyle(ui.StyleFile)
+// 	// files := make([]file, 0, len(archive.files))
+// 	// for name, file := range archive.files {
+// 	// 	file.name = name
+// 	// 	files = append(files, file)
+// 	// }
+// 	// sort.Slice(files, func(i, j int) bool {
+// 	// 	return files[i].name < files[j].name
+// 	// })
+// 	// for _, file := range files {
+// 	// 	b.AddText("")
+// 	// 	b.AddText(" " + file.name)
+// 	// 	b.AddText(" " + file.modTime.Format(time.DateTime))
+// 	// 	b.AddText(formatSize(file.size))
+// 	// 	b.LayoutLine()
 
-	// archive := app.archives[app.archiveIdx]
-	// location := app.locations[app.archiveIdx]
-	// for _, dir := range location.path {
-	// 	archive = archive.subFolders[dir]
-	// }
+// 	// 	if app.lineOffset >= app.height-1 {
+// 	// 		break
+// 	// 	}
+// 	// }
 
-	// // subfolders
-	// b.SetStyle(ui.StyleFolder)
-	// subFolders := make([]folder, 0, len(archive.subFolders))
-	// for name, folder := range archive.subFolders {
-	// 	folder.name = name
-	// 	subFolders = append(subFolders, folder)
-	// }
-	// sort.Slice(subFolders, func(i, j int) bool {
-	// 	return subFolders[i].name < subFolders[j].name
-	// })
-	// for _, subFolder := range subFolders {
-	// 	b.AddText("")
-	// 	b.AddText(" " + subFolder.name)
-	// 	b.AddText(" Каталог")
-	// 	b.AddText(formatSize(subFolder.size))
-	// 	b.LayoutLine()
+// 	view := ui.View(0, 1, app.width, app.height-2,
+// 		ui.Styled(ui.StyleDefault,
+// 			ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(7), ui.Pad(" "), ui.Flex(1), ui.Pad(" "), ui.Fixed(19), ui.Pad(" "), ui.Fixed(16), ui.Pad(" ")},
+// 				contents...,
+// 			),
+// 		),
+// 	)
+// 	app.renderer.Render(view...)
+// }
 
-	// 	if app.lineOffset >= app.height-1 {
-	// 		break
-	// 	}
-	// }
+// func (app *app) drawStatusLine() {
+// 	view := ui.View(0, app.height-1, app.width, 1,
+// 		ui.Styled(ui.StyleArchiveName,
+// 			ui.Layout(ui.Fields{ui.Pad(" "), ui.Flex(1), ui.Pad(" ")},
+// 				ui.Line(ui.Text("Status line will be here...")),
+// 			),
+// 		),
+// 	)
+// 	app.renderer.Render(view...)
+// }
 
-	// // files
-	// b.SetStyle(ui.StyleFile)
-	// files := make([]file, 0, len(archive.files))
-	// for name, file := range archive.files {
-	// 	file.name = name
-	// 	files = append(files, file)
-	// }
-	// sort.Slice(files, func(i, j int) bool {
-	// 	return files[i].name < files[j].name
-	// })
-	// for _, file := range files {
-	// 	b.AddText("")
-	// 	b.AddText(" " + file.name)
-	// 	b.AddText(" " + file.modTime.Format(time.DateTime))
-	// 	b.AddText(formatSize(file.size))
-	// 	b.LayoutLine()
-
-	// 	if app.lineOffset >= app.height-1 {
-	// 		break
-	// 	}
-	// }
-
-	view := ui.View(0, 1, app.width, app.height-2,
-		ui.Styled(ui.StyleDefault,
-			ui.Layout(ui.Fields{ui.Pad(" "), ui.Fixed(7), ui.Pad(" "), ui.Flex(1), ui.Pad(" "), ui.Fixed(19), ui.Pad(" "), ui.Fixed(16), ui.Pad(" ")},
-				contents...,
-			),
-		),
-	)
-	app.renderer.Render(view...)
-}
-
-func (app *app) drawStatusLine() {
-	view := ui.View(0, app.height-1, app.width, 1,
-		ui.Styled(ui.StyleArchiveName,
-			ui.Layout(ui.Fields{ui.Pad(" "), ui.Flex(1), ui.Pad(" ")},
-				ui.Line(ui.Text("Status line will be here...")),
-			),
-		),
-	)
-	app.renderer.Render(view...)
-}
-
-func formatSize(size int) string {
-	str := fmt.Sprintf("%13d ", size)
-	slice := []string{str[:1], str[1:4], str[4:7], str[7:10]}
-	b := strings.Builder{}
-	for _, s := range slice {
-		b.WriteString(s)
-		if s == " " || s == "   " {
-			b.WriteString(" ")
-		} else {
-			b.WriteString(",")
-		}
-	}
-	b.WriteString(str[10:])
-	return b.String()
-}
+// func formatSize(size int) string {
+// 	str := fmt.Sprintf("%13d ", size)
+// 	slice := []string{str[:1], str[1:4], str[4:7], str[7:10]}
+// 	b := strings.Builder{}
+// 	for _, s := range slice {
+// 		b.WriteString(s)
+// 		if s == " " || s == "   " {
+// 			b.WriteString(" ")
+// 		} else {
+// 			b.WriteString(",")
+// 		}
+// 	}
+// 	b.WriteString(str[10:])
+// 	return b.String()
+// }
