@@ -253,6 +253,7 @@ func storeMeta(basePath string, metas files.FileInfos) error {
 	if err != nil {
 		return err
 	}
-	defer hashInfoFile.Close()
-	return csv.NewWriter(hashInfoFile).WriteAll(result)
+	err = csv.NewWriter(hashInfoFile).WriteAll(result)
+	hashInfoFile.Close()
+	return err
 }

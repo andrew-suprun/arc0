@@ -10,8 +10,8 @@ func (LogRenderer) PollEvent() any {
 	select {}
 }
 
-func (LogRenderer) Write(runes []rune, x X, y Y, attributes *Attributes) {
-	log.Printf("Renderer: Write('%s', X(%d), Y(%d), Attributes(%v)", string(runes), x, y, attributes)
+func (LogRenderer) Write(runes []rune, x X, y Y, style Style) {
+	log.Printf("Renderer: Write('%s', X(%d), Y(%d), Style(%v)", string(runes), x, y, style)
 }
 
 func (LogRenderer) Show() {

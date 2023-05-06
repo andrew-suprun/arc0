@@ -26,10 +26,18 @@ func NewRenderer() (ui.Renderer, error) {
 	return &renderer{screen: screen}, nil
 }
 
-func (r *renderer) Write(runes []rune, x ui.X, y ui.Y, attributes *ui.Attributes) {
+func (r *renderer) Text(runes []rune, x ui.X, y ui.Y, style ui.Style) {
 	for i, rune := range runes {
-		r.screen.SetContent(int(x)+i, int(y), rune, nil, style(attributes.Style))
+		r.screen.SetContent(int(x)+i, int(y), rune, nil, tcellStyle(style))
 	}
+}
+
+func (r *renderer) MouseTarget(command any, x ui.X, y ui.Y) {
+	// TODO
+}
+
+func (r *renderer) ScrollTarget(command any, x ui.X, y ui.Y) {
+	// TODO
 }
 
 func (r *renderer) PollEvent() any {
@@ -87,7 +95,7 @@ var (
 	styleProgressBar   = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(20))
 )
 
-func style(uiStyle ui.Style) tcell.Style {
+func tcellStyle(uiStyle ui.Style) tcell.Style {
 	switch uiStyle {
 	case ui.NoStyle:
 		return noStyle

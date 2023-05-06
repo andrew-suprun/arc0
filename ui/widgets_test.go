@@ -31,7 +31,7 @@ func TestRow(t *testing.T) {
 			Text("quuzquuz"),
 		)
 		r := &TestRenderer{}
-		row.Render(r, 0, 0, W(w), 1, DefaultAttributes().WithMouseTarget("FOO"))
+		row.Render(r, 0, 0, W(w), 1, StyleDefault)
 		if r.width != w {
 			t.Fail()
 		}
@@ -46,15 +46,12 @@ func (*TestRenderer) PollEvent() any {
 	select {}
 }
 
-func (r *TestRenderer) Write(runes []rune, x X, y Y, attributes *Attributes) {
+func (r *TestRenderer) Text(runes []rune, x X, y Y, style Style) {
 	r.width += len(runes)
 }
 
-func (*TestRenderer) Show() {
-}
-
-func (*TestRenderer) Sync() {
-}
-
-func (*TestRenderer) Exit() {
-}
+func (*TestRenderer) MouseTarget(command any, x X, y Y)  {}
+func (*TestRenderer) ScrollTarget(command any, x X, y Y) {}
+func (*TestRenderer) Show()                              {}
+func (*TestRenderer) Sync()                              {}
+func (*TestRenderer) Exit()                              {}

@@ -7,7 +7,7 @@ import (
 
 type Widget interface {
 	Constraints() Constraints
-	Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes)
+	Render(renderer Renderer, x X, y Y, width W, height H, style Style)
 }
 
 // *** Text ***
@@ -35,7 +35,7 @@ func (t text) Constraints() Constraints {
 	return t.constraints
 }
 
-func (t text) Render(renderer Renderer, x X, y Y, width W, _ H, attributes *Attributes) {
+func (t text) Render(renderer Renderer, x X, y Y, width W, _ H, style Style) {
 	if width < 1 {
 		return
 	}
@@ -48,7 +48,7 @@ func (t text) Render(renderer Renderer, x X, y Y, width W, _ H, attributes *Attr
 		diff--
 	}
 
-	renderer.Write(t.runes, x, y, attributes)
+	renderer.Text(t.runes, x, y, style)
 }
 
 type progressBar struct {
@@ -73,7 +73,7 @@ func (pb progressBar) Flex() int {
 	return 2
 }
 
-func (pb progressBar) Render(renderer Renderer, x X, y Y, width W, _ H, attributes *Attributes) {
+func (pb progressBar) Render(renderer Renderer, x X, y Y, width W, _ H, style Style) {
 	if width < 1 {
 		return
 	}
@@ -92,7 +92,7 @@ func (pb progressBar) Render(renderer Renderer, x X, y Y, width W, _ H, attribut
 		runes[idx] = ' '
 	}
 
-	renderer.Write(runes, x, y, attributes)
+	renderer.Text(runes, x, y, style)
 }
 
 // *** Styled ***
@@ -109,8 +109,8 @@ func (s styled) Constraints() Constraints {
 	return s.widget.Constraints()
 }
 
-func (s styled) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
-	s.widget.Render(renderer, x, y, width, height, attributes.WithStyle(s.style))
+func (s styled) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
+	s.widget.Render(renderer, x, y, width, height, s.style)
 }
 
 // *** row ***
@@ -132,14 +132,14 @@ func (r row) Constraints() Constraints {
 	return MakeConstraints(width, flex, 1, 0)
 }
 
-func (r row) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
+func (r row) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
 	sizes := make([]Constraint[W], len(r.widgets))
 	for i, widget := range r.widgets {
 		sizes[i] = widget.Constraints().Width
 	}
 	widths := calcSizes(width, sizes)
 	for i, widget := range r.widgets {
-		widget.Render(renderer, x, y, widths[i], height, attributes)
+		widget.Render(renderer, x, y, widths[i], height, style)
 		x = x.Inc(widths[i])
 	}
 }
@@ -222,14 +222,14 @@ func (c column) Constraints() Constraints {
 	return Constraints{Width: Constraint[W]{0, 1}, Height: c.constraint}
 }
 
-func (c column) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
+func (c column) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
 	sizes := make([]Constraint[H], len(c.widgets))
 	for i, widget := range c.widgets {
 		sizes[i] = widget.Constraints().Height
 	}
 	heights := calcSizes(height, sizes)
 	for i, widget := range c.widgets {
-		widget.Render(renderer, x, y, width, height, attributes)
+		widget.Render(renderer, x, y, width, height, style)
 		y = y.Inc(heights[i])
 	}
 }
@@ -241,14 +241,14 @@ func (w VSpacer) Constraints() Constraints {
 	return Constraints{Width: Constraint[W]{0, 1}, Height: Constraint[H]{0, 1}}
 }
 
-func (w VSpacer) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
+func (w VSpacer) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
 	log.Println("VSpacer", x, y, width, height)
 	runes := make([]rune, width)
 	for i := range runes {
 		runes[i] = ' '
 	}
 	for i := 0; i < int(height); i++ {
-		renderer.Write(runes, x, y+Y(i), attributes)
+		renderer.Text(runes, x, y+Y(i), style)
 	}
 }
 
@@ -259,5 +259,5 @@ func (w NullWidget) Constraints() Constraints {
 	return Constraints{Width: Constraint[W]{0, 0}, Height: Constraint[H]{0, 0}}
 }
 
-func (w NullWidget) Render(renderer Renderer, x X, y Y, width W, height H, attributes *Attributes) {
+func (w NullWidget) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
 }
