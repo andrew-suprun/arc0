@@ -87,7 +87,7 @@ func (r *renderer) uiEvent(ev tcell.Event) any {
 var (
 	noStyle            = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
 	styleDefault       = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
-	styleFolder        = tcell.StyleDefault.Foreground(tcell.PaletteColor(230)).Background(tcell.PaletteColor(18)).Bold(true)
+	styleFolder        = tcell.StyleDefault.Foreground(tcell.PaletteColor(230)).Background(tcell.PaletteColor(19)).Bold(true)
 	styleFile          = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(18))
 	styleAppName       = tcell.StyleDefault.Foreground(tcell.PaletteColor(226)).Background(tcell.PaletteColor(0)).Bold(true).Italic(true)
 	styleArchiveName   = tcell.StyleDefault.Foreground(tcell.PaletteColor(231)).Background(tcell.PaletteColor(0)).Bold(true)

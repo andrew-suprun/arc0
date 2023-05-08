@@ -102,7 +102,7 @@ var copy1 = files.FileInfos{
 	},
 	{
 		Name:    "x.txt",
-		Size:    400,
+		Size:    500,
 		ModTime: time.Now(),
 		Hash:    "mmmm",
 	},
@@ -151,8 +151,8 @@ var copy2 = files.FileInfos{
 		Hash:    "tttt",
 	},
 	{
-		Name:    "x.txt",
-		Size:    400,
+		Name:    "x",
+		Size:    4_000_000_000_000,
 		ModTime: time.Now(),
 		Hash:    "asdfg",
 	},

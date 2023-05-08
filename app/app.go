@@ -173,7 +173,7 @@ func (app *app) buildFileTree() {
 				Name:   name,
 				Size:   info.Size,
 			}
-			current.SubFolders = append(current.SubFolders, currentFile)
+			current.Files = append(current.Files, currentFile)
 			for current != nil {
 				current.Status = status.Merge(current.Status)
 				current = current.Parent
@@ -184,13 +184,13 @@ func (app *app) buildFileTree() {
 }
 
 func subFolder(dir *view.File, name string) *view.File {
-	for i := range dir.SubFolders {
-		if name == dir.SubFolders[i].Name {
-			return dir.SubFolders[i]
+	for i := range dir.Files {
+		if name == dir.Files[i].Name {
+			return dir.Files[i]
 		}
 	}
 	subFolder := &view.File{Parent: dir, Kind: view.Folder, Name: name}
-	dir.SubFolders = append(dir.SubFolders, subFolder)
+	dir.Files = append(dir.Files, subFolder)
 	return subFolder
 }
 
@@ -286,7 +286,7 @@ func printArchive(archive *view.File, prefix string) {
 	} else {
 		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.Name, archive.Status, archive.Size)
 	}
-	for _, file := range archive.SubFolders {
+	for _, file := range archive.Files {
 		printArchive(file, prefix+"│ ")
 	}
 }
@@ -345,7 +345,6 @@ func (app *app) handleUiEvent(event any) {
 }
 
 func (app *app) render() {
-	// TODO
 	screen := app.model.View()
 	screen.Render(app.renderer, ui.X(0), ui.Y(0), ui.W(app.width), ui.H(app.height), ui.StyleDefault)
 	app.renderer.Show()
