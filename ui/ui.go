@@ -51,16 +51,7 @@ type ResizeEvent struct {
 	Width, Height int
 }
 
-type Style int
-
-const (
-	NoStyle Style = iota
-	StyleDefault
-	StyleHeader
-	StyleAppTitle
-	StyleArchiveName
-	StyleFile
-	StyleFolder
-	StyleProgressBar
-	StyleArchiveHeader
-)
+type Style struct {
+	FG, BG                int
+	Bold, Italic, Reverse bool
+}

@@ -346,7 +346,7 @@ func (app *app) handleUiEvent(event any) {
 
 func (app *app) render() {
 	screen := app.model.View()
-	screen.Render(app.renderer, ui.X(0), ui.Y(0), ui.W(app.width), ui.H(app.height), ui.StyleDefault)
+	screen.Render(app.renderer, ui.X(0), ui.Y(0), ui.W(app.width), ui.H(app.height), view.DefaultStyle)
 	app.renderer.Show()
 }
 

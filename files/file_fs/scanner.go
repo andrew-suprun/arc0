@@ -66,7 +66,7 @@ func (r *file_fs) scan(base string, out chan any) {
 		totalSizeToHash int
 		totalHashed     int
 		hash            = sha256.New()
-		buf             = make([]byte, 16*1024)
+		buf             = make([]byte, 256*1024)
 	)
 
 	for _, meta := range metas {

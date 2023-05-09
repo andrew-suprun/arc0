@@ -80,6 +80,12 @@ var origin = files.FileInfos{
 		ModTime: time.Now(),
 		Hash:    "qwerty",
 	},
+	{
+		Name:    "yyy.txt",
+		Size:    200,
+		ModTime: time.Now(),
+		Hash:    "yyyy",
+	},
 }
 var copy1 = files.FileInfos{
 	{
@@ -130,6 +136,12 @@ var copy1 = files.FileInfos{
 		ModTime: time.Now(),
 		Hash:    "zzzz",
 	},
+	{
+		Name:    "yyy.txt",
+		Size:    200,
+		ModTime: time.Now(),
+		Hash:    "yyyy",
+	},
 }
 var copy2 = files.FileInfos{
 	{
@@ -161,5 +173,11 @@ var copy2 = files.FileInfos{
 		Size:    300,
 		ModTime: time.Now(),
 		Hash:    "12345",
+	},
+	{
+		Name:    "yyy.txt",
+		Size:    200,
+		ModTime: time.Now(),
+		Hash:    "yyyy",
 	},
 }
