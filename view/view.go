@@ -4,7 +4,6 @@ import (
 	"arch/files"
 	"arch/ui"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -78,7 +77,6 @@ func (m Model) View() ui.Widget {
 			m.title(),
 			m.scanStats(),
 			m.treeView(),
-			ui.Spacer{},
 		))
 }
 
@@ -95,6 +93,7 @@ func (m Model) scanStats() ui.Widget {
 			forms = append(forms, scanStatsForm(m.ScanStates[i]))
 		}
 	}
+	forms = append(forms, ui.Spacer{})
 	return ui.Column(0, forms...)
 }
 
@@ -117,40 +116,36 @@ func (m Model) treeView() ui.Widget {
 	return ui.List{
 		Header: func() ui.Widget {
 			return ui.Styled(ui.StyleArchiveHeader,
-				ui.Row(ui.Text(" Статус", 7, 0), ui.Text(" Документ", 21, 1), ui.Text(" Время Изменения", 21, 0), ui.Text("            Размер ", 21, 0)),
+				ui.Row(ui.Text(" Статус", 7, 0), ui.Text("  Документ", 21, 1), ui.Text(" Время Изменения", 21, 0), ui.Text("            Размер ", 19, 0)),
 			)
 		},
 		Row: func(i ui.Y) ui.Widget {
-			log.Println("i =", i)
 			if int(i) >= len(m.Location.File.Files) {
 				return ui.Row(ui.Text("", 0, 1))
 			}
 			file := m.Location.File.Files[i]
-			log.Printf("file = %#v", file)
 			if file.Kind == RegularFile {
 				return ui.Styled(ui.StyleFile,
 					ui.Row(
 						ui.Text("", 7, 0),
-						ui.Text(" ", 1, 0),
+						ui.Text("  ", 2, 0),
 						ui.Text(file.Name, 20, 1),
-						ui.Text(" ", 1, 0),
-						ui.Text(file.Info.ModTime.Format(time.DateTime), 20, 0),
-						ui.Text(" ", 1, 0),
-						ui.Text(formatSize(file.Size), 19, 0),
-						ui.Text(" ", 1, 0),
+						ui.Text("  ", 2, 0),
+						ui.Text(file.Info.ModTime.Format(time.DateTime), 19, 0),
+						ui.Text("  ", 2, 0),
+						ui.Text(formatSize(file.Size), 18, 0),
 					),
 				)
 			}
 			return ui.Styled(ui.StyleFolder,
 				ui.Row(
 					ui.Text("       ", 7, 0),
-					ui.Text(" ", 1, 0),
+					ui.Text("  ", 2, 0),
 					ui.Text(file.Name, 20, 1),
-					ui.Text(" ", 1, 0),
-					ui.Text("Каталог", 20, 0),
-					ui.Text(" ", 1, 0),
-					ui.Text(formatSize(file.Size), 19, 0),
-					ui.Text(" ", 1, 0),
+					ui.Text("  ", 2, 0),
+					ui.Text("<Каталог>", 19, 0),
+					ui.Text("  ", 2, 0),
+					ui.Text(formatSize(file.Size), 18, 0),
 				),
 			)
 		},
