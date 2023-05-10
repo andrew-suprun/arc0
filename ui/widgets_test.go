@@ -25,13 +25,13 @@ func TestCalcSizes(t *testing.T) {
 func TestRow(t *testing.T) {
 	for w := 0; w <= 80; w++ {
 		row := Row(
-			Text("foofoofoofoofoo"),
-			FlexText("barbarbarbarbar", 2),
-			FlexText("bazbazbazbazbaz", 3),
-			Text("quuzquuz"),
+			Text("foofoofoofoofoo", 10, 0),
+			Text("barbarbarbarbar", 10, 2),
+			Text("bazbazbazbazbaz", 10, 3),
+			Text("quuzquuz", 10, 0),
 		)
 		r := &TestRenderer{}
-		row.Render(r, 0, 0, W(w), 1, StyleDefault)
+		row.Render(r, 0, 0, W(w), 1, Style{})
 		if r.width != w {
 			t.Fail()
 		}

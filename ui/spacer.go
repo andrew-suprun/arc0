@@ -1,7 +1,5 @@
 package ui
 
-import "log"
-
 type Spacer struct{}
 
 func (w Spacer) Constraints() Constraints {
@@ -9,7 +7,6 @@ func (w Spacer) Constraints() Constraints {
 }
 
 func (w Spacer) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
-	log.Println("Spacer", x, y, width, height)
 	runes := make([]rune, width)
 	for i := range runes {
 		runes[i] = ' '

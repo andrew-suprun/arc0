@@ -229,7 +229,6 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 	for _, source := range sources {
 		if copy.Name == source.Name {
 			sourceMap[source] = copy
-			log.Printf("    same name: %s -> %s", source.Name, copy.Name)
 			return nil
 		}
 	}

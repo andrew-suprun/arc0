@@ -152,43 +152,59 @@ func (m Model) treeView() ui.Widget {
 	if m.Root == nil {
 		return ui.NullWidget{}
 	}
-	return ui.List{
-		Header: func() ui.Widget {
-			return ui.Styled(styleArchiveHeader,
-				ui.Row(ui.Text(" Статус", 7, 0), ui.Text("  Документ", 21, 1), ui.Text(" Время Изменения", 21, 0), ui.Text("            Размер ", 19, 0)),
-			)
-		},
-		Row: func(i ui.Y) ui.Widget {
-			if int(i) >= len(m.Location.File.Files) {
-				return ui.Row(ui.Text("", 0, 1))
-			}
-			file := m.Location.File.Files[i]
-			if file.Kind == RegularFile {
-				return ui.Styled(styleFile(file.Status, false),
-					ui.Row(
-						ui.Text(file.Status.String(), 7, 0),
-						ui.Text("  ", 2, 0),
-						ui.Text(file.Name, 20, 1),
-						ui.Text("  ", 2, 0),
-						ui.Text(file.Info.ModTime.Format(time.DateTime), 19, 0),
-						ui.Text("  ", 2, 0),
-						ui.Text(formatSize(file.Size), 18, 0),
-					),
-				)
-			}
-			return ui.Styled(styleFolder(file.Status, false),
-				ui.Row(
-					ui.Text(file.Status.String(), 7, 0),
-					ui.Text("  ", 2, 0),
-					ui.Text(file.Name, 20, 1),
-					ui.Text("  ", 2, 0),
-					ui.Text("<Каталог>", 19, 0),
-					ui.Text("  ", 2, 0),
-					ui.Text(formatSize(file.Size), 18, 0),
-				),
-			)
-		},
-	}
+
+	return ui.Column(1,
+		ui.Styled(styleArchiveHeader,
+			ui.Row(ui.Text(" Статус", 7, 0), ui.Text("  Документ", 21, 1), ui.Text(" Время Изменения", 21, 0), ui.Text("            Размер ", 19, 0)),
+		),
+		ui.Sized(ui.MakeConstraints(0, 1, 0, 1),
+			func(width ui.W, height ui.H) ui.Widget {
+				if m.Location.LineOffset > len(m.Location.File.Files)-int(height) {
+					m.Location.LineOffset = len(m.Location.File.Files) - int(height)
+				}
+				if m.Location.LineOffset < 0 {
+					m.Location.LineOffset = 0
+				}
+				rows := make([]ui.Widget, height)
+				i := 0
+				var file *File
+				for i, file = range m.Location.File.Files[m.Location.LineOffset:] {
+					if i >= len(rows) {
+						break
+					}
+					if file.Kind == RegularFile {
+						rows[i] = ui.Styled(styleFile(file.Status, false),
+							ui.Row(
+								ui.Text(file.Status.String(), 7, 0),
+								ui.Text("  ", 2, 0),
+								ui.Text(file.Name, 20, 1),
+								ui.Text("  ", 2, 0),
+								ui.Text(file.Info.ModTime.Format(time.DateTime), 19, 0),
+								ui.Text("  ", 2, 0),
+								ui.Text(formatSize(file.Size), 18, 0),
+							),
+						)
+					} else {
+						rows[i] = ui.Styled(styleFolder(file.Status, false),
+							ui.Row(
+								ui.Text(file.Status.String(), 7, 0),
+								ui.Text("  ", 2, 0),
+								ui.Text(file.Name, 20, 1),
+								ui.Text("  ", 2, 0),
+								ui.Text("<Каталог>", 19, 0),
+								ui.Text("  ", 2, 0),
+								ui.Text(formatSize(file.Size), 18, 0),
+							),
+						)
+					}
+				}
+				for ; i < int(height); i++ {
+					rows[i] = ui.Text("", 0, 1)
+				}
+				return ui.Column(0, rows...)
+			},
+		),
+	)
 }
 
 func formatSize(size int) string {

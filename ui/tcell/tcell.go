@@ -2,7 +2,6 @@ package tcell
 
 import (
 	"arch/ui"
-	"log"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -64,9 +63,6 @@ func (r *renderer) Exit() {
 }
 
 func (r *renderer) uiEvent(ev tcell.Event) any {
-	log.Printf("### tcell.Event: %#v\n", ev)
-
-	// TODO: temporary
 	switch ev := ev.(type) {
 	case *tcell.EventResize:
 		w, h := ev.Size()
