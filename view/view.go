@@ -10,8 +10,9 @@ import (
 )
 
 type Model struct {
-	ScanStates []*files.ScanState
-	Locations  []Location
+	ScanStates       []*files.ScanState
+	Locations        []Location
+	ArchiveViewLines ui.Y
 }
 
 type File struct {
@@ -26,7 +27,7 @@ type File struct {
 type Location struct {
 	File       *File
 	Selected   *File
-	LineOffset int
+	LineOffset ui.Y
 }
 
 type FileKind int
@@ -159,19 +160,20 @@ func (m Model) treeView() ui.Widget {
 			ui.Row(ui.Text(" Статус", 7, 0), ui.Text("  Документ", 21, 1), ui.Text(" Время Изменения", 21, 0), ui.Text("            Размер ", 19, 0)),
 		),
 		ui.Sized(ui.MakeConstraints(0, 1, 0, 1),
-			func(width ui.W, height ui.H) ui.Widget {
+			func(width ui.X, height ui.Y) ui.Widget {
+				m.ArchiveViewLines = height
 				location := &m.Locations[len(m.Locations)-1]
-				if location.LineOffset > len(location.File.Files)+1-int(height) {
-					location.LineOffset = len(location.File.Files) + 1 - int(height)
+				if location.LineOffset > ui.Y(len(location.File.Files)+1-int(height)) {
+					location.LineOffset = ui.Y(len(location.File.Files) + 1 - int(height))
 				}
 				if location.LineOffset < 0 {
 					location.LineOffset = 0
 				}
 				if location.Selected != nil {
-					idx := -1
+					idx := ui.Y(-1)
 					for i := range location.File.Files {
 						if location.Selected == location.File.Files[i] {
-							idx = i
+							idx = ui.Y(i)
 							break
 						}
 					}
@@ -179,8 +181,8 @@ func (m Model) treeView() ui.Widget {
 						if location.LineOffset > idx {
 							location.LineOffset = idx
 						}
-						if location.LineOffset < idx+1-int(height) {
-							location.LineOffset = idx + 1 - int(height)
+						if location.LineOffset < idx+1-height {
+							location.LineOffset = idx + 1 - height
 						}
 					}
 				}

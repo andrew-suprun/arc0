@@ -5,14 +5,14 @@ import (
 )
 
 func TestCalcSizes(t *testing.T) {
-	for w := 0; w <= 80; w++ {
-		widths := calcSizes(w, []Constraint[int]{
+	for w := X(0); w <= 80; w++ {
+		widths := calcSizes(w, []Constraint[X]{
 			{14, 0},
 			{15, 2},
 			{16, 3},
 			{8, 0},
 		})
-		total := 0
+		total := X(0)
 		for _, width := range widths {
 			total += width
 		}
@@ -23,7 +23,7 @@ func TestCalcSizes(t *testing.T) {
 }
 
 func TestRow(t *testing.T) {
-	for w := 0; w <= 80; w++ {
+	for w := X(0); w <= 80; w++ {
 		row := Row(
 			Text("foofoofoofoofoo", 10, 0),
 			Text("barbarbarbarbar", 10, 2),
@@ -31,7 +31,7 @@ func TestRow(t *testing.T) {
 			Text("quuzquuz", 10, 0),
 		)
 		r := &TestRenderer{}
-		row.Render(r, 0, 0, W(w), 1, Style{})
+		row.Render(r, 0, 0, w, 1, Style{})
 		if r.width != w {
 			t.Fail()
 		}
@@ -39,7 +39,7 @@ func TestRow(t *testing.T) {
 }
 
 type TestRenderer struct {
-	width int
+	width X
 }
 
 func (*TestRenderer) PollEvent() any {
@@ -47,7 +47,7 @@ func (*TestRenderer) PollEvent() any {
 }
 
 func (r *TestRenderer) Text(runes []rune, x X, y Y, style Style) {
-	r.width += len(runes)
+	r.width += X(len(runes))
 }
 
 func (*TestRenderer) MouseTarget(command any, x X, y Y)  {}

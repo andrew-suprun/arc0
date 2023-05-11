@@ -5,7 +5,7 @@ type text struct {
 	constraints Constraints
 }
 
-func Text(txt string, width W, flex Flex) text {
+func Text(txt string, width X, flex Flex) text {
 	runes := []rune(txt)
 	return text{runes, MakeConstraints(width, flex, 1, 0)}
 }
@@ -14,7 +14,7 @@ func (t text) Constraints() Constraints {
 	return t.constraints
 }
 
-func (t text) Render(renderer Renderer, x X, y Y, width W, _ H, style Style) {
+func (t text) Render(renderer Renderer, x X, y Y, width X, _ Y, style Style) {
 	if width < 1 {
 		return
 	}

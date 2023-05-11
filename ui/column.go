@@ -1,30 +1,30 @@
 package ui
 
 type column struct {
-	constraint Constraint[H]
+	constraint Constraint[Y]
 	widgets    []Widget
 }
 
 func Column(flex Flex, widgets ...Widget) Widget {
-	height := H(0)
+	height := Y(0)
 	for _, widget := range widgets {
 		height += widget.Constraints().Height.Size
 	}
-	return column{Constraint[H]{height, flex}, widgets}
+	return column{Constraint[Y]{height, flex}, widgets}
 }
 
 func (c column) Constraints() Constraints {
-	return Constraints{Width: Constraint[W]{0, 1}, Height: c.constraint}
+	return Constraints{Width: Constraint[X]{0, 1}, Height: c.constraint}
 }
 
-func (c column) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
-	sizes := make([]Constraint[H], len(c.widgets))
+func (c column) Render(renderer Renderer, x X, y Y, width X, height Y, style Style) {
+	sizes := make([]Constraint[Y], len(c.widgets))
 	for i, widget := range c.widgets {
 		sizes[i] = widget.Constraints().Height
 	}
 	heights := calcSizes(height, sizes)
 	for i, widget := range c.widgets {
 		widget.Render(renderer, x, y, width, heights[i], style)
-		y = y.Inc(heights[i])
+		y += heights[i]
 	}
 }

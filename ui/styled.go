@@ -13,6 +13,6 @@ func (s styled) Constraints() Constraints {
 	return s.widget.Constraints()
 }
 
-func (s styled) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
+func (s styled) Render(renderer Renderer, x X, y Y, width X, height Y, style Style) {
 	s.widget.Render(renderer, x, y, width, height, s.style)
 }

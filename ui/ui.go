@@ -2,30 +2,20 @@ package ui
 
 type X int
 type Y int
-type W int
-type H int
 type Flex int
 
-func (x X) Inc(w W) X {
-	return x + X(w)
-}
-
-func (y Y) Inc(h H) Y {
-	return y + Y(h)
-}
-
-type Constraint[S ~int] struct {
+type Constraint[S X | Y] struct {
 	Size S
 	Flex Flex
 }
 
 type Constraints struct {
-	Width  Constraint[W]
-	Height Constraint[H]
+	Width  Constraint[X]
+	Height Constraint[Y]
 }
 
-func MakeConstraints(width W, wFlex Flex, height H, hFlex Flex) Constraints {
-	return Constraints{Width: Constraint[W]{width, wFlex}, Height: Constraint[H]{height, hFlex}}
+func MakeConstraints(width X, wFlex Flex, height Y, hFlex Flex) Constraints {
+	return Constraints{Width: Constraint[X]{width, wFlex}, Height: Constraint[Y]{height, hFlex}}
 }
 
 type Renderer interface {

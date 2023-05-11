@@ -4,11 +4,11 @@ import "math"
 
 type progressBar struct {
 	value float64
-	width W
+	width X
 	flex  Flex
 }
 
-func ProgressBar(value float64, width W, flex Flex) progressBar {
+func ProgressBar(value float64, width X, flex Flex) progressBar {
 	return progressBar{
 		value: value,
 		width: width,
@@ -24,7 +24,7 @@ func (pb progressBar) Flex() int {
 	return 2
 }
 
-func (pb progressBar) Render(renderer Renderer, x X, y Y, width W, _ H, style Style) {
+func (pb progressBar) Render(renderer Renderer, x X, y Y, width X, _ Y, style Style) {
 	if width < 1 {
 		return
 	}

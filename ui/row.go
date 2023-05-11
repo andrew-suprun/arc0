@@ -11,7 +11,7 @@ func Row(ws ...Widget) Widget {
 }
 
 func (r row) Constraints() Constraints {
-	width, flex := W(0), Flex(0)
+	width, flex := X(0), Flex(0)
 	for _, widget := range r.widgets {
 		c := widget.Constraints()
 		width += c.Width.Size
@@ -20,19 +20,19 @@ func (r row) Constraints() Constraints {
 	return MakeConstraints(width, flex, 1, 0)
 }
 
-func (r row) Render(renderer Renderer, x X, y Y, width W, height H, style Style) {
-	sizes := make([]Constraint[W], len(r.widgets))
+func (r row) Render(renderer Renderer, x X, y Y, width X, height Y, style Style) {
+	sizes := make([]Constraint[X], len(r.widgets))
 	for i, widget := range r.widgets {
 		sizes[i] = widget.Constraints().Width
 	}
 	widths := calcSizes(width, sizes)
 	for i, widget := range r.widgets {
 		widget.Render(renderer, x, y, widths[i], height, style)
-		x = x.Inc(widths[i])
+		x += widths[i]
 	}
 }
 
-func calcSizes[S ~int](size S, constraints []Constraint[S]) []S {
+func calcSizes[S X | Y](size S, constraints []Constraint[S]) []S {
 	result := make([]S, len(constraints))
 	totalSize, totalFlex := S(0), Flex(0)
 	for i, constraint := range constraints {

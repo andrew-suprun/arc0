@@ -11,15 +11,16 @@ import (
 )
 
 type app struct {
-	paths         []string
-	fs            files.FS
-	scanResults   files.ArchiveInfos
-	maps          []maps   // source, copy1, copy2, ...
-	links         []*links // copy1, copy2, ...
-	model         view.Model
-	renderer      ui.Renderer
-	width, height int
-	quit          bool
+	paths       []string
+	fs          files.FS
+	scanResults files.ArchiveInfos
+	maps        []maps   // source, copy1, copy2, ...
+	links       []*links // copy1, copy2, ...
+	model       view.Model
+	renderer    ui.Renderer
+	width       ui.X // TODO: make it size{X, Y}
+	height      ui.Y
+	quit        bool
 }
 
 type links struct {
@@ -330,38 +331,17 @@ func (app *app) handleFsEvent(event any) {
 func (app *app) handleUiEvent(event any) {
 	switch ev := event.(type) {
 	case ui.ResizeEvent:
-		app.width, app.height = ev.Width, ev.Height
+		app.width, app.height = ui.X(ev.Width), ui.Y(ev.Height)
 		app.render()
 		app.renderer.Sync()
 	case ui.KeyEvent:
-		switch ev.Name {
-		case "Ctrl+C":
+		if ev.Name == "Ctrl+C" {
 			app.quit = true
-		case "Down":
-			loc := app.currentLocation()
-			if loc.Selected != nil {
-				for i, file := range loc.File.Files {
-					if file == loc.Selected && i+1 < len(loc.File.Files) {
-						loc.Selected = loc.File.Files[i+1]
-						break
-					}
-				}
-			} else {
-				loc.Selected = loc.File.Files[0]
-			}
-
-		case "Up":
-			loc := app.currentLocation()
-			if loc.Selected != nil {
-				for i, file := range loc.File.Files {
-					if file == loc.Selected && i > 0 {
-						loc.Selected = loc.File.Files[i-1]
-						break
-					}
-				}
-			} else {
-				loc.Selected = loc.File.Files[len(loc.File.Files)-1]
-			}
+			break
+		}
+		location := app.currentLocation()
+		if location != nil {
+			app.handleArchiveKeyEvent(ev, location)
 		}
 
 	case ui.MouseEvent:
@@ -377,9 +357,51 @@ func (app *app) currentLocation() *view.Location {
 	return &app.model.Locations[len(app.model.Locations)-1]
 }
 
+func (app *app) handleArchiveKeyEvent(key ui.KeyEvent, loc *view.Location) {
+	switch key.Name {
+	case "Home":
+		loc.Selected = loc.File.Files[0]
+
+	case "End":
+		loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+
+	case "PgUp":
+		if loc.LineOffset < app.model.ArchiveViewLines {
+
+		}
+
+	case "PgDn":
+
+	case "Up":
+		if loc.Selected != nil {
+			for i, file := range loc.File.Files {
+				if file == loc.Selected && i > 0 {
+					loc.Selected = loc.File.Files[i-1]
+					break
+				}
+			}
+		} else {
+			loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+		}
+
+	case "Down":
+		if loc.Selected != nil {
+			for i, file := range loc.File.Files {
+				if file == loc.Selected && i+1 < len(loc.File.Files) {
+					loc.Selected = loc.File.Files[i+1]
+					break
+				}
+			}
+		} else {
+			loc.Selected = loc.File.Files[0]
+		}
+
+	}
+}
+
 func (app *app) render() {
 	screen := app.model.View()
-	screen.Render(app.renderer, ui.X(0), ui.Y(0), ui.W(app.width), ui.H(app.height), view.DefaultStyle)
+	screen.Render(app.renderer, 0, 0, app.width, app.height, view.DefaultStyle)
 	app.renderer.Show()
 }
 
