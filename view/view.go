@@ -21,7 +21,6 @@ type Model struct {
 }
 
 func NewModel(paths []string) *Model {
-	log.Println("NewModel: paths =", paths)
 	return &Model{
 		paths:       paths,
 		scanStates:  make([]*files.ScanState, len(paths)),
@@ -138,7 +137,6 @@ func (s FileStatus) Merge(other FileStatus) FileStatus {
 
 func (m *Model) View(event any) ui.Widget {
 	m.handleEvent(event)
-	log.Printf("### View %T: locations %d", event, len(m.locations))
 	return ui.Styled(DefaultStyle,
 		ui.Column(ui.Flex(0),
 			m.title(),
@@ -148,11 +146,6 @@ func (m *Model) View(event any) ui.Widget {
 }
 
 func (m *Model) handleEvent(event any) {
-	log.Printf("### event#1 %T: locations %d", event, len(m.locations))
-	defer func() {
-		log.Printf("### event#2 %T: locations %d", event, len(m.locations))
-	}()
-
 	switch event := event.(type) {
 	case *files.ScanState:
 		for i := range m.paths {
@@ -179,7 +172,6 @@ func (m *Model) handleEvent(event any) {
 		}
 		if doneScanning {
 			m.analizeArchives()
-			log.Println("### handleEvent: locations", len(m.locations))
 		}
 
 	case ui.KeyEvent:
@@ -190,17 +182,15 @@ func (m *Model) handleEvent(event any) {
 	case ui.MouseEvent:
 		log.Printf("EventMouse: [%d:%d]", event.Col, event.Line)
 
+	case ui.ResizeEvent:
+		// handled in App
+
 	default:
 		log.Printf("### unhandled event %#v", event)
 	}
 }
 
 func (m *Model) analizeArchives() {
-	log.Println("### analizeArchives#1: locations", len(m.locations))
-	defer func() {
-		log.Println("### analizeArchives#3: locations", len(m.locations))
-	}()
-
 	m.scanStates = nil
 	m.maps = make([]maps, len(m.scanResults))
 	for i, scan := range m.scanResults {
@@ -215,7 +205,6 @@ func (m *Model) analizeArchives() {
 		m.links[i] = m.linkArchives(copy.Files)
 	}
 	m.buildFileTree()
-	log.Println("### analizeArchives#2: locations", len(m.locations))
 }
 
 func byName(infos files.FileInfos) groupByName {
@@ -239,9 +228,6 @@ func (m *Model) buildFileTree() {
 	m.locations = []location{{
 		File: &File{Kind: Folder},
 	}}
-
-	log.Println("### buildFileTree#1: locations", len(m.locations))
-	defer log.Println("### buildFileTree#2: locations", len(m.locations))
 
 	uniqueFileNames := map[string]struct{}{}
 	for _, info := range m.scanResults[0].Files {
@@ -511,7 +497,6 @@ func scanStatsForm(state *files.ScanState) ui.Widget {
 }
 
 func (m *Model) treeView() ui.Widget {
-	log.Println("### treeView: locations", len(m.locations))
 	if len(m.locations) == 0 {
 		return ui.NullWidget{}
 	}
