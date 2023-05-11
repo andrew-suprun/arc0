@@ -124,6 +124,9 @@ func (m Model) title() ui.Widget {
 }
 
 func (m Model) scanStats() ui.Widget {
+	if m.ScanStates == nil {
+		return ui.NullWidget{}
+	}
 	forms := []ui.Widget{}
 	for i := range m.ScanStates {
 		if m.ScanStates[i] != nil {
@@ -131,7 +134,7 @@ func (m Model) scanStats() ui.Widget {
 		}
 	}
 	forms = append(forms, ui.Spacer{})
-	return ui.Column(0, forms...)
+	return ui.Column(1, forms...)
 }
 
 func scanStatsForm(state *files.ScanState) ui.Widget {
@@ -151,18 +154,35 @@ func (m Model) treeView() ui.Widget {
 		return ui.NullWidget{}
 	}
 
-	return ui.Column(1,
+	return ui.Column(ui.Flex(1),
 		ui.Styled(styleArchiveHeader,
 			ui.Row(ui.Text(" Статус", 7, 0), ui.Text("  Документ", 21, 1), ui.Text(" Время Изменения", 21, 0), ui.Text("            Размер ", 19, 0)),
 		),
 		ui.Sized(ui.MakeConstraints(0, 1, 0, 1),
 			func(width ui.W, height ui.H) ui.Widget {
-				location := m.Locations[len(m.Locations)-1]
-				if location.LineOffset > len(location.File.Files)-int(height) {
-					location.LineOffset = len(location.File.Files) - int(height)
+				location := &m.Locations[len(m.Locations)-1]
+				if location.LineOffset > len(location.File.Files)+1-int(height) {
+					location.LineOffset = len(location.File.Files) + 1 - int(height)
 				}
 				if location.LineOffset < 0 {
 					location.LineOffset = 0
+				}
+				if location.Selected != nil {
+					idx := -1
+					for i := range location.File.Files {
+						if location.Selected == location.File.Files[i] {
+							idx = i
+							break
+						}
+					}
+					if idx >= 0 {
+						if location.LineOffset > idx {
+							location.LineOffset = idx
+						}
+						if location.LineOffset < idx+1-int(height) {
+							location.LineOffset = idx + 1 - int(height)
+						}
+					}
 				}
 				rows := make([]ui.Widget, height)
 				i := 0

@@ -76,6 +76,7 @@ func Run(paths []string, fs files.FS, renderer ui.Renderer) {
 }
 
 func (app *app) analizeArchives() {
+	app.model.ScanStates = nil
 	app.maps = make([]maps, len(app.scanResults))
 	for i, scan := range app.scanResults {
 		app.maps[i] = maps{

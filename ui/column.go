@@ -24,7 +24,7 @@ func (c column) Render(renderer Renderer, x X, y Y, width W, height H, style Sty
 	}
 	heights := calcSizes(height, sizes)
 	for i, widget := range c.widgets {
-		widget.Render(renderer, x, y, width, height, style)
+		widget.Render(renderer, x, y, width, heights[i], style)
 		y = y.Inc(heights[i])
 	}
 }
