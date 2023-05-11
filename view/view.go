@@ -29,35 +29,35 @@ func NewModel(paths []string) *Model {
 }
 
 type File struct {
-	Info   *files.FileInfo
-	Kind   FileKind
-	Status FileStatus
-	Name   string
-	Size   int
-	Files  []*File
+	info   *files.FileInfo
+	kind   fileKind
+	status fileStatus
+	name   string
+	size   int
+	files  []*File
 }
 
 type location struct {
-	File       *File
-	Selected   *File
-	LineOffset ui.Y
+	file       *File
+	selected   *File
+	lineOffset ui.Y
 }
 
-type FileKind int
+type fileKind int
 
 const (
-	RegularFile FileKind = iota
-	Folder
+	regularFile fileKind = iota
+	folder
 )
 
-type FileStatus int
+type fileStatus int
 
 const (
-	Identical FileStatus = iota
-	SourceOnly
-	ExtraCopy
-	CopyOnly
-	Discrepancy // расхождение
+	identical fileStatus = iota
+	sourceOnly
+	extraCopy
+	copyOnly
+	discrepancy // расхождение
 )
 
 type links struct {
@@ -80,7 +80,7 @@ var (
 	styleArchiveHeader = ui.Style{FG: 231, BG: 8, Bold: true}
 )
 
-func styleFile(status FileStatus, selected bool) ui.Style {
+func styleFile(status fileStatus, selected bool) ui.Style {
 	result := ui.Style{FG: statusColor(status), BG: 17}
 	if selected {
 		result.Reverse = true
@@ -88,7 +88,7 @@ func styleFile(status FileStatus, selected bool) ui.Style {
 	return result
 }
 
-func styleFolder(status FileStatus, selected bool) ui.Style {
+func styleFolder(status fileStatus, selected bool) ui.Style {
 	result := ui.Style{FG: statusColor(status), BG: 18, Bold: true, Italic: true}
 	if selected {
 		result.Reverse = true
@@ -96,39 +96,39 @@ func styleFolder(status FileStatus, selected bool) ui.Style {
 	return result
 }
 
-func statusColor(status FileStatus) int {
+func statusColor(status fileStatus) int {
 	switch status {
-	case Identical:
+	case identical:
 		return 250
-	case SourceOnly:
+	case sourceOnly:
 		return 82
-	case ExtraCopy:
+	case extraCopy:
 		return 226
-	case CopyOnly:
+	case copyOnly:
 		return 214
-	case Discrepancy:
+	case discrepancy:
 		return 196
 	}
 	return 231
 }
 
-func (s FileStatus) String() string {
+func (s fileStatus) String() string {
 	switch s {
-	case Identical:
+	case identical:
 		return "identical"
-	case SourceOnly:
+	case sourceOnly:
 		return "sourceOnly"
-	case CopyOnly:
+	case copyOnly:
 		return "copyOnly"
-	case ExtraCopy:
+	case extraCopy:
 		return "extraCopy"
-	case Discrepancy:
+	case discrepancy:
 		return "discrepancy"
 	}
 	return "UNDEFINED"
 }
 
-func (s FileStatus) Merge(other FileStatus) FileStatus {
+func (s fileStatus) Merge(other fileStatus) fileStatus {
 	if s > other {
 		return s
 	}
@@ -226,7 +226,7 @@ func byHash(archive files.FileInfos) groupByHash {
 func (m *Model) buildFileTree() {
 
 	m.locations = []location{{
-		File: &File{Kind: Folder},
+		file: &File{kind: folder},
 	}}
 
 	uniqueFileNames := map[string]struct{}{}
@@ -251,7 +251,7 @@ func (m *Model) buildFileTree() {
 			infos[i] = info.byName[fullName]
 		}
 		for i, info := range infos {
-			current := m.locations[0].File
+			current := m.locations[0].file
 			fileStack := []*File{current}
 			if info == nil {
 				continue
@@ -260,42 +260,42 @@ func (m *Model) buildFileTree() {
 				continue
 			}
 			if i == 0 {
-				current.Size += info.Size
+				current.size += info.Size
 			}
 			for _, dir := range path {
 				sub := subFolder(current, dir)
 				if i == 0 {
-					sub.Size += info.Size
+					sub.size += info.Size
 				}
 				current = sub
 				fileStack = append(fileStack, current)
 			}
 
-			status := Identical
+			status := identical
 			if i == 0 {
 				for _, links := range m.links {
 					if links.sourceLinks[info] == nil {
-						status = SourceOnly
+						status = sourceOnly
 					}
 				}
 			} else {
 				if i > 0 && infos[0] != nil {
-					status = Discrepancy
+					status = discrepancy
 				} else {
-					status = CopyOnly
+					status = copyOnly
 				}
 			}
 
 			currentFile := &File{
-				Info:   info,
-				Kind:   RegularFile,
-				Status: status,
-				Name:   name,
-				Size:   info.Size,
+				info:   info,
+				kind:   regularFile,
+				status: status,
+				name:   name,
+				size:   info.Size,
 			}
-			current.Files = append(current.Files, currentFile)
+			current.files = append(current.files, currentFile)
 			for _, current = range fileStack {
-				current.Status = status.Merge(current.Status)
+				current.status = status.Merge(current.status)
 			}
 		}
 	}
@@ -303,13 +303,13 @@ func (m *Model) buildFileTree() {
 }
 
 func subFolder(dir *File, name string) *File {
-	for i := range dir.Files {
-		if name == dir.Files[i].Name && dir.Files[i].Kind == Folder {
-			return dir.Files[i]
+	for i := range dir.files {
+		if name == dir.files[i].name && dir.files[i].kind == folder {
+			return dir.files[i]
 		}
 	}
-	subFolder := &File{Kind: Folder, Name: name}
-	dir.Files = append(dir.Files, subFolder)
+	subFolder := &File{kind: folder, name: name}
+	dir.files = append(dir.files, subFolder)
 	return subFolder
 }
 
@@ -396,15 +396,15 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 
 func printArchive(archive *File, prefix string) {
 	kind := "D"
-	if archive.Kind == RegularFile {
+	if archive.kind == regularFile {
 		kind = "F"
 	}
-	if archive.Kind == RegularFile {
-		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.Name, archive.Status, archive.Size, archive.Info.Hash)
+	if archive.kind == regularFile {
+		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.name, archive.status, archive.size, archive.info.Hash)
 	} else {
-		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.Name, archive.Status, archive.Size)
+		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.name, archive.status, archive.size)
 	}
-	for _, file := range archive.Files {
+	for _, file := range archive.files {
 		printArchive(file, prefix+"│ ")
 	}
 }
@@ -412,46 +412,77 @@ func printArchive(archive *File, prefix string) {
 func (m *Model) handleArchiveKeyEvent(key ui.KeyEvent, loc *location) {
 	switch key.Name {
 	case "Home":
-		loc.Selected = loc.File.Files[0]
+		loc.selected = loc.file.files[0]
 
 	case "End":
-		loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+		loc.selected = loc.file.files[len(loc.file.files)-1]
 
 	case "PgUp":
-		log.Printf("PgUp#1: loc.LineOffset=%v  m.ArchiveViewLines=%v", loc.LineOffset, m.archiveViewLines)
-		if loc.LineOffset < m.archiveViewLines {
-			loc.LineOffset = 0
-			loc.Selected = loc.File.Files[0]
-		} else {
-			loc.LineOffset -= m.archiveViewLines
-			loc.Selected = loc.File.Files[loc.LineOffset]
+		loc.lineOffset -= m.archiveViewLines
+		if loc.lineOffset < 0 {
+			loc.lineOffset = 0
 		}
-		log.Printf("PgUp#2: loc.LineOffset=%v  m.ArchiveViewLines=%v", loc.LineOffset, m.archiveViewLines)
+		idxSelected := ui.Y(0)
+		foundSelected := false
+		for i := 0; i < len(loc.file.files); i++ {
+			if loc.file.files[i] == loc.selected {
+				idxSelected = ui.Y(i)
+				foundSelected = true
+				break
+			}
+		}
+		if foundSelected {
+			idxSelected -= m.archiveViewLines
+			if idxSelected < 0 {
+				idxSelected = 0
+			}
+			loc.selected = loc.file.files[idxSelected]
+		}
 
 	case "PgDn":
+		loc.lineOffset += m.archiveViewLines
+		if loc.lineOffset > ui.Y(len(loc.file.files))-m.archiveViewLines {
+			loc.lineOffset = ui.Y(len(loc.file.files)) - m.archiveViewLines
+		}
+		idxSelected := ui.Y(0)
+		foundSelected := false
+		for i := 0; i < len(loc.file.files); i++ {
+			if loc.file.files[i] == loc.selected {
+				idxSelected = ui.Y(i)
+				foundSelected = true
+				break
+			}
+		}
+		if foundSelected {
+			idxSelected += m.archiveViewLines
+			if idxSelected > ui.Y(len(loc.file.files))-1 {
+				idxSelected = ui.Y(len(loc.file.files)) - 1
+			}
+			loc.selected = loc.file.files[idxSelected]
+		}
 
 	case "Up":
-		if loc.Selected != nil {
-			for i, file := range loc.File.Files {
-				if file == loc.Selected && i > 0 {
-					loc.Selected = loc.File.Files[i-1]
+		if loc.selected != nil {
+			for i, file := range loc.file.files {
+				if file == loc.selected && i > 0 {
+					loc.selected = loc.file.files[i-1]
 					break
 				}
 			}
 		} else {
-			loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+			loc.selected = loc.file.files[len(loc.file.files)-1]
 		}
 
 	case "Down":
-		if loc.Selected != nil {
-			for i, file := range loc.File.Files {
-				if file == loc.Selected && i+1 < len(loc.File.Files) {
-					loc.Selected = loc.File.Files[i+1]
+		if loc.selected != nil {
+			for i, file := range loc.file.files {
+				if file == loc.selected && i+1 < len(loc.file.files) {
+					loc.selected = loc.file.files[i+1]
 					break
 				}
 			}
 		} else {
-			loc.Selected = loc.File.Files[0]
+			loc.selected = loc.file.files[0]
 		}
 
 	}
@@ -509,58 +540,58 @@ func (m *Model) treeView() ui.Widget {
 			func(width ui.X, height ui.Y) ui.Widget {
 				m.archiveViewLines = height
 				location := m.currentLocation()
-				if location.LineOffset > ui.Y(len(location.File.Files)+1-int(height)) {
-					location.LineOffset = ui.Y(len(location.File.Files) + 1 - int(height))
+				if location.lineOffset > ui.Y(len(location.file.files)+1-int(height)) {
+					location.lineOffset = ui.Y(len(location.file.files) + 1 - int(height))
 				}
-				if location.LineOffset < 0 {
-					location.LineOffset = 0
+				if location.lineOffset < 0 {
+					location.lineOffset = 0
 				}
-				if location.Selected != nil {
+				if location.selected != nil {
 					idx := ui.Y(-1)
-					for i := range location.File.Files {
-						if location.Selected == location.File.Files[i] {
+					for i := range location.file.files {
+						if location.selected == location.file.files[i] {
 							idx = ui.Y(i)
 							break
 						}
 					}
 					if idx >= 0 {
-						if location.LineOffset > idx {
-							location.LineOffset = idx
+						if location.lineOffset > idx {
+							location.lineOffset = idx
 						}
-						if location.LineOffset < idx+1-height {
-							location.LineOffset = idx + 1 - height
+						if location.lineOffset < idx+1-height {
+							location.lineOffset = idx + 1 - height
 						}
 					}
 				}
 				rows := make([]ui.Widget, height)
 				i := 0
 				var file *File
-				for i, file = range location.File.Files[location.LineOffset:] {
+				for i, file = range location.file.files[location.lineOffset:] {
 					if i >= len(rows) {
 						break
 					}
-					if file.Kind == RegularFile {
-						rows[i] = ui.Styled(styleFile(file.Status, location.Selected == file),
+					if file.kind == regularFile {
+						rows[i] = ui.Styled(styleFile(file.status, location.selected == file),
 							ui.Row(
-								ui.Text(file.Status.String(), 7, 0),
+								ui.Text(file.status.String(), 7, 0),
 								ui.Text("  ", 2, 0),
-								ui.Text(file.Name, 20, 1),
+								ui.Text(file.name, 20, 1),
 								ui.Text("  ", 2, 0),
-								ui.Text(file.Info.ModTime.Format(time.DateTime), 19, 0),
+								ui.Text(file.info.ModTime.Format(time.DateTime), 19, 0),
 								ui.Text("  ", 2, 0),
-								ui.Text(formatSize(file.Size), 18, 0),
+								ui.Text(formatSize(file.size), 18, 0),
 							),
 						)
 					} else {
-						rows[i] = ui.Styled(styleFolder(file.Status, location.Selected == file),
+						rows[i] = ui.Styled(styleFolder(file.status, location.selected == file),
 							ui.Row(
-								ui.Text(file.Status.String(), 7, 0),
+								ui.Text(file.status.String(), 7, 0),
 								ui.Text("  ", 2, 0),
-								ui.Text(file.Name, 20, 1),
+								ui.Text(file.name, 20, 1),
 								ui.Text("  ", 2, 0),
 								ui.Text("<Каталог>", 19, 0),
 								ui.Text("  ", 2, 0),
-								ui.Text(formatSize(file.Size), 18, 0),
+								ui.Text(formatSize(file.size), 18, 0),
 							),
 						)
 					}
