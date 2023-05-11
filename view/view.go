@@ -4,15 +4,29 @@ import (
 	"arch/files"
 	"arch/ui"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
 type Model struct {
-	ScanStates       []*files.ScanState
-	Locations        []Location
-	ArchiveViewLines ui.Y
+	paths            []string
+	scanStates       []*files.ScanState
+	locations        []location
+	scanResults      files.ArchiveInfos
+	maps             []maps   // source, copy1, copy2, ...
+	links            []*links // copy1, copy2, ...
+	archiveViewLines ui.Y
+}
+
+func NewModel(paths []string) *Model {
+	log.Println("NewModel: paths =", paths)
+	return &Model{
+		paths:       paths,
+		scanStates:  make([]*files.ScanState, len(paths)),
+		scanResults: make(files.ArchiveInfos, len(paths)),
+	}
 }
 
 type File struct {
@@ -24,7 +38,7 @@ type File struct {
 	Files  []*File
 }
 
-type Location struct {
+type location struct {
 	File       *File
 	Selected   *File
 	LineOffset ui.Y
@@ -46,6 +60,19 @@ const (
 	CopyOnly
 	Discrepancy // расхождение
 )
+
+type links struct {
+	sourceLinks  map[*files.FileInfo]*files.FileInfo
+	reverseLinks map[*files.FileInfo]*files.FileInfo
+}
+
+type maps struct {
+	byName groupByName
+	byHash groupByHash
+}
+
+type groupByName map[string]*files.FileInfo
+type groupByHash map[string]files.FileInfos
 
 var (
 	DefaultStyle       = ui.Style{FG: 231, BG: 17}
@@ -109,7 +136,9 @@ func (s FileStatus) Merge(other FileStatus) FileStatus {
 	return other
 }
 
-func (m Model) View() ui.Widget {
+func (m *Model) View(event any) ui.Widget {
+	m.handleEvent(event)
+	log.Printf("### View %T: locations %d", event, len(m.locations))
 	return ui.Styled(DefaultStyle,
 		ui.Column(ui.Flex(0),
 			m.title(),
@@ -118,20 +147,351 @@ func (m Model) View() ui.Widget {
 		))
 }
 
-func (m Model) title() ui.Widget {
+func (m *Model) handleEvent(event any) {
+	log.Printf("### event#1 %T: locations %d", event, len(m.locations))
+	defer func() {
+		log.Printf("### event#2 %T: locations %d", event, len(m.locations))
+	}()
+
+	switch event := event.(type) {
+	case *files.ScanState:
+		for i := range m.paths {
+			if m.paths[i] == event.Archive {
+				m.scanStates[i] = event
+				break
+			}
+		}
+
+	case *files.ArchiveInfo:
+		for i := range m.paths {
+			if m.paths[i] == event.Archive {
+				m.scanStates[i] = nil
+				m.scanResults[i] = event
+				break
+			}
+		}
+		doneScanning := true
+		for i := range m.paths {
+			if m.scanResults[i] == nil {
+				doneScanning = false
+				break
+			}
+		}
+		if doneScanning {
+			m.analizeArchives()
+			log.Println("### handleEvent: locations", len(m.locations))
+		}
+
+	case ui.KeyEvent:
+		if location := m.currentLocation(); location != nil {
+			m.handleArchiveKeyEvent(event, location)
+		}
+
+	case ui.MouseEvent:
+		log.Printf("EventMouse: [%d:%d]", event.Col, event.Line)
+
+	default:
+		log.Printf("### unhandled event %#v", event)
+	}
+}
+
+func (m *Model) analizeArchives() {
+	log.Println("### analizeArchives#1: locations", len(m.locations))
+	defer func() {
+		log.Println("### analizeArchives#3: locations", len(m.locations))
+	}()
+
+	m.scanStates = nil
+	m.maps = make([]maps, len(m.scanResults))
+	for i, scan := range m.scanResults {
+		m.maps[i] = maps{
+			byName: byName(scan.Files),
+			byHash: byHash(scan.Files),
+		}
+	}
+
+	m.links = make([]*links, len(m.scanResults)-1)
+	for i, copy := range m.scanResults[1:] {
+		m.links[i] = m.linkArchives(copy.Files)
+	}
+	m.buildFileTree()
+	log.Println("### analizeArchives#2: locations", len(m.locations))
+}
+
+func byName(infos files.FileInfos) groupByName {
+	result := groupByName{}
+	for _, info := range infos {
+		result[info.Name] = info
+	}
+	return result
+}
+
+func byHash(archive files.FileInfos) groupByHash {
+	result := groupByHash{}
+	for _, info := range archive {
+		result[info.Hash] = append(result[info.Hash], info)
+	}
+	return result
+}
+
+func (m *Model) buildFileTree() {
+
+	m.locations = []location{{
+		File: &File{Kind: Folder},
+	}}
+
+	log.Println("### buildFileTree#1: locations", len(m.locations))
+	defer log.Println("### buildFileTree#2: locations", len(m.locations))
+
+	uniqueFileNames := map[string]struct{}{}
+	for _, info := range m.scanResults[0].Files {
+		uniqueFileNames[info.Name] = struct{}{}
+	}
+	for i, copyScan := range m.scanResults[1:] {
+		reverseLinks := m.links[i].reverseLinks
+		for _, info := range copyScan.Files {
+			if _, ok := reverseLinks[info]; !ok {
+				uniqueFileNames[info.Name] = struct{}{}
+			}
+		}
+	}
+
+	for fullName := range uniqueFileNames {
+		path := strings.Split(fullName, "/")
+		name := path[len(path)-1]
+		path = path[:len(path)-1]
+		infos := make([]*files.FileInfo, len(m.maps))
+		for i, info := range m.maps {
+			infos[i] = info.byName[fullName]
+		}
+		for i, info := range infos {
+			current := m.locations[0].File
+			fileStack := []*File{current}
+			if info == nil {
+				continue
+			}
+			if i > 0 && infos[0] != nil && infos[0].Hash == info.Hash {
+				continue
+			}
+			if i == 0 {
+				current.Size += info.Size
+			}
+			for _, dir := range path {
+				sub := subFolder(current, dir)
+				if i == 0 {
+					sub.Size += info.Size
+				}
+				current = sub
+				fileStack = append(fileStack, current)
+			}
+
+			status := Identical
+			if i == 0 {
+				for _, links := range m.links {
+					if links.sourceLinks[info] == nil {
+						status = SourceOnly
+					}
+				}
+			} else {
+				if i > 0 && infos[0] != nil {
+					status = Discrepancy
+				} else {
+					status = CopyOnly
+				}
+			}
+
+			currentFile := &File{
+				Info:   info,
+				Kind:   RegularFile,
+				Status: status,
+				Name:   name,
+				Size:   info.Size,
+			}
+			current.Files = append(current.Files, currentFile)
+			for _, current = range fileStack {
+				current.Status = status.Merge(current.Status)
+			}
+		}
+	}
+	// printArchive(m.currentLocation().File, "")
+}
+
+func subFolder(dir *File, name string) *File {
+	for i := range dir.Files {
+		if name == dir.Files[i].Name && dir.Files[i].Kind == Folder {
+			return dir.Files[i]
+		}
+	}
+	subFolder := &File{Kind: Folder, Name: name}
+	dir.Files = append(dir.Files, subFolder)
+	return subFolder
+}
+
+func (a *links) String() string {
+	b := &strings.Builder{}
+	fmt.Fprintln(b, "Source Map:")
+	for s, c := range a.sourceLinks {
+		fmt.Fprintf(b, "  %s -> %s %s\n", s.Name, c.Name, s.Hash)
+	}
+	fmt.Fprintln(b, "Reverse Map:")
+	for s, c := range a.reverseLinks {
+		fmt.Fprintf(b, "  %s -> %s %s\n", s.Name, c.Name, s.Hash)
+	}
+	return b.String()
+}
+
+func (m *Model) linkArchives(copyInfos files.FileInfos) *links {
+	result := &links{
+		sourceLinks:  map[*files.FileInfo]*files.FileInfo{},
+		reverseLinks: map[*files.FileInfo]*files.FileInfo{},
+	}
+	for _, copy := range copyInfos {
+		if sources, ok := m.maps[0].byHash[copy.Hash]; ok {
+			match(sources, copy, result.sourceLinks)
+		}
+	}
+
+	for source, copy := range result.sourceLinks {
+		result.reverseLinks[copy] = source
+	}
+
+	return result
+}
+
+func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.FileInfo]*files.FileInfo) *files.FileInfo {
+	for _, source := range sources {
+		if copy.Name == source.Name {
+			sourceMap[source] = copy
+			return nil
+		}
+	}
+
+	for _, source := range sources {
+		tmpCopy := sourceMap[source]
+		sourceBase := filepath.Base(source.Name)
+		if filepath.Base(copy.Name) == sourceBase && (tmpCopy == nil || filepath.Base(tmpCopy.Name) != sourceBase) {
+			sourceMap[source] = copy
+			copy = tmpCopy
+			break
+		}
+	}
+
+	if copy == nil {
+		return nil
+	}
+
+	for _, source := range sources {
+		tmpCopy := sourceMap[source]
+		sourceBase := filepath.Base(source.Name)
+		sourceDir := filepath.Dir(source.Name)
+		if filepath.Dir(copy.Name) == sourceDir &&
+			(tmpCopy == nil ||
+				(filepath.Base(tmpCopy.Name) != sourceBase && filepath.Dir(tmpCopy.Name) != sourceDir)) {
+
+			sourceMap[source] = copy
+			copy = tmpCopy
+			break
+		}
+	}
+
+	if copy == nil {
+		return nil
+	}
+
+	for _, source := range sources {
+		if sourceMap[source] == nil {
+			sourceMap[source] = copy
+			return nil
+		}
+	}
+
+	return copy
+}
+
+func printArchive(archive *File, prefix string) {
+	kind := "D"
+	if archive.Kind == RegularFile {
+		kind = "F"
+	}
+	if archive.Kind == RegularFile {
+		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.Name, archive.Status, archive.Size, archive.Info.Hash)
+	} else {
+		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.Name, archive.Status, archive.Size)
+	}
+	for _, file := range archive.Files {
+		printArchive(file, prefix+"│ ")
+	}
+}
+
+func (m *Model) handleArchiveKeyEvent(key ui.KeyEvent, loc *location) {
+	switch key.Name {
+	case "Home":
+		loc.Selected = loc.File.Files[0]
+
+	case "End":
+		loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+
+	case "PgUp":
+		log.Printf("PgUp#1: loc.LineOffset=%v  m.ArchiveViewLines=%v", loc.LineOffset, m.archiveViewLines)
+		if loc.LineOffset < m.archiveViewLines {
+			loc.LineOffset = 0
+			loc.Selected = loc.File.Files[0]
+		} else {
+			loc.LineOffset -= m.archiveViewLines
+			loc.Selected = loc.File.Files[loc.LineOffset]
+		}
+		log.Printf("PgUp#2: loc.LineOffset=%v  m.ArchiveViewLines=%v", loc.LineOffset, m.archiveViewLines)
+
+	case "PgDn":
+
+	case "Up":
+		if loc.Selected != nil {
+			for i, file := range loc.File.Files {
+				if file == loc.Selected && i > 0 {
+					loc.Selected = loc.File.Files[i-1]
+					break
+				}
+			}
+		} else {
+			loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+		}
+
+	case "Down":
+		if loc.Selected != nil {
+			for i, file := range loc.File.Files {
+				if file == loc.Selected && i+1 < len(loc.File.Files) {
+					loc.Selected = loc.File.Files[i+1]
+					break
+				}
+			}
+		} else {
+			loc.Selected = loc.File.Files[0]
+		}
+
+	}
+}
+
+func (m *Model) currentLocation() *location {
+	if len(m.locations) == 0 {
+		return nil
+	}
+	return &m.locations[len(m.locations)-1]
+}
+
+func (m *Model) title() ui.Widget {
 	return ui.Row(
 		ui.Styled(styleAppTitle, ui.Text(" АРХИВАТОР", 4, 1)),
 	)
 }
 
-func (m Model) scanStats() ui.Widget {
-	if m.ScanStates == nil {
+func (m *Model) scanStats() ui.Widget {
+	if m.scanStates == nil {
 		return ui.NullWidget{}
 	}
 	forms := []ui.Widget{}
-	for i := range m.ScanStates {
-		if m.ScanStates[i] != nil {
-			forms = append(forms, scanStatsForm(m.ScanStates[i]))
+	for i := range m.scanStates {
+		if m.scanStates[i] != nil {
+			forms = append(forms, scanStatsForm(m.scanStates[i]))
 		}
 	}
 	forms = append(forms, ui.Spacer{})
@@ -150,8 +510,9 @@ func scanStatsForm(state *files.ScanState) ui.Widget {
 	)
 }
 
-func (m Model) treeView() ui.Widget {
-	if m.Locations == nil {
+func (m *Model) treeView() ui.Widget {
+	log.Println("### treeView: locations", len(m.locations))
+	if len(m.locations) == 0 {
 		return ui.NullWidget{}
 	}
 
@@ -161,8 +522,8 @@ func (m Model) treeView() ui.Widget {
 		),
 		ui.Sized(ui.MakeConstraints(0, 1, 0, 1),
 			func(width ui.X, height ui.Y) ui.Widget {
-				m.ArchiveViewLines = height
-				location := &m.Locations[len(m.Locations)-1]
+				m.archiveViewLines = height
+				location := m.currentLocation()
 				if location.LineOffset > ui.Y(len(location.File.Files)+1-int(height)) {
 					location.LineOffset = ui.Y(len(location.File.Files) + 1 - int(height))
 				}
