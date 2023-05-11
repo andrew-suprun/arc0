@@ -89,7 +89,6 @@ func (app *app) analizeArchives() {
 		app.links[i] = app.linkArchives(copy.Files)
 	}
 	app.buildFileTree()
-	app.model.Location.File = app.model.Root
 }
 
 func byName(infos files.FileInfos) groupByName {
@@ -109,7 +108,10 @@ func byHash(archive files.FileInfos) groupByHash {
 }
 
 func (app *app) buildFileTree() {
-	app.model.Root = &view.File{Kind: view.Folder}
+	app.model.Locations = []view.Location{{
+		File: &view.File{Kind: view.Folder},
+	}}
+
 	uniqueFileNames := map[string]struct{}{}
 	for _, info := range app.scanResults[0].Files {
 		uniqueFileNames[info.Name] = struct{}{}
@@ -132,7 +134,8 @@ func (app *app) buildFileTree() {
 			infos[i] = info.byName[fullName]
 		}
 		for i, info := range infos {
-			current := app.model.Root
+			current := app.model.Locations[0].File
+			fileStack := []*view.File{current}
 			if info == nil {
 				continue
 			}
@@ -148,6 +151,7 @@ func (app *app) buildFileTree() {
 					sub.Size += info.Size
 				}
 				current = sub
+				fileStack = append(fileStack, current)
 			}
 
 			status := view.Identical
@@ -166,7 +170,6 @@ func (app *app) buildFileTree() {
 			}
 
 			currentFile := &view.File{
-				Parent: current,
 				Info:   info,
 				Kind:   view.RegularFile,
 				Status: status,
@@ -174,22 +177,21 @@ func (app *app) buildFileTree() {
 				Size:   info.Size,
 			}
 			current.Files = append(current.Files, currentFile)
-			for current != nil {
+			for _, current = range fileStack {
 				current.Status = status.Merge(current.Status)
-				current = current.Parent
 			}
 		}
 	}
-	printArchive(app.model.Root, "")
+	printArchive(app.model.Locations[0].File, "")
 }
 
 func subFolder(dir *view.File, name string) *view.File {
 	for i := range dir.Files {
-		if name == dir.Files[i].Name {
+		if name == dir.Files[i].Name && dir.Files[i].Kind == view.Folder {
 			return dir.Files[i]
 		}
 	}
-	subFolder := &view.File{Parent: dir, Kind: view.Folder, Name: name}
+	subFolder := &view.File{Kind: view.Folder, Name: name}
 	dir.Files = append(dir.Files, subFolder)
 	return subFolder
 }
@@ -327,20 +329,51 @@ func (app *app) handleFsEvent(event any) {
 func (app *app) handleUiEvent(event any) {
 	switch ev := event.(type) {
 	case ui.ResizeEvent:
-		log.Printf("ResizeEvent: [%d:%d]", ev.Width, ev.Height)
 		app.width, app.height = ev.Width, ev.Height
 		app.render()
 		app.renderer.Sync()
 	case ui.KeyEvent:
-		log.Printf("EventKey: name=%s '%c'", ev.Name, ev.Rune)
-		if ev.Name == "Ctrl+C" {
+		switch ev.Name {
+		case "Ctrl+C":
 			app.quit = true
+		case "Down":
+			loc := app.currentLocation()
+			if loc.Selected != nil {
+				for i, file := range loc.File.Files {
+					if file == loc.Selected && i+1 < len(loc.File.Files) {
+						loc.Selected = loc.File.Files[i+1]
+						break
+					}
+				}
+			} else {
+				loc.Selected = loc.File.Files[0]
+			}
+
+		case "Up":
+			loc := app.currentLocation()
+			if loc.Selected != nil {
+				for i, file := range loc.File.Files {
+					if file == loc.Selected && i > 0 {
+						loc.Selected = loc.File.Files[i-1]
+						break
+					}
+				}
+			} else {
+				loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+			}
 		}
 
 	case ui.MouseEvent:
 		log.Printf("EventMouse: [%d:%d]", ev.Col, ev.Line)
 	default:
 	}
+}
+
+func (app *app) currentLocation() *view.Location {
+	if app.model.Locations == nil {
+		return nil
+	}
+	return &app.model.Locations[len(app.model.Locations)-1]
 }
 
 func (app *app) render() {

@@ -11,12 +11,10 @@ import (
 
 type Model struct {
 	ScanStates []*files.ScanState
-	Root       *File
-	Location   Location
+	Locations  []Location
 }
 
 type File struct {
-	Parent *File
 	Info   *files.FileInfo
 	Kind   FileKind
 	Status FileStatus
@@ -26,8 +24,8 @@ type File struct {
 }
 
 type Location struct {
-	Folder     *File
 	File       *File
+	Selected   *File
 	LineOffset int
 }
 
@@ -149,7 +147,7 @@ func scanStatsForm(state *files.ScanState) ui.Widget {
 }
 
 func (m Model) treeView() ui.Widget {
-	if m.Root == nil {
+	if m.Locations == nil {
 		return ui.NullWidget{}
 	}
 
@@ -159,21 +157,22 @@ func (m Model) treeView() ui.Widget {
 		),
 		ui.Sized(ui.MakeConstraints(0, 1, 0, 1),
 			func(width ui.W, height ui.H) ui.Widget {
-				if m.Location.LineOffset > len(m.Location.File.Files)-int(height) {
-					m.Location.LineOffset = len(m.Location.File.Files) - int(height)
+				location := m.Locations[len(m.Locations)-1]
+				if location.LineOffset > len(location.File.Files)-int(height) {
+					location.LineOffset = len(location.File.Files) - int(height)
 				}
-				if m.Location.LineOffset < 0 {
-					m.Location.LineOffset = 0
+				if location.LineOffset < 0 {
+					location.LineOffset = 0
 				}
 				rows := make([]ui.Widget, height)
 				i := 0
 				var file *File
-				for i, file = range m.Location.File.Files[m.Location.LineOffset:] {
+				for i, file = range location.File.Files[location.LineOffset:] {
 					if i >= len(rows) {
 						break
 					}
 					if file.Kind == RegularFile {
-						rows[i] = ui.Styled(styleFile(file.Status, false),
+						rows[i] = ui.Styled(styleFile(file.Status, location.Selected == file),
 							ui.Row(
 								ui.Text(file.Status.String(), 7, 0),
 								ui.Text("  ", 2, 0),
@@ -185,7 +184,7 @@ func (m Model) treeView() ui.Widget {
 							),
 						)
 					} else {
-						rows[i] = ui.Styled(styleFolder(file.Status, false),
+						rows[i] = ui.Styled(styleFolder(file.Status, location.Selected == file),
 							ui.Row(
 								ui.Text(file.Status.String(), 7, 0),
 								ui.Text("  ", 2, 0),
@@ -198,7 +197,7 @@ func (m Model) treeView() ui.Widget {
 						)
 					}
 				}
-				for ; i < int(height); i++ {
+				for i++; i < int(height); i++ {
 					rows[i] = ui.Text("", 0, 1)
 				}
 				return ui.Column(0, rows...)
