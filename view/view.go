@@ -5,6 +5,7 @@ import (
 	"arch/ui"
 	"fmt"
 	"log"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -299,7 +300,7 @@ func (m *Model) buildFileTree() {
 			}
 		}
 	}
-	// printArchive(m.currentLocation().File, "")
+	// PrintArchive(m.currentLocation().File, "")
 }
 
 func subFolder(dir *File, name string) *File {
@@ -394,7 +395,7 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 	return copy
 }
 
-func printArchive(archive *File, prefix string) {
+func PrintArchive(archive *File, prefix string) {
 	kind := "D"
 	if archive.kind == regularFile {
 		kind = "F"
@@ -405,7 +406,7 @@ func printArchive(archive *File, prefix string) {
 		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.name, archive.status, archive.size)
 	}
 	for _, file := range archive.files {
-		printArchive(file, prefix+"│ ")
+		PrintArchive(file, prefix+"│ ")
 	}
 }
 
@@ -414,7 +415,14 @@ func (m *Model) handleArchiveKeyEvent(key ui.KeyEvent, loc *location) {
 	case "Enter":
 		if loc.selected != nil && loc.selected.kind == folder {
 			m.locations = append(m.locations, location{file: loc.selected})
+		} else { // TODO
+			fileName := filepath.Join(loc.selected.info.Archive, loc.selected.info.Name)
+			exec.Command("open", fileName).Start()
 		}
+
+	case "Rune[R]", "Rune[r]":
+		fileName := filepath.Join(loc.selected.info.Archive, loc.selected.info.Name)
+		exec.Command("open", fileName).Start()
 
 	case "Esc":
 		if len(m.locations) > 1 {
