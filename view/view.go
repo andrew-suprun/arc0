@@ -411,6 +411,16 @@ func printArchive(archive *File, prefix string) {
 
 func (m *Model) handleArchiveKeyEvent(key ui.KeyEvent, loc *location) {
 	switch key.Name {
+	case "Enter":
+		if loc.selected != nil && loc.selected.kind == folder {
+			m.locations = append(m.locations, location{file: loc.selected})
+		}
+
+	case "Esc":
+		if len(m.locations) > 1 {
+			m.locations = m.locations[:len(m.locations)-1]
+		}
+
 	case "Home":
 		loc.selected = loc.file.files[0]
 

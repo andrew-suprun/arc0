@@ -2,6 +2,7 @@ package tcell
 
 import (
 	"arch/ui"
+	"log"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -18,7 +19,6 @@ func NewRenderer() (ui.Renderer, error) {
 	if err := screen.Init(); err != nil {
 		return nil, err
 	}
-	screen.SetStyle(noStyle)
 	screen.EnableMouse()
 	screen.EnablePaste()
 
@@ -69,6 +69,7 @@ func (r *renderer) uiEvent(ev tcell.Event) any {
 		return ui.ResizeEvent{Width: w, Height: h}
 
 	case *tcell.EventKey:
+		log.Printf("key: name=%v rune='%v' mod=%v", ev.Name(), ev.Rune(), ev.Modifiers())
 		return ui.KeyEvent{Name: ev.Name(), Rune: ev.Rune()}
 
 	case *tcell.EventMouse:
@@ -79,8 +80,6 @@ func (r *renderer) uiEvent(ev tcell.Event) any {
 		return nil
 	}
 }
-
-var noStyle = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
 
 func tcellStyle(uiStyle ui.Style) tcell.Style {
 	return tcell.StyleDefault.
