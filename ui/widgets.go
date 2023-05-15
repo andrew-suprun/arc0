@@ -15,11 +15,18 @@ type Context struct {
 }
 
 type MouseTargetArea struct {
-	Pos  Position
-	Size Size
+	Command any
+	Pos     Position
+	Size    Size
 }
 
 type ScrollArea struct {
-	Pos  Position
-	Size Size
+	Command any
+	Pos     Position
+	Size    Size
+}
+
+func (ctx *Context) Reset() {
+	ctx.MouseTargetAreas = ctx.MouseTargetAreas[:0]
+	ctx.ScrollAreas = ctx.ScrollAreas[:0]
 }

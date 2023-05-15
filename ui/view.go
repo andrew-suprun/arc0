@@ -21,8 +21,7 @@ type model struct {
 	links            []*links // copy1, copy2, ...
 	screenSize       Size
 	archiveViewLines int
-	device           Context
-	renderMode       device.RenderMode
+	ctx              *Context
 }
 
 func Run(r device.Device, events chan any, paths []string) {
@@ -31,21 +30,18 @@ func Run(r device.Device, events chan any, paths []string) {
 		paths:       paths,
 		scanStates:  make([]*files.ScanState, len(paths)),
 		scanResults: make(files.ArchiveInfos, len(paths)),
-		device:      Context{Device: r, Style: defaultStyle},
+		ctx:         &Context{Device: r, Style: defaultStyle},
 	}
-	defer m.device.Device.Exit()
+	defer m.ctx.Device.Exit()
 	for m.handleEvent(<-events) {
+		m.ctx.Reset()
 		Column(0,
 			m.title(),
 			m.scanStats(),
 			m.treeView(),
-		).Render(&m.device, Position{0, 0}, m.screenSize)
-		if m.renderMode == device.Regular {
-			m.device.Device.Show()
-		} else {
-			m.device.Device.Sync()
-			m.renderMode = device.Regular
-		}
+			m.statusLine(),
+		).Render(m.ctx, Position{0, 0}, m.screenSize)
+		m.ctx.Device.Show()
 	}
 }
 
@@ -97,25 +93,12 @@ type groupByHash map[string]files.FileInfos
 var (
 	defaultStyle       = device.Style{FG: 231, BG: 17}
 	styleAppTitle      = device.Style{FG: 226, BG: 0, Flags: device.Bold + device.Italic}
+	styleStatusLine    = device.Style{FG: 226, BG: 0}
 	styleProgressBar   = device.Style{FG: 231, BG: 19}
 	styleArchiveHeader = device.Style{FG: 231, BG: 8, Flags: device.Bold}
 )
 
-func styleFile(status fileStatus, selected bool) device.Style {
-	result := device.Style{FG: statusColor(status), BG: 17}
-	if selected {
-		result.Flags |= device.Reverse
-	}
-	return result
-}
-
-func styleFolder(status fileStatus, selected bool) device.Style {
-	result := device.Style{FG: statusColor(status), BG: 18, Flags: device.Bold + device.Italic}
-	if selected {
-		result.Flags |= device.Reverse
-	}
-	return result
-}
+type selectFile *File
 
 func statusColor(status fileStatus) byte {
 	switch status {
@@ -190,7 +173,7 @@ func (m *model) handleEvent(event any) bool {
 
 	case ResizeEvent:
 		m.screenSize = Size(event)
-		m.renderMode = device.Sync
+		m.ctx.Device.Sync()
 
 	case KeyEvent:
 		if event.Name == "Ctrl+C" {
@@ -201,7 +184,15 @@ func (m *model) handleEvent(event any) bool {
 		}
 
 	case MouseEvent:
-		log.Printf("EventMouse: [%d:%d]", event.Col, event.Line)
+		for _, target := range m.ctx.MouseTargetAreas {
+			if target.Pos.X <= event.X && target.Pos.X+target.Size.Width > event.X &&
+				target.Pos.Y <= event.Y && target.Pos.Y+target.Size.Height > event.Y {
+
+				if file, ok := target.Command.(selectFile); ok {
+					m.currentLocation().selected = file
+				}
+			}
+		}
 
 	default:
 		log.Printf("### unhandled event %#v", event)
@@ -536,6 +527,12 @@ func (m *model) title() Widget {
 	)
 }
 
+func (m *model) statusLine() Widget {
+	return Row(
+		Styled(styleStatusLine, Text(" Status line will be here...", 4, 1)),
+	)
+}
+
 func (m *model) scanStats() Widget {
 	if m.scanStates == nil {
 		return NullWidget{}
@@ -605,31 +602,17 @@ func (m *model) treeView() Widget {
 					if i >= len(rows) {
 						break
 					}
-					if file.kind == regularFile {
-						rows[i] = Styled(styleFile(file.status, location.selected == file),
-							Row(
-								Text(file.status.String(), 7, 0),
-								Text("  ", 2, 0),
-								Text(file.name, 20, 1),
-								Text("  ", 2, 0),
-								Text(file.info.ModTime.Format(time.DateTime), 19, 0),
-								Text("  ", 2, 0),
-								Text(formatSize(file.size), 18, 0),
-							),
-						)
-					} else {
-						rows[i] = Styled(styleFolder(file.status, location.selected == file),
-							Row(
-								Text(file.status.String(), 7, 0),
-								Text("  ", 2, 0),
-								Text(file.name, 20, 1),
-								Text("  ", 2, 0),
-								Text("<Каталог>", 19, 0),
-								Text("  ", 2, 0),
-								Text(formatSize(file.size), 18, 0),
-							),
-						)
-					}
+					rows[i] = Styled(styleFile(file, location.selected == file),
+						MouseTarget(selectFile(file), Row(
+							Text(file.status.String(), 7, 0),
+							Text("  ", 2, 0),
+							Text(file.name, 20, 1),
+							Text("  ", 2, 0),
+							Text(modTime(file), 19, 0),
+							Text("  ", 2, 0),
+							Text(formatSize(file.size), 18, 0),
+						)),
+					)
 				}
 				for i++; i < size.Height; i++ {
 					rows[i] = Text("", 0, 1)
@@ -638,6 +621,25 @@ func (m *model) treeView() Widget {
 			},
 		),
 	)
+}
+
+func styleFile(file *File, selected bool) device.Style {
+	bg, flags := byte(17), device.Flags(0)
+	if file.kind == folder {
+		bg, flags = byte(18), device.Bold+device.Italic
+	}
+	result := device.Style{FG: statusColor(file.status), BG: bg, Flags: flags}
+	if selected {
+		result.Flags |= device.Reverse
+	}
+	return result
+}
+
+func modTime(file *File) string {
+	if file.kind == regularFile {
+		return file.info.ModTime.Format(time.DateTime)
+	}
+	return "<Каталог>"
 }
 
 func formatSize(size int) string {

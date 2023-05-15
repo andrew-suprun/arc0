@@ -14,8 +14,8 @@ func (s scroll) Constraint() Constraint {
 	return s.constraint
 }
 
-func (g scroll) Render(ctx *Context, pos Position, size Size) {
-	ctx.ScrollAreas = append(ctx.ScrollAreas, ScrollArea{pos, size})
-	widget := g.widget(size)
+func (s scroll) Render(ctx *Context, pos Position, size Size) {
+	ctx.ScrollAreas = append(ctx.ScrollAreas, ScrollArea{s.command, pos, size})
+	widget := s.widget(size)
 	widget.Render(ctx, pos, size)
 }

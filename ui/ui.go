@@ -21,8 +21,25 @@ type Constraint struct {
 }
 
 type MouseEvent struct {
-	Col, Line int
+	Position
+	Button
+	ButtonModifier
 }
+
+type Button int
+
+const (
+	LeftButton  Button = 1
+	RightButton Button = 2
+)
+
+type ButtonModifier int
+
+const (
+	Shift   ButtonModifier = 1
+	Control ButtonModifier = 2
+	Option  ButtonModifier = 4
+)
 
 type KeyEvent struct {
 	Name string
