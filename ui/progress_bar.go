@@ -1,14 +1,16 @@
 package ui
 
-import "math"
+import (
+	"math"
+)
 
 type progressBar struct {
 	value float64
-	width X
-	flex  Flex
+	width int
+	flex  int
 }
 
-func ProgressBar(value float64, width X, flex Flex) progressBar {
+func ProgressBar(value float64, width int, flex int) progressBar {
 	return progressBar{
 		value: value,
 		width: width,
@@ -16,21 +18,21 @@ func ProgressBar(value float64, width X, flex Flex) progressBar {
 	}
 }
 
-func (pb progressBar) Constraints() Constraints {
-	return MakeConstraints(pb.width, pb.flex, 1, 0)
+func (pb progressBar) Constraint() Constraint {
+	return Constraint{Size{pb.width, 1}, Flex{pb.flex, 0}}
 }
 
 func (pb progressBar) Flex() int {
 	return 2
 }
 
-func (pb progressBar) Render(renderer Renderer, x X, y Y, width X, _ Y, style Style) {
-	if width < 1 {
+func (pb progressBar) Render(ctx *Context, pos Position, size Size) {
+	if size.Width < 1 {
 		return
 	}
 
-	runes := make([]rune, width)
-	progress := int(math.Round(float64(width*8) * float64(pb.value)))
+	runes := make([]rune, size.Width)
+	progress := int(math.Round(float64(size.Width*8) * float64(pb.value)))
 	idx := 0
 	for ; idx < progress/8; idx++ {
 		runes[idx] = '█'
@@ -39,9 +41,9 @@ func (pb progressBar) Render(renderer Renderer, x X, y Y, width X, _ Y, style St
 		runes[idx] = []rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}[progress%8]
 		idx++
 	}
-	for ; idx < int(width); idx++ {
+	for ; idx < int(size.Width); idx++ {
 		runes[idx] = ' '
 	}
 
-	renderer.Text(runes, x, y, style)
+	ctx.Device.Text(runes, pos.X, pos.Y, ctx.Style)
 }

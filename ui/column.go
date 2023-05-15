@@ -1,30 +1,34 @@
 package ui
 
 type column struct {
-	constraint Constraint[Y]
-	widgets    []Widget
+	height  int
+	flex    int
+	widgets []Widget
 }
 
-func Column(flex Flex, widgets ...Widget) Widget {
-	height := Y(0)
+func Column(flex int, widgets ...Widget) Widget {
+	height := 0
 	for _, widget := range widgets {
-		height += widget.Constraints().Height.Size
+		height += widget.Constraint().Size.Height
 	}
-	return column{Constraint[Y]{height, flex}, widgets}
+	return column{height, flex, widgets}
 }
 
-func (c column) Constraints() Constraints {
-	return Constraints{Width: Constraint[X]{0, 1}, Height: c.constraint}
+func (c column) Constraint() Constraint {
+	return Constraint{Size{0, c.height}, Flex{1, c.flex}}
 }
 
-func (c column) Render(renderer Renderer, x X, y Y, width X, height Y, style Style) {
-	sizes := make([]Constraint[Y], len(c.widgets))
+func (c column) Render(ctx *Context, pos Position, size Size) {
+	sizes := make([]int, len(c.widgets))
+	flexes := make([]int, len(c.widgets))
 	for i, widget := range c.widgets {
-		sizes[i] = widget.Constraints().Height
+		sizes[i] = widget.Constraint().Height
+		flexes[i] = widget.Constraint().Y
 	}
-	heights := calcSizes(height, sizes)
+	heights := calcSizes(size.Height, sizes, flexes)
+	y := 0
 	for i, widget := range c.widgets {
-		widget.Render(renderer, x, y, width, heights[i], style)
+		widget.Render(ctx, Position{pos.X, pos.Y + y}, Size{size.Width, heights[i]})
 		y += heights[i]
 	}
 }

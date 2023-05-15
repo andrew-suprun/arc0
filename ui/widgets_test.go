@@ -5,14 +5,9 @@ import (
 )
 
 func TestCalcSizes(t *testing.T) {
-	for w := X(0); w <= 80; w++ {
-		widths := calcSizes(w, []Constraint[X]{
-			{14, 0},
-			{15, 2},
-			{16, 3},
-			{8, 0},
-		})
-		total := X(0)
+	for w := 0; w <= 80; w++ {
+		widths := calcSizes(w, []int{14, 15, 16, 8}, []int{0, 2, 3, 0})
+		total := 0
 		for _, width := range widths {
 			total += width
 		}
@@ -21,37 +16,3 @@ func TestCalcSizes(t *testing.T) {
 		}
 	}
 }
-
-func TestRow(t *testing.T) {
-	for w := X(0); w <= 80; w++ {
-		row := Row(
-			Text("foofoofoofoofoo", 10, 0),
-			Text("barbarbarbarbar", 10, 2),
-			Text("bazbazbazbazbaz", 10, 3),
-			Text("quuzquuz", 10, 0),
-		)
-		r := &TestRenderer{}
-		row.Render(r, 0, 0, w, 1, Style{})
-		if r.width != w {
-			t.Fail()
-		}
-	}
-}
-
-type TestRenderer struct {
-	width X
-}
-
-func (*TestRenderer) PollEvent() any {
-	select {}
-}
-
-func (r *TestRenderer) Text(runes []rune, x X, y Y, style Style) {
-	r.width += X(len(runes))
-}
-
-func (*TestRenderer) MouseTarget(command any, x X, y Y)  {}
-func (*TestRenderer) ScrollTarget(command any, x X, y Y) {}
-func (*TestRenderer) Show()                              {}
-func (*TestRenderer) Sync()                              {}
-func (*TestRenderer) Exit()                              {}

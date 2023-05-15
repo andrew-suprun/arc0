@@ -1,31 +1,23 @@
 package ui
 
-type X int
-type Y int
-type Flex int
-
-type Constraint[S X | Y] struct {
-	Size S
-	Flex Flex
+type Position struct {
+	X int
+	Y int
 }
 
-type Constraints struct {
-	Width  Constraint[X]
-	Height Constraint[Y]
+type Size struct {
+	Width  int
+	Height int
 }
 
-func MakeConstraints(width X, wFlex Flex, height Y, hFlex Flex) Constraints {
-	return Constraints{Width: Constraint[X]{width, wFlex}, Height: Constraint[Y]{height, hFlex}}
+type Flex struct {
+	X int
+	Y int
 }
 
-type Renderer interface {
-	PollEvent() any
-	MouseTarget(command any, x X, y Y)
-	ScrollTarget(command any, x X, y Y)
-	Text(runes []rune, x X, y Y, style Style)
-	Show()
-	Sync()
-	Exit()
+type Constraint struct {
+	Size
+	Flex
 }
 
 type MouseEvent struct {
@@ -39,9 +31,4 @@ type KeyEvent struct {
 
 type ResizeEvent struct {
 	Width, Height int
-}
-
-type Style struct {
-	FG, BG                int
-	Bold, Italic, Reverse bool
 }

@@ -1,18 +1,24 @@
 package ui
 
+import "arch/device"
+
 type styled struct {
-	style  Style
+	style  device.Style
 	widget Widget
 }
 
-func Styled(style Style, widget Widget) Widget {
+func Styled(style device.Style, widget Widget) Widget {
 	return styled{style: style, widget: widget}
 }
 
-func (s styled) Constraints() Constraints {
-	return s.widget.Constraints()
+func (s styled) Constraint() Constraint {
+	return s.widget.Constraint()
 }
 
-func (s styled) Render(renderer Renderer, x X, y Y, width X, height Y, style Style) {
-	s.widget.Render(renderer, x, y, width, height, s.style)
+// TODO: remove style argument
+func (s styled) Render(ctx *Context, pos Position, size Size) {
+	currentStyle := ctx.Style
+	ctx.Style = s.style
+	s.widget.Render(ctx, pos, size)
+	ctx.Style = currentStyle
 }

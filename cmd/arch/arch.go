@@ -1,12 +1,12 @@
 package main
 
 import (
-	"arch/app"
+	"arch/device/tcell"
 	"arch/files"
 	"arch/files/file_fs"
 	"arch/files/mock2_fs"
 	"arch/files/mock_fs"
-	"arch/ui/tcell"
+	"arch/ui"
 	"log"
 	"os"
 )
@@ -35,11 +35,29 @@ func main() {
 		}
 	}
 
-	renderer, err := tcell.NewRenderer()
+	device, err := tcell.NewDevice()
 	if err != nil {
 		log.Printf("Failed to open terminal: %#v", err)
 		return
 	}
 
-	app.Run(paths, fs, renderer)
+	events := make(chan any)
+
+	go func() {
+		for {
+			events <- device.PollEvent()
+		}
+	}()
+
+	for _, archive := range paths {
+		go func(archive string) {
+			for ev := range fs.Scan(archive) {
+				events <- ev
+			}
+		}(archive)
+	}
+
+	ui.Run(device, events, paths)
+
+	fs.Stop()
 }

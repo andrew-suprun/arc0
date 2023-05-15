@@ -1,6 +1,8 @@
 package ui
 
-import "math"
+import (
+	"math"
+)
 
 type row struct {
 	widgets []Widget
@@ -10,37 +12,39 @@ func Row(ws ...Widget) Widget {
 	return row{ws}
 }
 
-func (r row) Constraints() Constraints {
-	width, flex := X(0), Flex(0)
+func (r row) Constraint() Constraint {
+	width, flex := 0, 0
 	for _, widget := range r.widgets {
-		c := widget.Constraints()
-		width += c.Width.Size
-		flex += c.Width.Flex
+		c := widget.Constraint()
+		width += c.Size.Width
+		flex += c.Flex.X
 	}
-	return MakeConstraints(width, flex, 1, 0)
+	return Constraint{Size{width, 1}, Flex{1, 0}}
 }
 
-func (r row) Render(renderer Renderer, x X, y Y, width X, height Y, style Style) {
-	sizes := make([]Constraint[X], len(r.widgets))
+func (r row) Render(ctx *Context, pos Position, size Size) {
+	sizes := make([]int, len(r.widgets))
+	flexes := make([]int, len(r.widgets))
 	for i, widget := range r.widgets {
-		sizes[i] = widget.Constraints().Width
+		sizes[i] = widget.Constraint().Width
+		flexes[i] = widget.Constraint().X
 	}
-	widths := calcSizes(width, sizes)
+	widths := calcSizes(size.Width, sizes, flexes)
 	for i, widget := range r.widgets {
-		widget.Render(renderer, x, y, widths[i], height, style)
-		x += widths[i]
+		widget.Render(ctx, Position{pos.X, pos.Y}, Size{widths[i], size.Height})
+		pos.X += widths[i]
 	}
 }
 
-func calcSizes[S X | Y](size S, constraints []Constraint[S]) []S {
-	result := make([]S, len(constraints))
-	totalSize, totalFlex := S(0), Flex(0)
-	for i, constraint := range constraints {
-		result[i] = constraint.Size
-		totalSize += constraint.Size
-		totalFlex += constraint.Flex
+func calcSizes(targetSize int, sizes []int, flexes []int) []int {
+	result := make([]int, len(sizes))
+	totalSize, totalFlex := 0, 0
+	for i, size := range sizes {
+		result[i] = size
+		totalSize += size
+		totalFlex += flexes[i]
 	}
-	for totalSize > size {
+	for totalSize > targetSize {
 		idx := 0
 		maxSize := result[0]
 		for i, size := range result {
@@ -57,32 +61,32 @@ func calcSizes[S X | Y](size S, constraints []Constraint[S]) []S {
 		return result
 	}
 
-	if totalSize < size {
-		diff := size - totalSize
-		remainders := make([]float64, len(constraints))
-		for i, constraint := range constraints {
-			rate := float64(Flex(diff)*constraint.Flex) / float64(totalFlex)
+	if totalSize < targetSize {
+		diff := targetSize - totalSize
+		remainders := make([]float64, len(sizes))
+		for i, flex := range flexes {
+			rate := float64(diff*flex) / float64(totalFlex)
 			remainders[i] = rate - math.Floor(rate)
-			result[i] += S(rate)
+			result[i] += int(rate)
 		}
-		totalSize := S(0)
+		totalSize := 0
 		for _, size := range result {
 			totalSize += size
 		}
 		for i := range result {
-			if totalSize == size {
+			if totalSize == targetSize {
 				break
 			}
-			if constraints[i].Flex > 0 {
+			if flexes[i] > 0 {
 				result[i]++
 				totalSize++
 			}
 		}
 		for i := range result {
-			if totalSize == size {
+			if totalSize == targetSize {
 				break
 			}
-			if constraints[i].Flex == 0 {
+			if flexes[i] == 0 {
 				result[i]++
 				totalSize++
 			}

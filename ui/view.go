@@ -1,8 +1,8 @@
-package view
+package ui
 
 import (
+	"arch/device"
 	"arch/files"
-	"arch/ui"
 	"fmt"
 	"log"
 	"os/exec"
@@ -11,21 +11,41 @@ import (
 	"time"
 )
 
-type Model struct {
+type model struct {
+	events           chan any
 	paths            []string
 	scanStates       []*files.ScanState
 	locations        []location
 	scanResults      files.ArchiveInfos
 	maps             []maps   // source, copy1, copy2, ...
 	links            []*links // copy1, copy2, ...
-	archiveViewLines ui.Y
+	screenSize       Size
+	archiveViewLines int
+	device           Context
+	renderMode       device.RenderMode
 }
 
-func NewModel(paths []string) *Model {
-	return &Model{
+func Run(r device.Device, events chan any, paths []string) {
+	m := &model{
+		events:      events,
 		paths:       paths,
 		scanStates:  make([]*files.ScanState, len(paths)),
 		scanResults: make(files.ArchiveInfos, len(paths)),
+		device:      Context{Device: r, Style: defaultStyle},
+	}
+	defer m.device.Device.Exit()
+	for m.handleEvent(<-events) {
+		Column(0,
+			m.title(),
+			m.scanStats(),
+			m.treeView(),
+		).Render(&m.device, Position{0, 0}, m.screenSize)
+		if m.renderMode == device.Regular {
+			m.device.Device.Show()
+		} else {
+			m.device.Device.Sync()
+			m.renderMode = device.Regular
+		}
 	}
 }
 
@@ -41,7 +61,7 @@ type File struct {
 type location struct {
 	file       *File
 	selected   *File
-	lineOffset ui.Y
+	lineOffset int
 }
 
 type fileKind int
@@ -75,29 +95,29 @@ type groupByName map[string]*files.FileInfo
 type groupByHash map[string]files.FileInfos
 
 var (
-	DefaultStyle       = ui.Style{FG: 231, BG: 17}
-	styleAppTitle      = ui.Style{FG: 226, BG: 0, Bold: true, Italic: true}
-	styleProgressBar   = ui.Style{FG: 231, BG: 19}
-	styleArchiveHeader = ui.Style{FG: 231, BG: 8, Bold: true}
+	defaultStyle       = device.Style{FG: 231, BG: 17}
+	styleAppTitle      = device.Style{FG: 226, BG: 0, Flags: device.Bold + device.Italic}
+	styleProgressBar   = device.Style{FG: 231, BG: 19}
+	styleArchiveHeader = device.Style{FG: 231, BG: 8, Flags: device.Bold}
 )
 
-func styleFile(status fileStatus, selected bool) ui.Style {
-	result := ui.Style{FG: statusColor(status), BG: 17}
+func styleFile(status fileStatus, selected bool) device.Style {
+	result := device.Style{FG: statusColor(status), BG: 17}
 	if selected {
-		result.Reverse = true
+		result.Flags |= device.Reverse
 	}
 	return result
 }
 
-func styleFolder(status fileStatus, selected bool) ui.Style {
-	result := ui.Style{FG: statusColor(status), BG: 18, Bold: true, Italic: true}
+func styleFolder(status fileStatus, selected bool) device.Style {
+	result := device.Style{FG: statusColor(status), BG: 18, Flags: device.Bold + device.Italic}
 	if selected {
-		result.Reverse = true
+		result.Flags |= device.Reverse
 	}
 	return result
 }
 
-func statusColor(status fileStatus) int {
+func statusColor(status fileStatus) byte {
 	switch status {
 	case identical:
 		return 250
@@ -136,17 +156,10 @@ func (s fileStatus) Merge(other fileStatus) fileStatus {
 	return other
 }
 
-func (m *Model) View(event any) ui.Widget {
-	m.handleEvent(event)
-	return ui.Styled(DefaultStyle,
-		ui.Column(ui.Flex(0),
-			m.title(),
-			m.scanStats(),
-			m.treeView(),
-		))
+func (m *model) View(widget Widget) {
 }
 
-func (m *Model) handleEvent(event any) {
+func (m *model) handleEvent(event any) bool {
 	switch event := event.(type) {
 	case *files.ScanState:
 		for i := range m.paths {
@@ -175,23 +188,28 @@ func (m *Model) handleEvent(event any) {
 			m.analizeArchives()
 		}
 
-	case ui.KeyEvent:
+	case ResizeEvent:
+		m.screenSize = Size(event)
+		m.renderMode = device.Sync
+
+	case KeyEvent:
+		if event.Name == "Ctrl+C" {
+			return false
+		}
 		if location := m.currentLocation(); location != nil {
 			m.handleArchiveKeyEvent(event, location)
 		}
 
-	case ui.MouseEvent:
+	case MouseEvent:
 		log.Printf("EventMouse: [%d:%d]", event.Col, event.Line)
-
-	case ui.ResizeEvent:
-		// handled in App
 
 	default:
 		log.Printf("### unhandled event %#v", event)
 	}
+	return true
 }
 
-func (m *Model) analizeArchives() {
+func (m *model) analizeArchives() {
 	m.scanStates = nil
 	m.maps = make([]maps, len(m.scanResults))
 	for i, scan := range m.scanResults {
@@ -224,8 +242,7 @@ func byHash(archive files.FileInfos) groupByHash {
 	return result
 }
 
-func (m *Model) buildFileTree() {
-
+func (m *model) buildFileTree() {
 	m.locations = []location{{
 		file: &File{kind: folder},
 	}}
@@ -300,7 +317,7 @@ func (m *Model) buildFileTree() {
 			}
 		}
 	}
-	// PrintArchive(m.currentLocation().File, "")
+	PrintArchive(m.currentLocation().file, "")
 }
 
 func subFolder(dir *File, name string) *File {
@@ -327,7 +344,7 @@ func (a *links) String() string {
 	return b.String()
 }
 
-func (m *Model) linkArchives(copyInfos files.FileInfos) *links {
+func (m *model) linkArchives(copyInfos files.FileInfos) *links {
 	result := &links{
 		sourceLinks:  map[*files.FileInfo]*files.FileInfo{},
 		reverseLinks: map[*files.FileInfo]*files.FileInfo{},
@@ -410,7 +427,7 @@ func PrintArchive(archive *File, prefix string) {
 	}
 }
 
-func (m *Model) handleArchiveKeyEvent(key ui.KeyEvent, loc *location) {
+func (m *model) handleArchiveKeyEvent(key KeyEvent, loc *location) {
 	switch key.Name {
 	case "Enter":
 		if loc.selected != nil && loc.selected.kind == folder {
@@ -440,11 +457,11 @@ func (m *Model) handleArchiveKeyEvent(key ui.KeyEvent, loc *location) {
 		if loc.lineOffset < 0 {
 			loc.lineOffset = 0
 		}
-		idxSelected := ui.Y(0)
+		idxSelected := 0
 		foundSelected := false
 		for i := 0; i < len(loc.file.files); i++ {
 			if loc.file.files[i] == loc.selected {
-				idxSelected = ui.Y(i)
+				idxSelected = i
 				foundSelected = true
 				break
 			}
@@ -459,22 +476,22 @@ func (m *Model) handleArchiveKeyEvent(key ui.KeyEvent, loc *location) {
 
 	case "PgDn":
 		loc.lineOffset += m.archiveViewLines
-		if loc.lineOffset > ui.Y(len(loc.file.files))-m.archiveViewLines {
-			loc.lineOffset = ui.Y(len(loc.file.files)) - m.archiveViewLines
+		if loc.lineOffset > len(loc.file.files)-m.archiveViewLines {
+			loc.lineOffset = len(loc.file.files) - m.archiveViewLines
 		}
-		idxSelected := ui.Y(0)
+		idxSelected := 0
 		foundSelected := false
 		for i := 0; i < len(loc.file.files); i++ {
 			if loc.file.files[i] == loc.selected {
-				idxSelected = ui.Y(i)
+				idxSelected = i
 				foundSelected = true
 				break
 			}
 		}
 		if foundSelected {
 			idxSelected += m.archiveViewLines
-			if idxSelected > ui.Y(len(loc.file.files))-1 {
-				idxSelected = ui.Y(len(loc.file.files)) - 1
+			if idxSelected > len(loc.file.files)-1 {
+				idxSelected = len(loc.file.files) - 1
 			}
 			loc.selected = loc.file.files[idxSelected]
 		}
@@ -506,69 +523,69 @@ func (m *Model) handleArchiveKeyEvent(key ui.KeyEvent, loc *location) {
 	}
 }
 
-func (m *Model) currentLocation() *location {
+func (m *model) currentLocation() *location {
 	if len(m.locations) == 0 {
 		return nil
 	}
 	return &m.locations[len(m.locations)-1]
 }
 
-func (m *Model) title() ui.Widget {
-	return ui.Row(
-		ui.Styled(styleAppTitle, ui.Text(" АРХИВАТОР", 4, 1)),
+func (m *model) title() Widget {
+	return Row(
+		Styled(styleAppTitle, Text(" АРХИВАТОР", 4, 1)),
 	)
 }
 
-func (m *Model) scanStats() ui.Widget {
+func (m *model) scanStats() Widget {
 	if m.scanStates == nil {
-		return ui.NullWidget{}
+		return NullWidget{}
 	}
-	forms := []ui.Widget{}
+	forms := []Widget{}
 	for i := range m.scanStates {
 		if m.scanStates[i] != nil {
 			forms = append(forms, scanStatsForm(m.scanStates[i]))
 		}
 	}
-	forms = append(forms, ui.Spacer{})
-	return ui.Column(1, forms...)
+	forms = append(forms, Spacer{})
+	return Column(1, forms...)
 }
 
-func scanStatsForm(state *files.ScanState) ui.Widget {
-	return ui.Column(ui.Flex(0),
-		ui.Row(ui.Text(" Архив                      ", 28, 0), ui.Text(state.Archive, 20, 1), ui.Text(" ", 1, 0)),
-		ui.Row(ui.Text(" Каталог                    ", 28, 0), ui.Text(filepath.Dir(state.Name), 20, 1), ui.Text(" ", 1, 0)),
-		ui.Row(ui.Text(" Документ                   ", 28, 0), ui.Text(filepath.Base(state.Name), 20, 1), ui.Text(" ", 1, 0)),
-		ui.Row(ui.Text(" Ожидаемое Время Завершения ", 28, 0), ui.Text(time.Now().Add(state.Remaining).Format(time.TimeOnly), 20, 1), ui.Text(" ", 1, 0)),
-		ui.Row(ui.Text(" Время До Завершения        ", 28, 0), ui.Text(state.Remaining.Truncate(time.Second).String(), 20, 1), ui.Text(" ", 1, 0)),
-		ui.Row(ui.Text(" Общий Прогресс             ", 28, 0), ui.Styled(styleProgressBar, ui.ProgressBar(state.Progress, 4, 1)), ui.Text(" ", 1, 0)),
-		ui.Row(ui.Text("", 0, 1)),
+func scanStatsForm(state *files.ScanState) Widget {
+	return Column(0,
+		Row(Text(" Архив                      ", 28, 0), Text(state.Archive, 20, 1), Text(" ", 1, 0)),
+		Row(Text(" Каталог                    ", 28, 0), Text(filepath.Dir(state.Name), 20, 1), Text(" ", 1, 0)),
+		Row(Text(" Документ                   ", 28, 0), Text(filepath.Base(state.Name), 20, 1), Text(" ", 1, 0)),
+		Row(Text(" Ожидаемое Время Завершения ", 28, 0), Text(time.Now().Add(state.Remaining).Format(time.TimeOnly), 20, 1), Text(" ", 1, 0)),
+		Row(Text(" Время До Завершения        ", 28, 0), Text(state.Remaining.Truncate(time.Second).String(), 20, 1), Text(" ", 1, 0)),
+		Row(Text(" Общий Прогресс             ", 28, 0), Styled(styleProgressBar, ProgressBar(state.Progress, 4, 1)), Text(" ", 1, 0)),
+		Row(Text("", 0, 1)),
 	)
 }
 
-func (m *Model) treeView() ui.Widget {
+func (m *model) treeView() Widget {
 	if len(m.locations) == 0 {
-		return ui.NullWidget{}
+		return NullWidget{}
 	}
 
-	return ui.Column(ui.Flex(1),
-		ui.Styled(styleArchiveHeader,
-			ui.Row(ui.Text(" Статус", 7, 0), ui.Text("  Документ", 21, 1), ui.Text(" Время Изменения", 21, 0), ui.Text("            Размер ", 19, 0)),
+	return Column(1,
+		Styled(styleArchiveHeader,
+			Row(Text(" Статус", 7, 0), Text("  Документ", 21, 1), Text(" Время Изменения", 21, 0), Text("            Размер ", 19, 0)),
 		),
-		ui.Sized(ui.MakeConstraints(0, 1, 0, 1),
-			func(width ui.X, height ui.Y) ui.Widget {
-				m.archiveViewLines = height
+		Scroll(nil, Constraint{Size{0, 0}, Flex{1, 1}},
+			func(size Size) Widget {
+				m.archiveViewLines = size.Height
 				location := m.currentLocation()
-				if location.lineOffset > ui.Y(len(location.file.files)+1-int(height)) {
-					location.lineOffset = ui.Y(len(location.file.files) + 1 - int(height))
+				if location.lineOffset > len(location.file.files)+1-size.Height {
+					location.lineOffset = len(location.file.files) + 1 - size.Height
 				}
 				if location.lineOffset < 0 {
 					location.lineOffset = 0
 				}
 				if location.selected != nil {
-					idx := ui.Y(-1)
+					idx := -1
 					for i := range location.file.files {
 						if location.selected == location.file.files[i] {
-							idx = ui.Y(i)
+							idx = i
 							break
 						}
 					}
@@ -576,12 +593,12 @@ func (m *Model) treeView() ui.Widget {
 						if location.lineOffset > idx {
 							location.lineOffset = idx
 						}
-						if location.lineOffset < idx+1-height {
-							location.lineOffset = idx + 1 - height
+						if location.lineOffset < idx+1-size.Height {
+							location.lineOffset = idx + 1 - size.Height
 						}
 					}
 				}
-				rows := make([]ui.Widget, height)
+				rows := make([]Widget, size.Height)
 				i := 0
 				var file *File
 				for i, file = range location.file.files[location.lineOffset:] {
@@ -589,35 +606,35 @@ func (m *Model) treeView() ui.Widget {
 						break
 					}
 					if file.kind == regularFile {
-						rows[i] = ui.Styled(styleFile(file.status, location.selected == file),
-							ui.Row(
-								ui.Text(file.status.String(), 7, 0),
-								ui.Text("  ", 2, 0),
-								ui.Text(file.name, 20, 1),
-								ui.Text("  ", 2, 0),
-								ui.Text(file.info.ModTime.Format(time.DateTime), 19, 0),
-								ui.Text("  ", 2, 0),
-								ui.Text(formatSize(file.size), 18, 0),
+						rows[i] = Styled(styleFile(file.status, location.selected == file),
+							Row(
+								Text(file.status.String(), 7, 0),
+								Text("  ", 2, 0),
+								Text(file.name, 20, 1),
+								Text("  ", 2, 0),
+								Text(file.info.ModTime.Format(time.DateTime), 19, 0),
+								Text("  ", 2, 0),
+								Text(formatSize(file.size), 18, 0),
 							),
 						)
 					} else {
-						rows[i] = ui.Styled(styleFolder(file.status, location.selected == file),
-							ui.Row(
-								ui.Text(file.status.String(), 7, 0),
-								ui.Text("  ", 2, 0),
-								ui.Text(file.name, 20, 1),
-								ui.Text("  ", 2, 0),
-								ui.Text("<Каталог>", 19, 0),
-								ui.Text("  ", 2, 0),
-								ui.Text(formatSize(file.size), 18, 0),
+						rows[i] = Styled(styleFolder(file.status, location.selected == file),
+							Row(
+								Text(file.status.String(), 7, 0),
+								Text("  ", 2, 0),
+								Text(file.name, 20, 1),
+								Text("  ", 2, 0),
+								Text("<Каталог>", 19, 0),
+								Text("  ", 2, 0),
+								Text(formatSize(file.size), 18, 0),
 							),
 						)
 					}
 				}
-				for i++; i < int(height); i++ {
-					rows[i] = ui.Text("", 0, 1)
+				for i++; i < size.Height; i++ {
+					rows[i] = Text("", 0, 1)
 				}
-				return ui.Column(0, rows...)
+				return Column(0, rows...)
 			},
 		),
 	)
