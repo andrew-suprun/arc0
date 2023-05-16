@@ -1,13 +1,35 @@
 package ui
 
+import "fmt"
+
 type text struct {
 	runes      []rune
 	constraint Constraint
+	pad        rune
 }
 
-func Text(txt string, width int, flex int) text {
+func Text(txt string) *text {
 	runes := []rune(txt)
-	return text{runes, Constraint{Size{width, 1}, Flex{flex, 0}}}
+	return &text{runes, Constraint{Size{len(runes), 1}, Flex{0, 0}}, ' '}
+}
+
+func (t *text) String() string {
+	return fmt.Sprintf("Text('%s').Width(%d).Flex(%d).Pad('%c')", string(t.runes), t.constraint.Width, t.constraint.X, t.pad)
+}
+
+func (t *text) Width(width int) *text {
+	t.constraint.Width = width
+	return t
+}
+
+func (t *text) Flex(flex int) *text {
+	t.constraint.X = flex
+	return t
+}
+
+func (t *text) Pad(r rune) *text {
+	t.pad = r
+	return t
 }
 
 func (t text) Constraint() Constraint {

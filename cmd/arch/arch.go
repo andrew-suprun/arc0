@@ -60,4 +60,5 @@ func main() {
 	ui.Run(device, events, paths)
 
 	fs.Stop()
+	device.Stop()
 }

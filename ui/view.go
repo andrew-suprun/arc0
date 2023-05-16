@@ -32,7 +32,7 @@ func Run(r device.Device, events chan any, paths []string) {
 		scanResults: make(files.ArchiveInfos, len(paths)),
 		ctx:         &Context{Device: r, Style: defaultStyle},
 	}
-	defer m.ctx.Device.Exit()
+
 	for m.handleEvent(<-events) {
 		m.ctx.Reset()
 		Column(0,
@@ -173,7 +173,6 @@ func (m *model) handleEvent(event any) bool {
 
 	case ResizeEvent:
 		m.screenSize = Size(event)
-		m.ctx.Device.Sync()
 
 	case KeyEvent:
 		if event.Name == "Ctrl+C" {
@@ -523,13 +522,13 @@ func (m *model) currentLocation() *location {
 
 func (m *model) title() Widget {
 	return Row(
-		Styled(styleAppTitle, Text(" АРХИВАТОР", 4, 1)),
+		Styled(styleAppTitle, Text(" АРХИВАТОР").Flex(1)),
 	)
 }
 
 func (m *model) statusLine() Widget {
 	return Row(
-		Styled(styleStatusLine, Text(" Status line will be here...", 4, 1)),
+		Styled(styleStatusLine, Text(" Status line will be here...").Flex(1)),
 	)
 }
 
@@ -538,8 +537,13 @@ func (m *model) scanStats() Widget {
 		return NullWidget{}
 	}
 	forms := []Widget{}
+	first := true
 	for i := range m.scanStates {
 		if m.scanStates[i] != nil {
+			if !first {
+				forms = append(forms, Row(Text("").Flex(1).Pad('─')))
+				first = false
+			}
 			forms = append(forms, scanStatsForm(m.scanStates[i]))
 		}
 	}
@@ -548,14 +552,14 @@ func (m *model) scanStats() Widget {
 }
 
 func scanStatsForm(state *files.ScanState) Widget {
+	log.Println(Text(filepath.Base(state.Name)).Flex(1))
 	return Column(0,
-		Row(Text(" Архив                      ", 28, 0), Text(state.Archive, 20, 1), Text(" ", 1, 0)),
-		Row(Text(" Каталог                    ", 28, 0), Text(filepath.Dir(state.Name), 20, 1), Text(" ", 1, 0)),
-		Row(Text(" Документ                   ", 28, 0), Text(filepath.Base(state.Name), 20, 1), Text(" ", 1, 0)),
-		Row(Text(" Ожидаемое Время Завершения ", 28, 0), Text(time.Now().Add(state.Remaining).Format(time.TimeOnly), 20, 1), Text(" ", 1, 0)),
-		Row(Text(" Время До Завершения        ", 28, 0), Text(state.Remaining.Truncate(time.Second).String(), 20, 1), Text(" ", 1, 0)),
-		Row(Text(" Общий Прогресс             ", 28, 0), Styled(styleProgressBar, ProgressBar(state.Progress, 4, 1)), Text(" ", 1, 0)),
-		Row(Text("", 0, 1)),
+		Row(Text(" Архив                       "), Text(state.Archive).Flex(1), Text(" ")),
+		Row(Text(" Каталог                     "), Text(filepath.Dir(state.Name)).Flex(1), Text(" ")),
+		Row(Text(" Документ                    "), Text(filepath.Base(state.Name)).Flex(1), Text(" ")),
+		Row(Text(" Ожидаемое Время Завершения  "), Text(time.Now().Add(state.Remaining).Format(time.TimeOnly)).Flex(1), Text(" ")),
+		Row(Text(" Время До Завершения         "), Text(state.Remaining.Truncate(time.Second).String()).Flex(1), Text(" ")),
+		Row(Text(" Общий Прогресс              "), Styled(styleProgressBar, ProgressBar(state.Progress)), Text(" ")),
 	)
 }
 
@@ -566,7 +570,7 @@ func (m *model) treeView() Widget {
 
 	return Column(1,
 		Styled(styleArchiveHeader,
-			Row(Text(" Статус", 7, 0), Text("  Документ", 21, 1), Text(" Время Изменения", 21, 0), Text("            Размер ", 19, 0)),
+			Row(Text(" Статус").Width(7), Text("  Документ").Width(21).Flex(1), Text(" Время Изменения").Width(21), Text("            Размер ").Width(19)),
 		),
 		Scroll(nil, Constraint{Size{0, 0}, Flex{1, 1}},
 			func(size Size) Widget {
@@ -604,18 +608,18 @@ func (m *model) treeView() Widget {
 					}
 					rows[i] = Styled(styleFile(file, location.selected == file),
 						MouseTarget(selectFile(file), Row(
-							Text(file.status.String(), 7, 0),
-							Text("  ", 2, 0),
-							Text(file.name, 20, 1),
-							Text("  ", 2, 0),
-							Text(modTime(file), 19, 0),
-							Text("  ", 2, 0),
-							Text(formatSize(file.size), 18, 0),
+							Text(" "+file.status.String()).Width(7),
+							Text("  "),
+							Text(file.name).Width(20).Flex(1),
+							Text("  "),
+							Text(modTime(file)).Width(19),
+							Text("  "),
+							Text(formatSize(file.size)).Width(18),
 						)),
 					)
 				}
 				for i++; i < size.Height; i++ {
-					rows[i] = Text("", 0, 1)
+					rows[i] = Text("").Flex(1)
 				}
 				return Column(0, rows...)
 			},

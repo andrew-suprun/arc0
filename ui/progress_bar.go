@@ -10,20 +10,26 @@ type progressBar struct {
 	flex  int
 }
 
-func ProgressBar(value float64, width int, flex int) progressBar {
-	return progressBar{
+func ProgressBar(value float64) *progressBar {
+	return &progressBar{
 		value: value,
-		width: width,
-		flex:  flex,
+		width: 0,
+		flex:  1,
 	}
+}
+
+func (t *progressBar) Width(width int) *progressBar {
+	t.width = width
+	return t
+}
+
+func (t *progressBar) Flex(flex int) *progressBar {
+	t.flex = flex
+	return t
 }
 
 func (pb progressBar) Constraint() Constraint {
 	return Constraint{Size{pb.width, 1}, Flex{pb.flex, 0}}
-}
-
-func (pb progressBar) Flex() int {
-	return 2
 }
 
 func (pb progressBar) Render(ctx *Context, pos Position, size Size) {

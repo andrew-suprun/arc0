@@ -12,7 +12,7 @@ type tcellDevice struct {
 	screen tcell.Screen
 }
 
-func NewDevice() (device.Device, error) {
+func NewDevice() (*tcellDevice, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		return nil, err
@@ -35,6 +35,7 @@ func (r *tcellDevice) PollEvent() any {
 	}
 	switch ev := ev.(type) {
 	case *tcell.EventResize:
+		r.screen.Sync()
 		w, h := ev.Size()
 		return ui.ResizeEvent{Width: w, Height: h}
 
@@ -72,10 +73,6 @@ func (r *tcellDevice) Show() {
 	r.screen.Show()
 }
 
-func (r *tcellDevice) Sync() {
-	r.screen.Sync()
-}
-
-func (r *tcellDevice) Exit() {
+func (r *tcellDevice) Stop() {
 	r.screen.Fini()
 }
