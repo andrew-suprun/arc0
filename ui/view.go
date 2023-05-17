@@ -12,11 +12,10 @@ import (
 )
 
 type model struct {
-	events           chan any
 	paths            []string
 	scanStates       []*files.ScanState
 	locations        []location
-	scanResults      files.ArchiveInfos
+	scanResults      []*files.ArchiveInfo
 	maps             []maps   // source, copy1, copy2, ...
 	links            []*links // copy1, copy2, ...
 	screenSize       Size
@@ -25,16 +24,37 @@ type model struct {
 	lastMouseEvent   device.MouseEvent
 }
 
-func Run(r device.Device, events chan any, paths []string) {
+func Run(dev device.Device, fs files.FS, paths []string) {
 	m := &model{
-		events:      events,
 		paths:       paths,
 		scanStates:  make([]*files.ScanState, len(paths)),
-		scanResults: make(files.ArchiveInfos, len(paths)),
-		ctx:         &Context{Device: r, Style: defaultStyle},
+		scanResults: make([]*files.ArchiveInfo, len(paths)),
+		ctx:         &Context{Device: dev, Style: defaultStyle},
 	}
 
-	for m.handleEvent(<-events) {
+	fsEvents := make(chan files.Event)
+	for _, archive := range paths {
+		go func(archive string) {
+			for ev := range fs.Scan(archive) {
+				fsEvents <- ev
+			}
+		}(archive)
+	}
+	deviceEvents := make(chan device.Event)
+	go func() {
+		for {
+			deviceEvents <- dev.PollEvent()
+		}
+	}()
+
+	running := true
+	for running {
+		select {
+		case fsEvent := <-fsEvents:
+			m.handleFilesEvent(fsEvent)
+		case deviceEvent := <-deviceEvents:
+			running = m.handleDeviceEvent(deviceEvent)
+		}
 		m.ctx.Reset()
 		Column(0,
 			m.title(),
@@ -44,6 +64,9 @@ func Run(r device.Device, events chan any, paths []string) {
 		).Render(m.ctx, Position{0, 0}, m.screenSize)
 		m.ctx.Device.Render()
 	}
+
+	fs.Stop()
+	dev.Stop()
 }
 
 type File struct {
@@ -141,7 +164,7 @@ func (s fileStatus) Merge(other fileStatus) fileStatus {
 	return other
 }
 
-func (m *model) handleEvent(event any) bool {
+func (m *model) handleFilesEvent(event files.Event) {
 	switch event := event.(type) {
 	case *files.ScanState:
 		for i := range m.paths {
@@ -170,6 +193,13 @@ func (m *model) handleEvent(event any) bool {
 			m.analizeArchives()
 		}
 
+	default:
+		log.Panicf("### unhandled files event %#v", event)
+	}
+}
+
+func (m *model) handleDeviceEvent(event device.Event) bool {
+	switch event := event.(type) {
 	case device.ResizeEvent:
 		m.screenSize = Size(event)
 
@@ -201,15 +231,13 @@ func (m *model) handleEvent(event any) bool {
 		}
 	case device.ScrollEvent:
 		if event.Direction == device.ScrollUp {
-			// m.currentLocation().lineOffset++
 			m.up()
 		} else {
-			// m.currentLocation().lineOffset--
 			m.down()
 		}
 
 	default:
-		log.Printf("### unhandled event %#v", event)
+		log.Panicf("### unhandled device event %#v", event)
 	}
 	return true
 }

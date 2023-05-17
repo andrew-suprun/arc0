@@ -4,8 +4,12 @@ import "time"
 
 type FS interface {
 	IsValid(path string) bool
-	Scan(path string) <-chan any
+	Scan(path string) <-chan Event
 	Stop()
+}
+
+type Event interface {
+	event()
 }
 
 type ScanState struct {
@@ -15,12 +19,14 @@ type ScanState struct {
 	Progress  float64
 }
 
+func (e *ScanState) event() {}
+
 type ArchiveInfo struct {
 	Archive string
 	Files   FileInfos
 }
 
-type ArchiveInfos []*ArchiveInfo
+func (e *ArchiveInfo) event() {}
 
 type FileInfo struct {
 	Ino     uint64
@@ -38,3 +44,5 @@ type ScanError struct {
 	Name    string
 	Error   error
 }
+
+func (e ScanError) event() {}

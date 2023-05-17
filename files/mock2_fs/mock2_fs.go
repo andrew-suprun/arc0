@@ -18,9 +18,9 @@ func (fs *mockFs) IsValid(path string) bool {
 func (fs *mockFs) Stop() {
 }
 
-func (fsys *mockFs) Scan(path string) <-chan any {
+func (fsys *mockFs) Scan(path string) <-chan files.Event {
 	if path == "origin" {
-		result := make(chan any, 1)
+		result := make(chan files.Event, 1)
 		result <- &files.ArchiveInfo{
 			Archive: "origin",
 			Files:   origin,
@@ -29,7 +29,7 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 		return result
 	}
 	if path == "copy 1" {
-		result := make(chan any, 1)
+		result := make(chan files.Event, 1)
 		result <- &files.ArchiveInfo{
 			Archive: "copy 1",
 			Files:   copy1,
@@ -38,7 +38,7 @@ func (fsys *mockFs) Scan(path string) <-chan any {
 		return result
 	}
 	if path == "copy 2" {
-		result := make(chan any, 1)
+		result := make(chan files.Event, 1)
 		result <- &files.ArchiveInfo{
 			Archive: "copy 2",
 			Files:   copy2,

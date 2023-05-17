@@ -25,8 +25,8 @@ type file struct {
 	hash string
 }
 
-func (fsys *mockFs) Scan(path string) <-chan any {
-	result := make(chan any, 1)
+func (fsys *mockFs) Scan(path string) <-chan files.Event {
+	result := make(chan files.Event, 1)
 	go func() {
 		scanStarted := time.Now()
 		scanFiles, totalSize, totalHashed := genFiles()

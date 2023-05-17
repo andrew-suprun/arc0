@@ -20,7 +20,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-func (r *file_fs) scan(base string, out chan any) {
+func (r *file_fs) scan(base string, out chan files.Event) {
 	r.lc.Started()
 	defer r.lc.Done()
 
@@ -163,7 +163,7 @@ func (r *file_fs) scan(base string, out chan any) {
 	}
 }
 
-func (f *file_fs) collectMeta(base string, out chan any) (infos files.FileInfos) {
+func (f *file_fs) collectMeta(base string, out chan files.Event) (infos files.FileInfos) {
 	fsys := os.DirFS(base)
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if f.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {

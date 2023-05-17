@@ -6,6 +6,7 @@ type Device interface {
 	PollEvent() Event
 	Text(runes []rune, x, y int, style Style)
 	Render()
+	Stop()
 }
 
 type Event interface {

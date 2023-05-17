@@ -21,8 +21,8 @@ func (fs *file_fs) IsValid(path string) bool {
 	return err == nil
 }
 
-func (fs *file_fs) Scan(path string) <-chan any {
-	result := make(chan any, 1)
+func (fs *file_fs) Scan(path string) <-chan files.Event {
+	result := make(chan files.Event, 1)
 	go fs.scan(path, result)
 	return result
 }

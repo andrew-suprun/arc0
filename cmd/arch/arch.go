@@ -41,24 +41,5 @@ func main() {
 		return
 	}
 
-	events := make(chan any)
-
-	go func() {
-		for {
-			events <- device.PollEvent()
-		}
-	}()
-
-	for _, archive := range paths {
-		go func(archive string) {
-			for ev := range fs.Scan(archive) {
-				events <- ev
-			}
-		}(archive)
-	}
-
-	ui.Run(device, events, paths)
-
-	fs.Stop()
-	device.Stop()
+	ui.Run(device, fs, paths)
 }

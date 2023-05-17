@@ -1,22 +1,9 @@
 * breadcrumbs
 * sort
-* top and bottom lines in file view
+
+* remove directories that only contain .DS_Store and ._* files
 
 * scanner:
-
-if info.Name() == ".DS_Store" || strings.HasPrefix(info.Name(), "._") {
-    log.Printf("removing %q\n", name)
-    os.Remove(name)
-    return nil
-}
-
-* scanner:
-
-if info.Size() == 0 {
-    return nil
-}
-
-* scanner 
 
 func copyFile(src, dst string) error {
 	err := copyFileInternal(src, dst)
