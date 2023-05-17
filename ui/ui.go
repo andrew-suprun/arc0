@@ -26,7 +26,7 @@ type MouseEvent struct {
 	Position
 	Button
 	ButtonModifier
-	Time time.Time
+	time.Time
 }
 
 type Button int
@@ -42,6 +42,17 @@ const (
 	Shift   ButtonModifier = 1
 	Control ButtonModifier = 2
 	Option  ButtonModifier = 4
+)
+
+type ScrollEvent struct {
+	Direction
+}
+
+type Direction int
+
+const (
+	ScrollUp   Direction = 1
+	ScrollDown Direction = 2
 )
 
 type KeyEvent struct {

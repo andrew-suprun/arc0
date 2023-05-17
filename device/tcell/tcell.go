@@ -44,6 +44,11 @@ func (r *tcellDevice) PollEvent() any {
 		return ui.KeyEvent{Name: ev.Name(), Rune: ev.Rune()}
 
 	case *tcell.EventMouse:
+		if ev.Buttons() == 512 {
+			return ui.ScrollEvent{Direction: ui.ScrollUp}
+		} else if ev.Buttons() == 256 {
+			return ui.ScrollEvent{Direction: ui.ScrollDown}
+		}
 		x, y := ev.Position()
 		return ui.MouseEvent{
 			Position:       ui.Position{X: x, Y: y},
@@ -53,6 +58,7 @@ func (r *tcellDevice) PollEvent() any {
 		}
 
 	default:
+		log.Printf("### unhandled tcell event: %#v", ev)
 		return nil
 	}
 }

@@ -50,6 +50,7 @@ type File struct {
 	info   *files.FileInfo
 	kind   fileKind
 	status fileStatus
+	path   string
 	name   string
 	size   int
 	files  []*File
@@ -176,9 +177,7 @@ func (m *model) handleEvent(event any) bool {
 		if event.Name == "Ctrl+C" {
 			return false
 		}
-		if location := m.currentLocation(); location != nil {
-			m.handleArchiveKeyEvent(event, location)
-		}
+		m.handleArchiveKeyEvent(event)
 
 	case MouseEvent:
 		for _, target := range m.ctx.MouseTargetAreas {
@@ -191,11 +190,19 @@ func (m *model) handleEvent(event any) bool {
 				last := m.lastMouseEvent
 				if last.Position == event.Position && last.Button == event.Button && last.ButtonModifier == event.ButtonModifier {
 					if event.Time.Sub(last.Time).Seconds() < 0.5 {
-						m.enter(m.currentLocation())
+						m.enter()
 					}
 				}
 				m.lastMouseEvent = event
 			}
+		}
+	case ScrollEvent:
+		if event.Direction == ScrollUp {
+			// m.currentLocation().lineOffset++
+			m.up()
+		} else {
+			// m.currentLocation().lineOffset--
+			m.down()
 		}
 
 	default:
@@ -275,10 +282,13 @@ func (m *model) buildFileTree() {
 			if i == 0 {
 				current.size += info.Size
 			}
-			for _, dir := range path {
+			for pathIdx, dir := range path {
 				sub := subFolder(current, dir)
 				if i == 0 {
 					sub.size += info.Size
+				}
+				if sub.path == "" {
+					sub.path = info.Archive + "/" + filepath.Join(path[:pathIdx+1]...)
 				}
 				current = sub
 				fileStack = append(fileStack, current)
@@ -303,6 +313,7 @@ func (m *model) buildFileTree() {
 				info:   info,
 				kind:   regularFile,
 				status: status,
+				path:   filepath.Join(info.Archive, info.Name),
 				name:   name,
 				size:   info.Size,
 			}
@@ -422,14 +433,18 @@ func PrintArchive(archive *File, prefix string) {
 	}
 }
 
-func (m *model) handleArchiveKeyEvent(key KeyEvent, loc *location) {
+func (m *model) handleArchiveKeyEvent(key KeyEvent) {
+	loc := m.currentLocation()
+	if loc == nil {
+		return
+	}
+
 	switch key.Name {
 	case "Enter":
-		m.enter(loc)
+		m.enter()
 
 	case "Rune[R]", "Rune[r]":
-		fileName := filepath.Join(loc.selected.info.Archive, loc.selected.info.Name)
-		exec.Command("open", fileName).Start()
+		exec.Command("open", "-R", loc.selected.path).Start()
 
 	case "Esc":
 		if len(m.locations) > 1 {
@@ -487,38 +502,48 @@ func (m *model) handleArchiveKeyEvent(key KeyEvent, loc *location) {
 		}
 
 	case "Up":
-		if loc.selected != nil {
-			for i, file := range loc.file.files {
-				if file == loc.selected && i > 0 {
-					loc.selected = loc.file.files[i-1]
-					break
-				}
-			}
-		} else {
-			loc.selected = loc.file.files[len(loc.file.files)-1]
-		}
+		m.up()
 
 	case "Down":
-		if loc.selected != nil {
-			for i, file := range loc.file.files {
-				if file == loc.selected && i+1 < len(loc.file.files) {
-					loc.selected = loc.file.files[i+1]
-					break
-				}
-			}
-		} else {
-			loc.selected = loc.file.files[0]
-		}
-
+		m.down()
 	}
 }
 
-func (m *model) enter(loc *location) {
+func (m *model) enter() {
+	loc := m.currentLocation()
 	if loc.selected != nil && loc.selected.kind == folder {
 		m.locations = append(m.locations, location{file: loc.selected})
 	} else {
 		fileName := filepath.Join(loc.selected.info.Archive, loc.selected.info.Name)
 		exec.Command("open", fileName).Start()
+	}
+}
+
+func (m *model) up() {
+	loc := m.currentLocation()
+	if loc.selected != nil {
+		for i, file := range loc.file.files {
+			if file == loc.selected && i > 0 {
+				loc.selected = loc.file.files[i-1]
+				break
+			}
+		}
+	} else {
+		loc.selected = loc.file.files[len(loc.file.files)-1]
+	}
+}
+
+func (m *model) down() {
+	loc := m.currentLocation()
+	if loc.selected != nil {
+		for i, file := range loc.file.files {
+			if file == loc.selected && i+1 < len(loc.file.files) {
+				loc.selected = loc.file.files[i+1]
+				break
+			}
+		}
+	} else {
+		loc.selected = loc.file.files[0]
 	}
 }
 
