@@ -3,27 +3,28 @@ package ui
 import "fmt"
 
 type text struct {
-	runes      []rune
-	constraint Constraint
-	pad        rune
+	runes []rune
+	width int
+	flex  int
+	pad   rune
 }
 
 func Text(txt string) *text {
 	runes := []rune(txt)
-	return &text{runes, Constraint{Size{len(runes), 1}, Flex{0, 0}}, ' '}
+	return &text{runes, len(runes), 0, ' '}
 }
 
 func (t *text) String() string {
-	return fmt.Sprintf("Text('%s').Width(%d).Flex(%d).Pad('%c')", string(t.runes), t.constraint.Width, t.constraint.X, t.pad)
+	return fmt.Sprintf("Text('%s').Width(%d).Flex(%d).Pad('%c')", string(t.runes), t.width, t.flex, t.pad)
 }
 
 func (t *text) Width(width int) *text {
-	t.constraint.Width = width
+	t.width = width
 	return t
 }
 
 func (t *text) Flex(flex int) *text {
-	t.constraint.X = flex
+	t.flex = flex
 	return t
 }
 
@@ -32,11 +33,11 @@ func (t *text) Pad(r rune) *text {
 	return t
 }
 
-func (t text) Constraint() Constraint {
-	return t.constraint
+func (t *text) Constraint() Constraint {
+	return Constraint{Size{t.width, 1}, Flex{t.flex, 0}}
 }
 
-func (t text) Render(ctx *Context, pos Position, size Size) {
+func (t *text) Render(ctx *Context, pos Position, size Size) {
 	if size.Width < 1 {
 		return
 	}

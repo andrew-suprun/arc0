@@ -2,7 +2,6 @@ package tcell
 
 import (
 	"arch/device"
-	"arch/ui"
 	"log"
 
 	"github.com/gdamore/tcell/v2"
@@ -25,7 +24,7 @@ func NewDevice() (*tcellDevice, error) {
 	return &tcellDevice{screen: screen}, nil
 }
 
-func (r *tcellDevice) PollEvent() any {
+func (r *tcellDevice) PollEvent() device.Event {
 	ev := r.screen.PollEvent()
 	for {
 		if ev, mouseEvent := ev.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
@@ -37,23 +36,24 @@ func (r *tcellDevice) PollEvent() any {
 	case *tcell.EventResize:
 		r.screen.Sync()
 		w, h := ev.Size()
-		return ui.ResizeEvent{Width: w, Height: h}
+		return device.ResizeEvent{Width: w, Height: h}
 
 	case *tcell.EventKey:
 		log.Printf("key: name=%v rune='%v' mod=%v", ev.Name(), ev.Rune(), ev.Modifiers())
-		return ui.KeyEvent{Name: ev.Name(), Rune: ev.Rune()}
+		return device.KeyEvent{Name: ev.Name(), Rune: ev.Rune()}
 
 	case *tcell.EventMouse:
 		if ev.Buttons() == 512 {
-			return ui.ScrollEvent{Direction: ui.ScrollUp}
+			return device.ScrollEvent{Direction: device.ScrollUp}
 		} else if ev.Buttons() == 256 {
-			return ui.ScrollEvent{Direction: ui.ScrollDown}
+			return device.ScrollEvent{Direction: device.ScrollDown}
 		}
 		x, y := ev.Position()
-		return ui.MouseEvent{
-			Position:       ui.Position{X: x, Y: y},
-			Button:         ui.Button(ev.Buttons()),
-			ButtonModifier: ui.ButtonModifier(ev.Modifiers()),
+		return device.MouseEvent{
+			X:              x,
+			Y:              y,
+			Button:         device.Button(ev.Buttons()),
+			ButtonModifier: device.ButtonModifier(ev.Modifiers()),
 			Time:           ev.When(),
 		}
 
@@ -76,7 +76,7 @@ func (r *tcellDevice) Text(runes []rune, x, y int, style device.Style) {
 	}
 }
 
-func (r *tcellDevice) Show() {
+func (r *tcellDevice) Render() {
 	r.screen.Show()
 }
 

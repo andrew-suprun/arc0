@@ -22,7 +22,7 @@ type model struct {
 	screenSize       Size
 	archiveViewLines int
 	ctx              *Context
-	lastMouseEvent   MouseEvent
+	lastMouseEvent   device.MouseEvent
 }
 
 func Run(r device.Device, events chan any, paths []string) {
@@ -42,7 +42,7 @@ func Run(r device.Device, events chan any, paths []string) {
 			m.treeView(),
 			m.statusLine(),
 		).Render(m.ctx, Position{0, 0}, m.screenSize)
-		m.ctx.Device.Show()
+		m.ctx.Device.Render()
 	}
 }
 
@@ -170,16 +170,16 @@ func (m *model) handleEvent(event any) bool {
 			m.analizeArchives()
 		}
 
-	case ResizeEvent:
+	case device.ResizeEvent:
 		m.screenSize = Size(event)
 
-	case KeyEvent:
+	case device.KeyEvent:
 		if event.Name == "Ctrl+C" {
 			return false
 		}
 		m.handleArchiveKeyEvent(event)
 
-	case MouseEvent:
+	case device.MouseEvent:
 		for _, target := range m.ctx.MouseTargetAreas {
 			if target.Pos.X <= event.X && target.Pos.X+target.Size.Width > event.X &&
 				target.Pos.Y <= event.Y && target.Pos.Y+target.Size.Height > event.Y {
@@ -188,7 +188,10 @@ func (m *model) handleEvent(event any) bool {
 					m.currentLocation().selected = file
 				}
 				last := m.lastMouseEvent
-				if last.Position == event.Position && last.Button == event.Button && last.ButtonModifier == event.ButtonModifier {
+				if last.X == event.X && last.Y == event.Y &&
+					last.Button == event.Button &&
+					last.ButtonModifier == event.ButtonModifier {
+
 					if event.Time.Sub(last.Time).Seconds() < 0.5 {
 						m.enter()
 					}
@@ -196,8 +199,8 @@ func (m *model) handleEvent(event any) bool {
 				m.lastMouseEvent = event
 			}
 		}
-	case ScrollEvent:
-		if event.Direction == ScrollUp {
+	case device.ScrollEvent:
+		if event.Direction == device.ScrollUp {
 			// m.currentLocation().lineOffset++
 			m.up()
 		} else {
@@ -433,7 +436,7 @@ func PrintArchive(archive *File, prefix string) {
 	}
 }
 
-func (m *model) handleArchiveKeyEvent(key KeyEvent) {
+func (m *model) handleArchiveKeyEvent(key device.KeyEvent) {
 	loc := m.currentLocation()
 	if loc == nil {
 		return
