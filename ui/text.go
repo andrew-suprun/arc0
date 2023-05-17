@@ -45,7 +45,7 @@ func (t text) Render(ctx *Context, pos Position, size Size) {
 	}
 	diff := int(size.Width) - len(t.runes)
 	for diff > 0 {
-		t.runes = append(t.runes, ' ')
+		t.runes = append(t.runes, t.pad)
 		diff--
 	}
 

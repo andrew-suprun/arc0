@@ -1,5 +1,7 @@
 package ui
 
+import "time"
+
 type Position struct {
 	X int
 	Y int
@@ -24,6 +26,7 @@ type MouseEvent struct {
 	Position
 	Button
 	ButtonModifier
+	Time time.Time
 }
 
 type Button int

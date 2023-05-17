@@ -22,6 +22,7 @@ type model struct {
 	screenSize       Size
 	archiveViewLines int
 	ctx              *Context
+	lastMouseEvent   MouseEvent
 }
 
 func Run(r device.Device, events chan any, paths []string) {
@@ -139,9 +140,6 @@ func (s fileStatus) Merge(other fileStatus) fileStatus {
 	return other
 }
 
-func (m *model) View(widget Widget) {
-}
-
 func (m *model) handleEvent(event any) bool {
 	switch event := event.(type) {
 	case *files.ScanState:
@@ -190,6 +188,13 @@ func (m *model) handleEvent(event any) bool {
 				if file, ok := target.Command.(selectFile); ok {
 					m.currentLocation().selected = file
 				}
+				last := m.lastMouseEvent
+				if last.Position == event.Position && last.Button == event.Button && last.ButtonModifier == event.ButtonModifier {
+					if event.Time.Sub(last.Time).Seconds() < 0.5 {
+						m.enter(m.currentLocation())
+					}
+				}
+				m.lastMouseEvent = event
 			}
 		}
 
@@ -420,12 +425,7 @@ func PrintArchive(archive *File, prefix string) {
 func (m *model) handleArchiveKeyEvent(key KeyEvent, loc *location) {
 	switch key.Name {
 	case "Enter":
-		if loc.selected != nil && loc.selected.kind == folder {
-			m.locations = append(m.locations, location{file: loc.selected})
-		} else { // TODO
-			fileName := filepath.Join(loc.selected.info.Archive, loc.selected.info.Name)
-			exec.Command("open", fileName).Start()
-		}
+		m.enter(loc)
 
 	case "Rune[R]", "Rune[r]":
 		fileName := filepath.Join(loc.selected.info.Archive, loc.selected.info.Name)
@@ -513,6 +513,15 @@ func (m *model) handleArchiveKeyEvent(key KeyEvent, loc *location) {
 	}
 }
 
+func (m *model) enter(loc *location) {
+	if loc.selected != nil && loc.selected.kind == folder {
+		m.locations = append(m.locations, location{file: loc.selected})
+	} else {
+		fileName := filepath.Join(loc.selected.info.Archive, loc.selected.info.Name)
+		exec.Command("open", fileName).Start()
+	}
+}
+
 func (m *model) currentLocation() *location {
 	if len(m.locations) == 0 {
 		return nil
@@ -542,9 +551,9 @@ func (m *model) scanStats() Widget {
 		if m.scanStates[i] != nil {
 			if !first {
 				forms = append(forms, Row(Text("").Flex(1).Pad('─')))
-				first = false
 			}
 			forms = append(forms, scanStatsForm(m.scanStates[i]))
+			first = false
 		}
 	}
 	forms = append(forms, Spacer{})

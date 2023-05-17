@@ -49,6 +49,7 @@ func (r *tcellDevice) PollEvent() any {
 			Position:       ui.Position{X: x, Y: y},
 			Button:         ui.Button(ev.Buttons()),
 			ButtonModifier: ui.ButtonModifier(ev.Modifiers()),
+			Time:           ev.When(),
 		}
 
 	default:
