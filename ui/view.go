@@ -211,19 +211,18 @@ func (m *model) handleDeviceEvent(event device.Event) bool {
 		m.screenSize = Size(event)
 
 	case device.KeyEvent:
-		if event.Name == "Ctrl+C" {
-			return false
-		}
-		return m.handleKeyEvent(event)
+		result := m.handleKeyEvent(event)
+		m.makeSelectedVisible()
+		return result
 
 	case device.MouseEvent:
 		m.handleMouseEvent(event)
 
 	case device.ScrollEvent:
 		if event.Direction == device.ScrollUp {
-			m.up()
+			m.currentLocation().lineOffset++
 		} else {
-			m.down()
+			m.currentLocation().lineOffset--
 		}
 
 	default:
@@ -690,23 +689,6 @@ func (m *model) treeView() Widget {
 				if location.lineOffset < 0 {
 					location.lineOffset = 0
 				}
-				if location.selected != nil {
-					idx := -1
-					for i := range location.file.files {
-						if location.selected == location.file.files[i] {
-							idx = i
-							break
-						}
-					}
-					if idx >= 0 {
-						if location.lineOffset > idx {
-							location.lineOffset = idx
-						}
-						if location.lineOffset < idx+1-size.Height {
-							location.lineOffset = idx + 1 - size.Height
-						}
-					}
-				}
 				rows := []Widget{}
 				i := 0
 				var file *fileInfo
@@ -731,6 +713,28 @@ func (m *model) treeView() Widget {
 			},
 		),
 	)
+}
+
+func (m *model) makeSelectedVisible() {
+	location := m.currentLocation()
+	if location.selected != nil {
+		idx := -1
+		for i := range location.file.files {
+			if location.selected == location.file.files[i] {
+				idx = i
+				break
+			}
+		}
+		if idx >= 0 {
+			if location.lineOffset > idx {
+				location.lineOffset = idx
+			}
+			if location.lineOffset < idx+1-m.archiveViewLines {
+				location.lineOffset = idx + 1 - m.archiveViewLines
+			}
+		}
+	}
+
 }
 
 func displayName(file *fileInfo) string {
