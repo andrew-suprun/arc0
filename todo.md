@@ -1,6 +1,3 @@
-* breadcrumbs
-* sort
-
 * remove directories that only contain .DS_Store and ._* files
 
 * scanner:
@@ -12,3 +9,4 @@ func copyFile(src, dst string) error {
 	}
 	return setFileModTime(src, dst)
 }
+

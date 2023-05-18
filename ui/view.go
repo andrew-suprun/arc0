@@ -22,14 +22,17 @@ type model struct {
 	archiveViewLines int
 	ctx              *Context
 	lastMouseEvent   device.MouseEvent
+	sortColumn       sortColumn
+	sortAscending    []bool
 }
 
 func Run(dev device.Device, fs files.FS, paths []string) {
 	m := &model{
-		paths:       paths,
-		scanStates:  make([]*files.ScanState, len(paths)),
-		scanResults: make([]*files.ArchiveInfo, len(paths)),
-		ctx:         &Context{Device: dev, Style: defaultStyle},
+		paths:         paths,
+		scanStates:    make([]*files.ScanState, len(paths)),
+		scanResults:   make([]*files.ArchiveInfo, len(paths)),
+		ctx:           &Context{Device: dev, Style: defaultStyle},
+		sortAscending: []bool{true, true, true, true},
 	}
 
 	fsEvents := make(chan files.Event)
@@ -211,31 +214,11 @@ func (m *model) handleDeviceEvent(event device.Event) bool {
 		if event.Name == "Ctrl+C" {
 			return false
 		}
-		m.handleArchiveKeyEvent(event)
+		return m.handleKeyEvent(event)
 
 	case device.MouseEvent:
-		for _, target := range m.ctx.MouseTargetAreas {
-			if target.Pos.X <= event.X && target.Pos.X+target.Size.Width > event.X &&
-				target.Pos.Y <= event.Y && target.Pos.Y+target.Size.Height > event.Y {
+		m.handleMouseEvent(event)
 
-				if file, ok := target.Command.(selectFolder); ok {
-					for i, loc := range m.locations {
-						if loc.file == file && i < len(m.locations) {
-							m.locations = m.locations[:i+1]
-							return true
-						}
-					}
-				}
-				if file, ok := target.Command.(selectFile); ok {
-					m.currentLocation().selected = file
-					last := m.lastMouseEvent
-					if event.Time.Sub(last.Time).Seconds() < 0.5 {
-						m.enter()
-					}
-					m.lastMouseEvent = event
-				}
-			}
-		}
 	case device.ScrollEvent:
 		if event.Direction == device.ScrollUp {
 			m.up()
@@ -247,6 +230,114 @@ func (m *model) handleDeviceEvent(event device.Event) bool {
 		log.Panicf("### unhandled device event %#v", event)
 	}
 	return true
+}
+
+func (m *model) handleKeyEvent(key device.KeyEvent) bool {
+	if key.Name == "Ctrl+C" {
+		return false
+	}
+
+	loc := m.currentLocation()
+
+	switch key.Name {
+	case "Enter":
+		m.enter()
+
+	case "Esc":
+		m.esc()
+
+	case "Rune[R]", "Rune[r]":
+		exec.Command("open", "-R", loc.selected.path).Start()
+
+	case "Home":
+		loc.selected = loc.file.files[0]
+
+	case "End":
+		loc.selected = loc.file.files[len(loc.file.files)-1]
+
+	case "PgUp":
+		loc.lineOffset -= m.archiveViewLines
+		if loc.lineOffset < 0 {
+			loc.lineOffset = 0
+		}
+		idxSelected := 0
+		foundSelected := false
+		for i := 0; i < len(loc.file.files); i++ {
+			if loc.file.files[i] == loc.selected {
+				idxSelected = i
+				foundSelected = true
+				break
+			}
+		}
+		if foundSelected {
+			idxSelected -= m.archiveViewLines
+			if idxSelected < 0 {
+				idxSelected = 0
+			}
+			loc.selected = loc.file.files[idxSelected]
+		}
+
+	case "PgDn":
+		loc.lineOffset += m.archiveViewLines
+		if loc.lineOffset > len(loc.file.files)-m.archiveViewLines {
+			loc.lineOffset = len(loc.file.files) - m.archiveViewLines
+		}
+		idxSelected := 0
+		foundSelected := false
+		for i := 0; i < len(loc.file.files); i++ {
+			if loc.file.files[i] == loc.selected {
+				idxSelected = i
+				foundSelected = true
+				break
+			}
+		}
+		if foundSelected {
+			idxSelected += m.archiveViewLines
+			if idxSelected > len(loc.file.files)-1 {
+				idxSelected = len(loc.file.files) - 1
+			}
+			loc.selected = loc.file.files[idxSelected]
+		}
+
+	case "Up":
+		m.up()
+
+	case "Down":
+		m.down()
+	}
+	return true
+}
+
+func (m *model) handleMouseEvent(event device.MouseEvent) {
+	for _, target := range m.ctx.MouseTargetAreas {
+		if target.Pos.X <= event.X && target.Pos.X+target.Size.Width > event.X &&
+			target.Pos.Y <= event.Y && target.Pos.Y+target.Size.Height > event.Y {
+
+			switch cmd := target.Command.(type) {
+			case selectFolder:
+				for i, loc := range m.locations {
+					if loc.file == cmd && i < len(m.locations) {
+						m.locations = m.locations[:i+1]
+						return
+					}
+				}
+			case selectFile:
+				m.currentLocation().selected = cmd
+				last := m.lastMouseEvent
+				if event.Time.Sub(last.Time).Seconds() < 0.5 {
+					m.enter()
+				}
+				m.lastMouseEvent = event
+			case sortColumn:
+				if cmd == m.sortColumn {
+					m.sortAscending[m.sortColumn] = !m.sortAscending[m.sortColumn]
+				} else {
+					m.sortColumn = cmd
+				}
+				m.sort()
+			}
+		}
+	}
 }
 
 func (m *model) analizeArchives() {
@@ -367,6 +458,7 @@ func (m *model) buildFileTree() {
 			}
 		}
 	}
+	m.sort()
 	PrintArchive(m.currentLocation().file, "")
 }
 
@@ -477,90 +569,21 @@ func PrintArchive(archive *fileInfo, prefix string) {
 	}
 }
 
-func (m *model) handleArchiveKeyEvent(key device.KeyEvent) {
-	loc := m.currentLocation()
-	if loc == nil {
-		return
-	}
-
-	switch key.Name {
-	case "Enter":
-		m.enter()
-
-	case "Rune[R]", "Rune[r]":
-		log.Println("Rune[R]", loc.selected.archive, loc.selected.path, loc.selected.name)
-		exec.Command("open", "-R", filepath.Join(loc.selected.archive, loc.selected.path, loc.selected.name)).Start()
-
-	case "Esc":
-		if len(m.locations) > 1 {
-			m.locations = m.locations[:len(m.locations)-1]
-		}
-
-	case "Home":
-		loc.selected = loc.file.files[0]
-
-	case "End":
-		loc.selected = loc.file.files[len(loc.file.files)-1]
-
-	case "PgUp":
-		loc.lineOffset -= m.archiveViewLines
-		if loc.lineOffset < 0 {
-			loc.lineOffset = 0
-		}
-		idxSelected := 0
-		foundSelected := false
-		for i := 0; i < len(loc.file.files); i++ {
-			if loc.file.files[i] == loc.selected {
-				idxSelected = i
-				foundSelected = true
-				break
-			}
-		}
-		if foundSelected {
-			idxSelected -= m.archiveViewLines
-			if idxSelected < 0 {
-				idxSelected = 0
-			}
-			loc.selected = loc.file.files[idxSelected]
-		}
-
-	case "PgDn":
-		loc.lineOffset += m.archiveViewLines
-		if loc.lineOffset > len(loc.file.files)-m.archiveViewLines {
-			loc.lineOffset = len(loc.file.files) - m.archiveViewLines
-		}
-		idxSelected := 0
-		foundSelected := false
-		for i := 0; i < len(loc.file.files); i++ {
-			if loc.file.files[i] == loc.selected {
-				idxSelected = i
-				foundSelected = true
-				break
-			}
-		}
-		if foundSelected {
-			idxSelected += m.archiveViewLines
-			if idxSelected > len(loc.file.files)-1 {
-				idxSelected = len(loc.file.files) - 1
-			}
-			loc.selected = loc.file.files[idxSelected]
-		}
-
-	case "Up":
-		m.up()
-
-	case "Down":
-		m.down()
-	}
-}
-
 func (m *model) enter() {
 	loc := m.currentLocation()
 	if loc.selected != nil && loc.selected.kind == folder {
 		m.locations = append(m.locations, location{file: loc.selected})
+		m.sort()
 	} else {
 		fileName := filepath.Join(loc.selected.archive, loc.selected.path, loc.selected.name)
 		exec.Command("open", fileName).Start()
+	}
+}
+
+func (m *model) esc() {
+	if len(m.locations) > 1 {
+		m.locations = m.locations[:len(m.locations)-1]
+		m.sort()
 	}
 }
 
@@ -651,10 +674,11 @@ func (m *model) treeView() Widget {
 		m.breadcrumbs(),
 		Styled(styleArchiveHeader,
 			Row(
-				Text(" Статус").Width(7),
-				Text("    Документ").Width(21).Flex(1),
-				Text(" Время Изменения").Width(21),
-				Text("            Размер ").Width(19)),
+				MouseTarget(sortByStatus, Text(" Статус"+m.sortIndicator(sortByStatus)).Width(9)),
+				MouseTarget(sortByName, Text("  Документ"+m.sortIndicator(sortByName)).Width(20).Flex(1)),
+				MouseTarget(sortByTime, Text("  Время Изменения"+m.sortIndicator(sortByTime)).Width(19)),
+				MouseTarget(sortBySize, Text(fmt.Sprintf("%22s", "Размер"+m.sortIndicator(sortBySize)+" "))),
+			),
 		),
 		Scroll(nil, Constraint{Size{0, 0}, Flex{1, 1}},
 			func(size Size) Widget {
@@ -683,28 +707,26 @@ func (m *model) treeView() Widget {
 						}
 					}
 				}
-				rows := make([]Widget, size.Height)
+				rows := []Widget{}
 				i := 0
 				var file *fileInfo
 				for i, file = range location.file.files[location.lineOffset:] {
-					if i >= len(rows) {
+					if i >= size.Height {
 						break
 					}
-					rows[i] = Styled(styleFile(file, location.selected == file),
+					rows = append(rows, Styled(styleFile(file, location.selected == file),
 						MouseTarget(selectFile(file), Row(
-							Text(" "+file.status.String()).Width(7),
+							Text(" "+file.status.String()).Width(9),
 							Text("  "),
 							Text(displayName(file)).Width(20).Flex(1),
 							Text("  "),
 							Text(file.modTime.Format(time.DateTime)),
 							Text("  "),
-							Text(formatSize(file.size)),
+							Text(formatSize(file.size)).Width(18),
 						)),
-					)
+					))
 				}
-				for i++; i < size.Height; i++ {
-					rows[i] = Text("").Flex(1)
-				}
+				rows = append(rows, Spacer{})
 				return Column(0, rows...)
 			},
 		),
@@ -716,6 +738,16 @@ func displayName(file *fileInfo) string {
 		return "▶ " + file.name
 	}
 	return "  " + file.name
+}
+
+func (m *model) sortIndicator(column sortColumn) string {
+	if column == m.sortColumn {
+		if m.sortAscending[column] {
+			return " ▲"
+		}
+		return " ▼"
+	}
+	return ""
 }
 
 func (m *model) breadcrumbs() Widget {
