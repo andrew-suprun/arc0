@@ -26,6 +26,9 @@ func NewDevice() (*tcellDevice, error) {
 
 func (r *tcellDevice) PollEvent() device.Event {
 	ev := r.screen.PollEvent()
+	if ev == nil {
+		return nil
+	}
 	for {
 		if ev, mouseEvent := ev.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
 			break

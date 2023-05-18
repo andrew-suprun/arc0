@@ -69,19 +69,21 @@ func Run(dev device.Device, fs files.FS, paths []string) {
 	dev.Stop()
 }
 
-type File struct {
-	info   *files.FileInfo
-	kind   fileKind
-	status fileStatus
-	path   string
-	name   string
-	size   int
-	files  []*File
+type fileInfo struct {
+	kind    fileKind
+	status  fileStatus
+	archive string
+	path    string
+	name    string
+	size    int
+	modTime time.Time
+	hash    string
+	files   []*fileInfo
 }
 
 type location struct {
-	file       *File
-	selected   *File
+	file       *fileInfo
+	selected   *fileInfo
 	lineOffset int
 }
 
@@ -124,8 +126,8 @@ var (
 	styleBreadcrumbs   = device.Style{FG: 226, BG: 18, Flags: device.Bold + device.Italic}
 )
 
-type selectFile *File
-type selectFolder *File
+type selectFile *fileInfo
+type selectFolder *fileInfo
 
 func statusColor(status fileStatus) byte {
 	switch status {
@@ -282,7 +284,7 @@ func byHash(archive files.FileInfos) groupByHash {
 
 func (m *model) buildFileTree() {
 	m.locations = []location{{
-		file: &File{name: " Архив", kind: folder},
+		file: &fileInfo{name: " Архив", kind: folder},
 	}}
 
 	uniqueFileNames := map[string]struct{}{}
@@ -308,7 +310,7 @@ func (m *model) buildFileTree() {
 		}
 		for i, info := range infos {
 			current := m.locations[0].file
-			fileStack := []*File{current}
+			fileStack := []*fileInfo{current}
 			if info == nil {
 				continue
 			}
@@ -323,8 +325,12 @@ func (m *model) buildFileTree() {
 				if i == 0 {
 					sub.size += info.Size
 				}
-				if sub.path == "" {
-					sub.path = info.Archive + "/" + filepath.Join(path[:pathIdx+1]...)
+				if sub.archive == "" {
+					sub.archive = info.Archive
+					sub.path = filepath.Join(path[:pathIdx]...)
+				}
+				if sub.modTime.Before(info.ModTime) {
+					sub.modTime = info.ModTime
 				}
 				current = sub
 				fileStack = append(fileStack, current)
@@ -345,13 +351,15 @@ func (m *model) buildFileTree() {
 				}
 			}
 
-			currentFile := &File{
-				info:   info,
-				kind:   regularFile,
-				status: status,
-				path:   filepath.Join(info.Archive, info.Name),
-				name:   name,
-				size:   info.Size,
+			currentFile := &fileInfo{
+				kind:    regularFile,
+				status:  status,
+				archive: info.Archive,
+				path:    filepath.Dir(info.Name),
+				name:    name,
+				size:    info.Size,
+				modTime: info.ModTime,
+				hash:    info.Hash,
 			}
 			current.files = append(current.files, currentFile)
 			for _, current = range fileStack {
@@ -362,13 +370,13 @@ func (m *model) buildFileTree() {
 	PrintArchive(m.currentLocation().file, "")
 }
 
-func subFolder(dir *File, name string) *File {
+func subFolder(dir *fileInfo, name string) *fileInfo {
 	for i := range dir.files {
 		if name == dir.files[i].name && dir.files[i].kind == folder {
 			return dir.files[i]
 		}
 	}
-	subFolder := &File{kind: folder, name: name}
+	subFolder := &fileInfo{kind: folder, name: name}
 	dir.files = append(dir.files, subFolder)
 	return subFolder
 }
@@ -454,13 +462,13 @@ func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.F
 	return copy
 }
 
-func PrintArchive(archive *File, prefix string) {
+func PrintArchive(archive *fileInfo, prefix string) {
 	kind := "D"
 	if archive.kind == regularFile {
 		kind = "F"
 	}
 	if archive.kind == regularFile {
-		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.name, archive.status, archive.size, archive.info.Hash)
+		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.name, archive.status, archive.size, archive.hash)
 	} else {
 		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.name, archive.status, archive.size)
 	}
@@ -480,7 +488,8 @@ func (m *model) handleArchiveKeyEvent(key device.KeyEvent) {
 		m.enter()
 
 	case "Rune[R]", "Rune[r]":
-		exec.Command("open", "-R", loc.selected.path).Start()
+		log.Println("Rune[R]", loc.selected.archive, loc.selected.path, loc.selected.name)
+		exec.Command("open", "-R", filepath.Join(loc.selected.archive, loc.selected.path, loc.selected.name)).Start()
 
 	case "Esc":
 		if len(m.locations) > 1 {
@@ -550,7 +559,7 @@ func (m *model) enter() {
 	if loc.selected != nil && loc.selected.kind == folder {
 		m.locations = append(m.locations, location{file: loc.selected})
 	} else {
-		fileName := filepath.Join(loc.selected.info.Archive, loc.selected.info.Name)
+		fileName := filepath.Join(loc.selected.archive, loc.selected.path, loc.selected.name)
 		exec.Command("open", fileName).Start()
 	}
 }
@@ -641,7 +650,11 @@ func (m *model) treeView() Widget {
 	return Column(1,
 		m.breadcrumbs(),
 		Styled(styleArchiveHeader,
-			Row(Text(" Статус").Width(7), Text("  Документ").Width(21).Flex(1), Text(" Время Изменения").Width(21), Text("            Размер ").Width(19)),
+			Row(
+				Text(" Статус").Width(7),
+				Text("    Документ").Width(21).Flex(1),
+				Text(" Время Изменения").Width(21),
+				Text("            Размер ").Width(19)),
 		),
 		Scroll(nil, Constraint{Size{0, 0}, Flex{1, 1}},
 			func(size Size) Widget {
@@ -672,7 +685,7 @@ func (m *model) treeView() Widget {
 				}
 				rows := make([]Widget, size.Height)
 				i := 0
-				var file *File
+				var file *fileInfo
 				for i, file = range location.file.files[location.lineOffset:] {
 					if i >= len(rows) {
 						break
@@ -681,11 +694,11 @@ func (m *model) treeView() Widget {
 						MouseTarget(selectFile(file), Row(
 							Text(" "+file.status.String()).Width(7),
 							Text("  "),
-							Text(file.name).Width(20).Flex(1),
+							Text(displayName(file)).Width(20).Flex(1),
 							Text("  "),
-							Text(modTime(file)).Width(19),
+							Text(file.modTime.Format(time.DateTime)),
 							Text("  "),
-							Text(formatSize(file.size)).Width(18),
+							Text(formatSize(file.size)),
 						)),
 					)
 				}
@@ -696,6 +709,13 @@ func (m *model) treeView() Widget {
 			},
 		),
 	)
+}
+
+func displayName(file *fileInfo) string {
+	if file.kind == folder {
+		return "▶ " + file.name
+	}
+	return "  " + file.name
 }
 
 func (m *model) breadcrumbs() Widget {
@@ -709,29 +729,21 @@ func (m *model) breadcrumbs() Widget {
 				Styled(styleBreadcrumbs, Text(loc.file.name)),
 			),
 		)
-		log.Printf("loc[%d] = %v", i, loc.file.name)
 	}
 	widgets = append(widgets, Spacer{})
 	return Row(widgets...)
 }
 
-func styleFile(file *File, selected bool) device.Style {
+func styleFile(file *fileInfo, selected bool) device.Style {
 	bg, flags := byte(17), device.Flags(0)
 	if file.kind == folder {
-		bg, flags = byte(18), device.Bold+device.Italic
+		bg, flags = byte(18), device.Bold
 	}
 	result := device.Style{FG: statusColor(file.status), BG: bg, Flags: flags}
 	if selected {
 		result.Flags |= device.Reverse
 	}
 	return result
-}
-
-func modTime(file *File) string {
-	if file.kind == regularFile {
-		return file.info.ModTime.Format(time.DateTime)
-	}
-	return "<Каталог>"
 }
 
 func formatSize(size int) string {
