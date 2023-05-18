@@ -121,9 +121,11 @@ var (
 	styleStatusLine    = device.Style{FG: 226, BG: 0}
 	styleProgressBar   = device.Style{FG: 231, BG: 19}
 	styleArchiveHeader = device.Style{FG: 231, BG: 8, Flags: device.Bold}
+	styleBreadcrumbs   = device.Style{FG: 226, BG: 18, Flags: device.Bold + device.Italic}
 )
 
 type selectFile *File
+type selectFolder *File
 
 func statusColor(status fileStatus) byte {
 	switch status {
@@ -214,19 +216,22 @@ func (m *model) handleDeviceEvent(event device.Event) bool {
 			if target.Pos.X <= event.X && target.Pos.X+target.Size.Width > event.X &&
 				target.Pos.Y <= event.Y && target.Pos.Y+target.Size.Height > event.Y {
 
+				if file, ok := target.Command.(selectFolder); ok {
+					for i, loc := range m.locations {
+						if loc.file == file && i < len(m.locations) {
+							m.locations = m.locations[:i+1]
+							return true
+						}
+					}
+				}
 				if file, ok := target.Command.(selectFile); ok {
 					m.currentLocation().selected = file
-				}
-				last := m.lastMouseEvent
-				if last.X == event.X && last.Y == event.Y &&
-					last.Button == event.Button &&
-					last.ButtonModifier == event.ButtonModifier {
-
+					last := m.lastMouseEvent
 					if event.Time.Sub(last.Time).Seconds() < 0.5 {
 						m.enter()
 					}
+					m.lastMouseEvent = event
 				}
-				m.lastMouseEvent = event
 			}
 		}
 	case device.ScrollEvent:
@@ -277,7 +282,7 @@ func byHash(archive files.FileInfos) groupByHash {
 
 func (m *model) buildFileTree() {
 	m.locations = []location{{
-		file: &File{kind: folder},
+		file: &File{name: " Архив", kind: folder},
 	}}
 
 	uniqueFileNames := map[string]struct{}{}
@@ -634,6 +639,7 @@ func (m *model) treeView() Widget {
 	}
 
 	return Column(1,
+		m.breadcrumbs(),
 		Styled(styleArchiveHeader,
 			Row(Text(" Статус").Width(7), Text("  Документ").Width(21).Flex(1), Text(" Время Изменения").Width(21), Text("            Размер ").Width(19)),
 		),
@@ -690,6 +696,23 @@ func (m *model) treeView() Widget {
 			},
 		),
 	)
+}
+
+func (m *model) breadcrumbs() Widget {
+	widgets := make([]Widget, 0, len(m.locations)*2)
+	for i, loc := range m.locations {
+		if i > 0 {
+			widgets = append(widgets, Text(" / "))
+		}
+		widgets = append(widgets,
+			MouseTarget(selectFolder(loc.file),
+				Styled(styleBreadcrumbs, Text(loc.file.name)),
+			),
+		)
+		log.Printf("loc[%d] = %v", i, loc.file.name)
+	}
+	widgets = append(widgets, Spacer{})
+	return Row(widgets...)
 }
 
 func styleFile(file *File, selected bool) device.Style {
