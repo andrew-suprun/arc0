@@ -15,8 +15,8 @@ func NewFs() files.FS {
 	return &mockFs{}
 }
 
-func (fs *mockFs) IsValid(path string) bool {
-	return true
+func (fs *mockFs) Abs(path string) (string, error) {
+	return path, nil
 }
 
 type file struct {

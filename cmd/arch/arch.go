@@ -28,11 +28,14 @@ func main() {
 		paths = os.Args[1:]
 	}
 
-	for _, path := range paths {
-		if !fs.IsValid(path) {
+	for i, path := range paths {
+		var err error
+		path, err = fs.Abs(path)
+		if err != nil {
 			log.Printf("Invalid path: %v", path)
 			return
 		}
+		paths[i] = path
 	}
 
 	device, err := tcell.NewDevice()

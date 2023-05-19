@@ -151,15 +151,15 @@ func statusColor(status fileStatus) byte {
 func (s fileStatus) String() string {
 	switch s {
 	case identical:
-		return "identical"
+		return ""
 	case sourceOnly:
-		return "sourceOnly"
+		return "Оригинал"
 	case copyOnly:
-		return "copyOnly"
+		return "Копия"
 	case extraCopy:
-		return "extraCopy"
+		return "Копия"
 	case discrepancy:
-		return "discrepancy"
+		return "Расхождение"
 	}
 	return "UNDEFINED"
 }
@@ -172,6 +172,8 @@ func (s fileStatus) Merge(other fileStatus) fileStatus {
 }
 
 func (m *model) handleFilesEvent(event files.Event) {
+	log.Printf("handleFilesEvent: paths = %#v", m.paths)
+	log.Printf("handleFilesEvent: event = %#v", event)
 	switch event := event.(type) {
 	case *files.ScanState:
 		for i := range m.paths {
@@ -196,6 +198,7 @@ func (m *model) handleFilesEvent(event files.Event) {
 				break
 			}
 		}
+		log.Println("handleFilesEvent: doneScanning = ", doneScanning)
 		if doneScanning {
 			m.analizeArchives()
 		}
@@ -340,6 +343,7 @@ func (m *model) handleMouseEvent(event device.MouseEvent) {
 }
 
 func (m *model) analizeArchives() {
+	log.Println("analizeArchives")
 	m.scanStates = nil
 	m.maps = make([]maps, len(m.scanResults))
 	for i, scan := range m.scanResults {
@@ -653,7 +657,6 @@ func (m *model) scanStats() Widget {
 }
 
 func scanStatsForm(state *files.ScanState) Widget {
-	log.Println(Text(filepath.Base(state.Name)).Flex(1))
 	return Column(0,
 		Row(Text(" Архив                       "), Text(state.Archive).Flex(1), Text(" ")),
 		Row(Text(" Каталог                     "), Text(filepath.Dir(state.Name)).Flex(1), Text(" ")),
@@ -673,7 +676,7 @@ func (m *model) treeView() Widget {
 		m.breadcrumbs(),
 		Styled(styleArchiveHeader,
 			Row(
-				MouseTarget(sortByStatus, Text(" Статус"+m.sortIndicator(sortByStatus)).Width(9)),
+				MouseTarget(sortByStatus, Text(" Статус"+m.sortIndicator(sortByStatus)).Width(12)),
 				MouseTarget(sortByName, Text("  Документ"+m.sortIndicator(sortByName)).Width(20).Flex(1)),
 				MouseTarget(sortByTime, Text("  Время Изменения"+m.sortIndicator(sortByTime)).Width(19)),
 				MouseTarget(sortBySize, Text(fmt.Sprintf("%22s", "Размер"+m.sortIndicator(sortBySize)+" "))),
@@ -698,7 +701,7 @@ func (m *model) treeView() Widget {
 					}
 					rows = append(rows, Styled(styleFile(file, location.selected == file),
 						MouseTarget(selectFile(file), Row(
-							Text(" "+file.status.String()).Width(9),
+							Text(" "+file.status.String()).Width(12),
 							Text("  "),
 							Text(displayName(file)).Width(20).Flex(1),
 							Text("  "),
@@ -717,24 +720,24 @@ func (m *model) treeView() Widget {
 
 func (m *model) makeSelectedVisible() {
 	location := m.currentLocation()
-	if location.selected != nil {
-		idx := -1
-		for i := range location.file.files {
-			if location.selected == location.file.files[i] {
-				idx = i
-				break
-			}
-		}
-		if idx >= 0 {
-			if location.lineOffset > idx {
-				location.lineOffset = idx
-			}
-			if location.lineOffset < idx+1-m.archiveViewLines {
-				location.lineOffset = idx + 1 - m.archiveViewLines
-			}
+	if location.selected == nil {
+		return
+	}
+	idx := -1
+	for i := range location.file.files {
+		if location.selected == location.file.files[i] {
+			idx = i
+			break
 		}
 	}
-
+	if idx >= 0 {
+		if location.lineOffset > idx {
+			location.lineOffset = idx
+		}
+		if location.lineOffset < idx+1-m.archiveViewLines {
+			location.lineOffset = idx + 1 - m.archiveViewLines
+		}
+	}
 }
 
 func displayName(file *fileInfo) string {

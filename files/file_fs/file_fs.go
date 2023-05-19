@@ -4,6 +4,9 @@ import (
 	"arch/files"
 	"arch/lifecycle"
 	"os"
+	"path/filepath"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 type file_fs struct {
@@ -16,9 +19,19 @@ func NewFs() files.FS {
 	}
 }
 
-func (fs *file_fs) IsValid(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+func (fs *file_fs) Abs(path string) (string, error) {
+	var err error
+	path, err = filepath.Abs(path)
+	path = norm.NFC.String(path)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 func (fs *file_fs) Scan(path string) <-chan files.Event {

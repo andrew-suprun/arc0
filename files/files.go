@@ -3,7 +3,7 @@ package files
 import "time"
 
 type FS interface {
-	IsValid(path string) bool
+	Abs(path string) (string, error)
 	Scan(path string) <-chan Event
 	Stop()
 }

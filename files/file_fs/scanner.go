@@ -20,25 +20,18 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-func (r *file_fs) scan(base string, out chan files.Event) {
+func (r *file_fs) scan(archivePath string, out chan files.Event) {
 	r.lc.Started()
 	defer r.lc.Done()
 
-	path, err := filepath.Abs(base)
-	path = norm.NFC.String(path)
-	if err != nil {
-		out <- files.ScanError{Archive: base, Error: err}
-		return
-	}
-
-	metas := r.collectMeta(base, out)
+	metas := r.collectMeta(archivePath, out)
 	defer func() {
-		storeMeta(path, metas)
+		storeMeta(archivePath, metas)
 		if r.lc.ShoudStop() {
 			return
 		}
 		out <- &files.ArchiveInfo{
-			Archive: path,
+			Archive: archivePath,
 			Files:   metas,
 		}
 		close(out)
@@ -49,7 +42,7 @@ func (r *file_fs) scan(base string, out chan files.Event) {
 		inodes[meta.Ino] = meta
 	}
 
-	storedMetas := readMeta(path)
+	storedMetas := readMeta(archivePath)
 
 	for _, storedInfo := range storedMetas {
 		if meta, ok := inodes[storedInfo.Ino]; ok {
@@ -88,10 +81,10 @@ func (r *file_fs) scan(base string, out chan files.Event) {
 
 		hash.Reset()
 
-		fsys := os.DirFS(base)
+		fsys := os.DirFS(archivePath)
 		file, err := fsys.Open(meta.Name)
 		if err != nil {
-			out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
+			out <- files.ScanError{Archive: archivePath, Name: meta.Name, Error: err}
 			return
 		}
 		defer file.Close()
@@ -108,12 +101,12 @@ func (r *file_fs) scan(base string, out chan files.Event) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
+						out <- files.ScanError{Archive: archivePath, Name: meta.Name, Error: err}
 						return
 					}
 				}
 				if nr != nw {
-					out <- files.ScanError{Archive: base, Name: meta.Name, Error: io.ErrShortWrite}
+					out <- files.ScanError{Archive: archivePath, Name: meta.Name, Error: io.ErrShortWrite}
 					return
 				}
 			}
@@ -124,7 +117,7 @@ func (r *file_fs) scan(base string, out chan files.Event) {
 				break
 			}
 			if er != nil {
-				out <- files.ScanError{Archive: base, Name: meta.Name, Error: err}
+				out <- files.ScanError{Archive: archivePath, Name: meta.Name, Error: err}
 				return
 			}
 
@@ -144,7 +137,7 @@ func (r *file_fs) scan(base string, out chan files.Event) {
 			remaining := time.Duration(float64(dur) * float64(totalSizeToHash) / float64(totalHashed+hashed))
 
 			out <- &files.ScanState{
-				Archive:   base,
+				Archive:   archivePath,
 				Name:      meta.Name,
 				Remaining: remaining,
 				Progress:  float64(totalSize-totalSizeToHash+totalHashed+hashed) / float64(totalSize),
