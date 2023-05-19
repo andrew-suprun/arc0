@@ -155,9 +155,9 @@ func (s fileStatus) String() string {
 	case sourceOnly:
 		return "Оригинал"
 	case copyOnly:
-		return "Копия"
+		return "Только Копия"
 	case extraCopy:
-		return "Копия"
+		return "Лишняя Копия"
 	case discrepancy:
 		return "Расхождение"
 	}
@@ -399,8 +399,8 @@ func (m *model) buildFileTree() {
 		name := path[len(path)-1]
 		path = path[:len(path)-1]
 		infos := make([]*files.FileInfo, len(m.maps))
-		for i, info := range m.maps {
-			infos[i] = info.byName[fullName]
+		for i, maps := range m.maps {
+			infos[i] = maps.byName[fullName]
 		}
 		for i, info := range infos {
 			current := m.locations[0].file
@@ -438,8 +438,10 @@ func (m *model) buildFileTree() {
 					}
 				}
 			} else {
-				if i > 0 && infos[0] != nil {
+				if infos[0] != nil {
 					status = discrepancy
+				} else if m.maps[0].byHash[info.Hash] != nil {
+					status = extraCopy
 				} else {
 					status = copyOnly
 				}
@@ -573,12 +575,15 @@ func PrintArchive(archive *fileInfo, prefix string) {
 }
 
 func (m *model) enter() {
-	loc := m.currentLocation()
-	if loc.selected != nil && loc.selected.kind == folder {
-		m.locations = append(m.locations, location{file: loc.selected})
+	selected := m.currentLocation().selected
+	if selected == nil {
+		return
+	}
+	if selected.kind == folder {
+		m.locations = append(m.locations, location{file: selected})
 		m.sort()
 	} else {
-		fileName := filepath.Join(loc.selected.archive, loc.selected.path, loc.selected.name)
+		fileName := filepath.Join(selected.archive, selected.path, selected.name)
 		exec.Command("open", fileName).Start()
 	}
 }
@@ -676,7 +681,7 @@ func (m *model) treeView() Widget {
 		m.breadcrumbs(),
 		Styled(styleArchiveHeader,
 			Row(
-				MouseTarget(sortByStatus, Text(" Статус"+m.sortIndicator(sortByStatus)).Width(12)),
+				MouseTarget(sortByStatus, Text(" Статус"+m.sortIndicator(sortByStatus)).Width(13)),
 				MouseTarget(sortByName, Text("  Документ"+m.sortIndicator(sortByName)).Width(20).Flex(1)),
 				MouseTarget(sortByTime, Text("  Время Изменения"+m.sortIndicator(sortByTime)).Width(19)),
 				MouseTarget(sortBySize, Text(fmt.Sprintf("%22s", "Размер"+m.sortIndicator(sortBySize)+" "))),
@@ -701,7 +706,7 @@ func (m *model) treeView() Widget {
 					}
 					rows = append(rows, Styled(styleFile(file, location.selected == file),
 						MouseTarget(selectFile(file), Row(
-							Text(" "+file.status.String()).Width(12),
+							Text(" "+file.status.String()).Width(13),
 							Text("  "),
 							Text(displayName(file)).Width(20).Flex(1),
 							Text("  "),

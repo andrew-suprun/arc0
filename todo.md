@@ -1,3 +1,4 @@
+* investigate discrepancy for "copy only" and "extra copy" files
 * remove directories that only contain .DS_Store and ._* files
 
 * scanner:
