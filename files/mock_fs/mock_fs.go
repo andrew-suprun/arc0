@@ -75,7 +75,7 @@ func (fsys *mockFs) Scan(path string) <-chan files.Event {
 			scanFiles[i].hash = faker.Phonenumber()
 		}
 
-		infos := make(files.FileInfos, len(scanFiles))
+		infos := make([]*files.FileInfo, len(scanFiles))
 
 		for i, file := range scanFiles {
 			infos[i] = &files.FileInfo{

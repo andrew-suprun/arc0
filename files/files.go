@@ -23,25 +23,23 @@ func (e *ScanState) event() {}
 
 type ArchiveInfo struct {
 	Archive string
-	Files   FileInfos
+	Files   []*FileInfo
 }
 
 func (e *ArchiveInfo) event() {}
 
 type FileInfo struct {
-	Ino     uint64
 	Archive string
+	Path    string
 	Name    string
 	Size    int
 	ModTime time.Time
 	Hash    string
 }
 
-type FileInfos []*FileInfo
-
 type ScanError struct {
 	Archive string
-	Name    string
+	Path    string
 	Error   error
 }
 

@@ -11,202 +11,13 @@ import (
 	"time"
 )
 
-type model struct {
-	paths            []string
-	scanStates       []*files.ScanState
-	locations        []location
-	scanResults      []*files.ArchiveInfo
-	maps             []maps   // source, copy1, copy2, ...
-	links            []*links // copy1, copy2, ...
-	screenSize       Size
-	archiveViewLines int
-	ctx              *Context
-	lastMouseEvent   device.MouseEvent
-	sortColumn       sortColumn
-	sortAscending    []bool
-}
-
-func Run(dev device.Device, fs files.FS, paths []string) {
-	m := &model{
-		paths:         paths,
-		scanStates:    make([]*files.ScanState, len(paths)),
-		scanResults:   make([]*files.ArchiveInfo, len(paths)),
-		ctx:           &Context{Device: dev, Style: defaultStyle},
-		sortAscending: []bool{true, true, true, true},
-	}
-
-	fsEvents := make(chan files.Event)
-	for _, archive := range paths {
-		go func(archive string) {
-			for ev := range fs.Scan(archive) {
-				fsEvents <- ev
-			}
-		}(archive)
-	}
-	deviceEvents := make(chan device.Event)
-	go func() {
-		for {
-			deviceEvents <- dev.PollEvent()
-		}
-	}()
-
-	running := true
-	for running {
-		select {
-		case fsEvent := <-fsEvents:
-			m.handleFilesEvent(fsEvent)
-		case deviceEvent := <-deviceEvents:
-			running = m.handleDeviceEvent(deviceEvent)
-		}
-		m.ctx.Reset()
-		Column(0,
-			m.title(),
-			m.scanStats(),
-			m.treeView(),
-			m.statusLine(),
-		).Render(m.ctx, Position{0, 0}, m.screenSize)
-		m.ctx.Device.Render()
-	}
-
-	fs.Stop()
-	dev.Stop()
-}
-
-type fileInfo struct {
-	kind    fileKind
-	status  fileStatus
-	archive string
-	path    string
-	name    string
-	size    int
-	modTime time.Time
-	hash    string
-	files   []*fileInfo
-}
-
-type location struct {
-	file       *fileInfo
-	selected   *fileInfo
-	lineOffset int
-}
-
-type fileKind int
-
-const (
-	regularFile fileKind = iota
-	folder
-)
-
-type fileStatus int
-
-const (
-	identical fileStatus = iota
-	sourceOnly
-	extraCopy
-	copyOnly
-	discrepancy // расхождение
-)
-
-type links struct {
-	sourceLinks  map[*files.FileInfo]*files.FileInfo
-	reverseLinks map[*files.FileInfo]*files.FileInfo
-}
-
-type maps struct {
-	byName groupByName
-	byHash groupByHash
-}
-
-type groupByName map[string]*files.FileInfo
-type groupByHash map[string]files.FileInfos
-
 var (
 	defaultStyle       = device.Style{FG: 231, BG: 17}
 	styleAppTitle      = device.Style{FG: 226, BG: 0, Flags: device.Bold + device.Italic}
 	styleStatusLine    = device.Style{FG: 226, BG: 0}
 	styleProgressBar   = device.Style{FG: 231, BG: 19}
 	styleArchiveHeader = device.Style{FG: 231, BG: 8, Flags: device.Bold}
-	styleBreadcrumbs   = device.Style{FG: 226, BG: 18, Flags: device.Bold + device.Italic}
 )
-
-type selectFile *fileInfo
-type selectFolder *fileInfo
-
-func statusColor(status fileStatus) byte {
-	switch status {
-	case identical:
-		return 250
-	case sourceOnly:
-		return 82
-	case extraCopy:
-		return 226
-	case copyOnly:
-		return 214
-	case discrepancy:
-		return 196
-	}
-	return 231
-}
-
-func (s fileStatus) String() string {
-	switch s {
-	case identical:
-		return ""
-	case sourceOnly:
-		return "Оригинал"
-	case copyOnly:
-		return "Только Копия"
-	case extraCopy:
-		return "Лишняя Копия"
-	case discrepancy:
-		return "Расхождение"
-	}
-	return "UNDEFINED"
-}
-
-func (s fileStatus) Merge(other fileStatus) fileStatus {
-	if s > other {
-		return s
-	}
-	return other
-}
-
-func (m *model) handleFilesEvent(event files.Event) {
-	log.Printf("handleFilesEvent: paths = %#v", m.paths)
-	log.Printf("handleFilesEvent: event = %#v", event)
-	switch event := event.(type) {
-	case *files.ScanState:
-		for i := range m.paths {
-			if m.paths[i] == event.Archive {
-				m.scanStates[i] = event
-				break
-			}
-		}
-
-	case *files.ArchiveInfo:
-		for i := range m.paths {
-			if m.paths[i] == event.Archive {
-				m.scanStates[i] = nil
-				m.scanResults[i] = event
-				break
-			}
-		}
-		doneScanning := true
-		for i := range m.paths {
-			if m.scanResults[i] == nil {
-				doneScanning = false
-				break
-			}
-		}
-		log.Println("handleFilesEvent: doneScanning = ", doneScanning)
-		if doneScanning {
-			m.analizeArchives()
-		}
-
-	default:
-		log.Panicf("### unhandled files event %#v", event)
-	}
-}
 
 func (m *model) handleDeviceEvent(event device.Event) bool {
 	switch event := event.(type) {
@@ -342,292 +153,55 @@ func (m *model) handleMouseEvent(event device.MouseEvent) {
 	}
 }
 
-func (m *model) analizeArchives() {
-	log.Println("analizeArchives")
-	m.scanStates = nil
-	m.maps = make([]maps, len(m.scanResults))
-	for i, scan := range m.scanResults {
-		m.maps[i] = maps{
-			byName: byName(scan.Files),
-			byHash: byHash(scan.Files),
-		}
+func styleFile(file *fileInfo, selected bool) device.Style {
+	bg, flags := byte(17), device.Flags(0)
+	if file.status == discrepancy {
+		flags = device.Bold
 	}
-
-	m.links = make([]*links, len(m.scanResults)-1)
-	for i, copy := range m.scanResults[1:] {
-		m.links[i] = m.linkArchives(copy.Files)
+	if file.kind == folder {
+		bg = byte(18)
 	}
-	m.buildFileTree()
-}
-
-func byName(infos files.FileInfos) groupByName {
-	result := groupByName{}
-	for _, info := range infos {
-		result[info.Name] = info
+	result := device.Style{FG: statusColor(file.status), BG: bg, Flags: flags}
+	if selected {
+		result.Flags |= device.Reverse
 	}
 	return result
 }
 
-func byHash(archive files.FileInfos) groupByHash {
-	result := groupByHash{}
-	for _, info := range archive {
-		result[info.Hash] = append(result[info.Hash], info)
-	}
-	return result
+func styleBreadcrumbs(file *fileInfo) device.Style {
+	return device.Style{FG: statusColor(file.status), BG: 17, Flags: device.Bold + device.Italic}
 }
 
-func (m *model) buildFileTree() {
-	m.locations = []location{{
-		file: &fileInfo{name: " Архив", kind: folder},
-	}}
-
-	uniqueFileNames := map[string]struct{}{}
-	for _, info := range m.scanResults[0].Files {
-		uniqueFileNames[info.Name] = struct{}{}
+func statusColor(status fileStatus) byte {
+	switch status {
+	case identical:
+		return 250
+	case sourceOnly:
+		return 82
+	case extraCopy:
+		return 226
+	case copyOnly:
+		return 214
+	case discrepancy:
+		return 196
 	}
-	for i, copyScan := range m.scanResults[1:] {
-		reverseLinks := m.links[i].reverseLinks
-		for _, info := range copyScan.Files {
-			if _, ok := reverseLinks[info]; !ok {
-				uniqueFileNames[info.Name] = struct{}{}
-			}
-		}
-	}
-
-	for fullName := range uniqueFileNames {
-		path := strings.Split(fullName, "/")
-		name := path[len(path)-1]
-		path = path[:len(path)-1]
-		infos := make([]*files.FileInfo, len(m.maps))
-		for i, maps := range m.maps {
-			infos[i] = maps.byName[fullName]
-		}
-		for i, info := range infos {
-			current := m.locations[0].file
-			fileStack := []*fileInfo{current}
-			if info == nil {
-				continue
-			}
-			if i > 0 && infos[0] != nil && infos[0].Hash == info.Hash {
-				continue
-			}
-			if i == 0 {
-				current.size += info.Size
-			}
-			for pathIdx, dir := range path {
-				sub := subFolder(current, dir)
-				if i == 0 {
-					sub.size += info.Size
-				}
-				if sub.archive == "" {
-					sub.archive = info.Archive
-					sub.path = filepath.Join(path[:pathIdx]...)
-				}
-				if sub.modTime.Before(info.ModTime) {
-					sub.modTime = info.ModTime
-				}
-				current = sub
-				fileStack = append(fileStack, current)
-			}
-
-			status := identical
-			if i == 0 {
-				for _, links := range m.links {
-					if links.sourceLinks[info] == nil {
-						status = sourceOnly
-					}
-				}
-			} else {
-				if infos[0] != nil {
-					status = discrepancy
-				} else if m.maps[0].byHash[info.Hash] != nil {
-					status = extraCopy
-				} else {
-					status = copyOnly
-				}
-			}
-
-			currentFile := &fileInfo{
-				kind:    regularFile,
-				status:  status,
-				archive: info.Archive,
-				path:    filepath.Dir(info.Name),
-				name:    name,
-				size:    info.Size,
-				modTime: info.ModTime,
-				hash:    info.Hash,
-			}
-			current.files = append(current.files, currentFile)
-			for _, current = range fileStack {
-				current.status = status.Merge(current.status)
-			}
-		}
-	}
-	m.sort()
-	PrintArchive(m.currentLocation().file, "")
+	return 231
 }
 
-func subFolder(dir *fileInfo, name string) *fileInfo {
-	for i := range dir.files {
-		if name == dir.files[i].name && dir.files[i].kind == folder {
-			return dir.files[i]
-		}
+func (s fileStatus) repr() string {
+	switch s {
+	case identical:
+		return ""
+	case sourceOnly:
+		return "Оригинал"
+	case copyOnly:
+		return "Только Копия"
+	case extraCopy:
+		return "Лишняя Копия"
+	case discrepancy:
+		return "Расхождение"
 	}
-	subFolder := &fileInfo{kind: folder, name: name}
-	dir.files = append(dir.files, subFolder)
-	return subFolder
-}
-
-func (a *links) String() string {
-	b := &strings.Builder{}
-	fmt.Fprintln(b, "Source Map:")
-	for s, c := range a.sourceLinks {
-		fmt.Fprintf(b, "  %s -> %s %s\n", s.Name, c.Name, s.Hash)
-	}
-	fmt.Fprintln(b, "Reverse Map:")
-	for s, c := range a.reverseLinks {
-		fmt.Fprintf(b, "  %s -> %s %s\n", s.Name, c.Name, s.Hash)
-	}
-	return b.String()
-}
-
-func (m *model) linkArchives(copyInfos files.FileInfos) *links {
-	result := &links{
-		sourceLinks:  map[*files.FileInfo]*files.FileInfo{},
-		reverseLinks: map[*files.FileInfo]*files.FileInfo{},
-	}
-	for _, copy := range copyInfos {
-		if sources, ok := m.maps[0].byHash[copy.Hash]; ok {
-			match(sources, copy, result.sourceLinks)
-		}
-	}
-
-	for source, copy := range result.sourceLinks {
-		result.reverseLinks[copy] = source
-	}
-
-	return result
-}
-
-func match(sources files.FileInfos, copy *files.FileInfo, sourceMap map[*files.FileInfo]*files.FileInfo) *files.FileInfo {
-	for _, source := range sources {
-		if copy.Name == source.Name {
-			sourceMap[source] = copy
-			return nil
-		}
-	}
-
-	for _, source := range sources {
-		tmpCopy := sourceMap[source]
-		sourceBase := filepath.Base(source.Name)
-		if filepath.Base(copy.Name) == sourceBase && (tmpCopy == nil || filepath.Base(tmpCopy.Name) != sourceBase) {
-			sourceMap[source] = copy
-			copy = tmpCopy
-			break
-		}
-	}
-
-	if copy == nil {
-		return nil
-	}
-
-	for _, source := range sources {
-		tmpCopy := sourceMap[source]
-		sourceBase := filepath.Base(source.Name)
-		sourceDir := filepath.Dir(source.Name)
-		if filepath.Dir(copy.Name) == sourceDir &&
-			(tmpCopy == nil ||
-				(filepath.Base(tmpCopy.Name) != sourceBase && filepath.Dir(tmpCopy.Name) != sourceDir)) {
-
-			sourceMap[source] = copy
-			copy = tmpCopy
-			break
-		}
-	}
-
-	if copy == nil {
-		return nil
-	}
-
-	for _, source := range sources {
-		if sourceMap[source] == nil {
-			sourceMap[source] = copy
-			return nil
-		}
-	}
-
-	return copy
-}
-
-func PrintArchive(archive *fileInfo, prefix string) {
-	kind := "D"
-	if archive.kind == regularFile {
-		kind = "F"
-	}
-	if archive.kind == regularFile {
-		log.Printf("%s%s: %s status=%v size=%v hash=%v", prefix, kind, archive.name, archive.status, archive.size, archive.hash)
-	} else {
-		log.Printf("%s%s: %s status=%v size=%v", prefix, kind, archive.name, archive.status, archive.size)
-	}
-	for _, file := range archive.files {
-		PrintArchive(file, prefix+"│ ")
-	}
-}
-
-func (m *model) enter() {
-	selected := m.currentLocation().selected
-	if selected == nil {
-		return
-	}
-	if selected.kind == folder {
-		m.locations = append(m.locations, location{file: selected})
-		m.sort()
-	} else {
-		fileName := filepath.Join(selected.archive, selected.path, selected.name)
-		exec.Command("open", fileName).Start()
-	}
-}
-
-func (m *model) esc() {
-	if len(m.locations) > 1 {
-		m.locations = m.locations[:len(m.locations)-1]
-		m.sort()
-	}
-}
-
-func (m *model) up() {
-	loc := m.currentLocation()
-	if loc.selected != nil {
-		for i, file := range loc.file.files {
-			if file == loc.selected && i > 0 {
-				loc.selected = loc.file.files[i-1]
-				break
-			}
-		}
-	} else {
-		loc.selected = loc.file.files[len(loc.file.files)-1]
-	}
-}
-
-func (m *model) down() {
-	loc := m.currentLocation()
-	if loc.selected != nil {
-		for i, file := range loc.file.files {
-			if file == loc.selected && i+1 < len(loc.file.files) {
-				loc.selected = loc.file.files[i+1]
-				break
-			}
-		}
-	} else {
-		loc.selected = loc.file.files[0]
-	}
-}
-
-func (m *model) currentLocation() *location {
-	if len(m.locations) == 0 {
-		return nil
-	}
-	return &m.locations[len(m.locations)-1]
+	return "UNDEFINED"
 }
 
 func (m *model) title() Widget {
@@ -687,7 +261,7 @@ func (m *model) treeView() Widget {
 				MouseTarget(sortBySize, Text(fmt.Sprintf("%22s", "Размер"+m.sortIndicator(sortBySize)+" "))),
 			),
 		),
-		Scroll(nil, Constraint{Size{0, 0}, Flex{1, 1}},
+		Scroll(nil, Constraint{Size: Size{Width: 0, Height: 0}, Flex: Flex{X: 1, Y: 1}},
 			func(size Size) Widget {
 				m.archiveViewLines = size.Height
 				location := m.currentLocation()
@@ -706,7 +280,7 @@ func (m *model) treeView() Widget {
 					}
 					rows = append(rows, Styled(styleFile(file, location.selected == file),
 						MouseTarget(selectFile(file), Row(
-							Text(" "+file.status.String()).Width(13),
+							Text(" "+file.status.repr()).Width(13),
 							Text("  "),
 							Text(displayName(file)).Width(20).Flex(1),
 							Text("  "),
@@ -770,24 +344,12 @@ func (m *model) breadcrumbs() Widget {
 		}
 		widgets = append(widgets,
 			MouseTarget(selectFolder(loc.file),
-				Styled(styleBreadcrumbs, Text(loc.file.name)),
+				Styled(styleBreadcrumbs(loc.file), Text(loc.file.name)),
 			),
 		)
 	}
 	widgets = append(widgets, Spacer{})
 	return Row(widgets...)
-}
-
-func styleFile(file *fileInfo, selected bool) device.Style {
-	bg, flags := byte(17), device.Flags(0)
-	if file.kind == folder {
-		bg, flags = byte(18), device.Bold
-	}
-	result := device.Style{FG: statusColor(file.status), BG: bg, Flags: flags}
-	if selected {
-		result.Flags |= device.Reverse
-	}
-	return result
 }
 
 func formatSize(size int) string {

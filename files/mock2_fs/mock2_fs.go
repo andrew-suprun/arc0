@@ -49,7 +49,7 @@ func (fsys *mockFs) Scan(path string) <-chan files.Event {
 	return nil
 }
 
-var origin = files.FileInfos{
+var origin = []*files.FileInfo{
 	{
 		Name:    "a/b/c/x.txt",
 		Size:    150,
@@ -87,7 +87,7 @@ var origin = files.FileInfos{
 		Hash:    "yyyy",
 	},
 }
-var copy1 = files.FileInfos{
+var copy1 = []*files.FileInfo{
 	{
 		Name:    "a/b/c/d.txt",
 		Size:    100,
@@ -143,7 +143,7 @@ var copy1 = files.FileInfos{
 		Hash:    "yyyy",
 	},
 }
-var copy2 = files.FileInfos{
+var copy2 = []*files.FileInfo{
 	{
 		Name:    "a/b/c/f.txt",
 		Size:    150,
