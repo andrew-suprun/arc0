@@ -15,13 +15,6 @@ const (
 	sortBySize
 )
 
-type sortDirection int
-
-const (
-	asc sortDirection = iota
-	desc
-)
-
 func (m *model) sort() {
 	files := m.currentLocation().file.files
 	log.Println("sortBy", m.sortColumn, "sortAscending", m.sortAscending[m.sortColumn])
@@ -78,7 +71,7 @@ func (s sliceByStatus) Less(i, j int) bool {
 		return false
 	}
 
-	return strings.ToLower(s.sliceBy[i].name) < strings.ToLower(s.sliceBy[j].name)
+	return strings.ToLower(s.sliceBy[i].name) > strings.ToLower(s.sliceBy[j].name)
 }
 
 type sliceByTime struct {
