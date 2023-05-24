@@ -11,14 +11,13 @@ func Styled(style device.Style, widget Widget) Widget {
 	return styled{style: style, widget: widget}
 }
 
-func (s styled) Constraint() Constraint {
+func (s styled) Constraint() device.Constraint {
 	return s.widget.Constraint()
 }
 
-// TODO: remove style argument
-func (s styled) Render(ctx *Context, pos Position, size Size) {
-	currentStyle := ctx.Style
-	ctx.Style = s.style
-	s.widget.Render(ctx, pos, size)
-	ctx.Style = currentStyle
+func (s styled) Render(d device.Device, pos device.Position, size device.Size) {
+	currentStyle := d.CurrentStyle()
+	d.SetStyle(s.style)
+	s.widget.Render(d, pos, size)
+	d.SetStyle(currentStyle)
 }

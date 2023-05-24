@@ -1,5 +1,7 @@
 package ui
 
+import "arch/device"
+
 type column struct {
 	height  int
 	flex    int
@@ -11,14 +13,14 @@ func Column(flex int, widgets ...Widget) Widget {
 	for _, widget := range widgets {
 		height += widget.Constraint().Size.Height
 	}
-	return column{height, flex, widgets}
+	return column{height: height, flex: flex, widgets: widgets}
 }
 
-func (c column) Constraint() Constraint {
-	return Constraint{Size{0, c.height}, Flex{1, c.flex}}
+func (c column) Constraint() device.Constraint {
+	return device.Constraint{Size: device.Size{Width: 0, Height: c.height}, Flex: device.Flex{X: 1, Y: c.flex}}
 }
 
-func (c column) Render(ctx *Context, pos Position, size Size) {
+func (c column) Render(d device.Device, pos device.Position, size device.Size) {
 	sizes := make([]int, len(c.widgets))
 	flexes := make([]int, len(c.widgets))
 	for i, widget := range c.widgets {
@@ -28,7 +30,7 @@ func (c column) Render(ctx *Context, pos Position, size Size) {
 	heights := calcSizes(size.Height, sizes, flexes)
 	y := 0
 	for i, widget := range c.widgets {
-		widget.Render(ctx, Position{pos.X, pos.Y + y}, Size{size.Width, heights[i]})
+		widget.Render(d, device.Position{X: pos.X, Y: pos.Y + y}, device.Size{Width: size.Width, Height: heights[i]})
 		y += heights[i]
 	}
 }

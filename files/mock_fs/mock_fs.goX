@@ -1,7 +1,7 @@
 package mock_fs
 
 import (
-	"arch/files"
+	"arch/model"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -9,14 +9,16 @@ import (
 	"github.com/go-faker/faker/v4"
 )
 
-type mockFs struct{}
-
-func NewFs() files.FS {
-	return &mockFs{}
+type mockFs struct {
+	path   string
+	events model.EventHandler
 }
 
-func (fs *mockFs) Abs(path string) (string, error) {
-	return path, nil
+func NewFs(path string, events model.EventHandler) model.FS {
+	return &mockFs{
+		path:   path,
+		events: events,
+	}
 }
 
 type file struct {
@@ -25,8 +27,8 @@ type file struct {
 	hash string
 }
 
-func (fsys *mockFs) Scan(path string) <-chan files.Event {
-	result := make(chan files.Event, 1)
+func (fsys *mockFs) Scan() {
+	result := make(chan func(*model.Model))
 	go func() {
 		scanStarted := time.Now()
 		scanFiles, totalSize, totalHashed := genFiles()
@@ -65,7 +67,7 @@ func (fsys *mockFs) Scan(path string) <-chan files.Event {
 				eta := scanStarted.Add(time.Duration(float64(dur) / float64(newFilesHashed) * float64(toHash)))
 
 				result <- &files.ScanState{
-					Archive:   path,
+					Archive:   fsys.path,
 					Name:      file.name,
 					Remaining: time.Until(eta),
 					Progress:  progress,
@@ -79,7 +81,7 @@ func (fsys *mockFs) Scan(path string) <-chan files.Event {
 
 		for i, file := range scanFiles {
 			infos[i] = &files.FileInfo{
-				Archive: path,
+				Archive: fsys.path,
 				Name:    file.name,
 				Size:    file.size,
 				ModTime: beginning.Add(time.Duration(rand.Int63n(int64(duration)))),
@@ -88,7 +90,7 @@ func (fsys *mockFs) Scan(path string) <-chan files.Event {
 		}
 
 		result <- &files.ArchiveInfo{
-			Archive: path,
+			Archive: fsys.path,
 			Files:   infos,
 		}
 		close(result)

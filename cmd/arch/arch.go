@@ -1,12 +1,12 @@
 package main
 
 import (
+	"arch/device"
 	"arch/device/tcell"
-	"arch/files"
 	"arch/files/file_fs"
-	"arch/files/mock2_fs"
-	"arch/files/mock_fs"
-	"arch/ui"
+	"arch/lifecycle"
+	"arch/model"
+	"arch/view"
 	"log"
 	"os"
 )
@@ -14,35 +14,63 @@ import (
 func main() {
 	log.SetFlags(0)
 
-	var fs files.FS
-	var paths []string
+	m := model.Model{}
 
-	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
-		fs = mock_fs.NewFs()
-		paths = []string{"origin", "copy 1", "copy 2"}
-	} else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
-		fs = mock2_fs.NewFs()
-		paths = []string{"origin", "copy 1", "copy 2"}
-	} else {
-		fs = file_fs.NewFs()
-		paths = os.Args[1:]
-	}
+	events := make(model.EventHandler)
 
-	for i, path := range paths {
-		var err error
-		path, err = fs.Abs(path)
+	// if len(os.Args) >= 1 && os.Args[1] == "-sim" {
+	// 	startMock("origin", events)
+	// 	startMock("copy 1", events)
+	// 	startMock("copy 2", events)
+	// } else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
+	// 	startMock2("origin,", events)
+	// 	startMock2("copy 1", events)
+	// 	startMock2("copy 2", events)
+	// } else {
+	lc := lifecycle.Lifecycle{}
+	m.ArchivePaths = os.Args[1:]
+	for _, path := range os.Args[1:] {
+		fsys, err := file_fs.NewFs(path, events, &lc)
 		if err != nil {
-			log.Printf("Invalid path: %v", path)
-			return
+			log.Panicf("Failed to scan archive %s: %#v", path, err)
 		}
-		paths[i] = path
+		fsys.Scan()
 	}
+	// }
 
-	device, err := tcell.NewDevice()
+	d, err := tcell.NewDevice(events)
 	if err != nil {
 		log.Printf("Failed to open terminal: %#v", err)
 		return
 	}
 
-	ui.Run(device, fs, paths)
+	for !m.Quit {
+		handler := <-events
+		if handler != nil {
+			handler(&m)
+		}
+		select {
+		case handler = <-events:
+			if handler != nil {
+				handler(&m)
+			}
+		default:
+		}
+		screen := view.Draw(&m)
+		screen.Render(d, device.Position{X: 0, Y: 0}, device.Size(m.ScreenSize))
+		d.Show()
+	}
+
+	lc.Stop()
+	d.Stop()
 }
+
+// func startMock(path string, events model.EventHandler) {
+// 	fsys := mock_fs.NewFs(path, events)
+// 	fsys.Scan()
+// }
+
+// func startMock2(path string, events model.EventHandler) {
+// 	fsys := mock2_fs.NewFs(path, events)
+// 	fsys.Scan()
+// }

@@ -1,4 +1,6 @@
-* investigate discrepancy for "copy only" and "extra copy" files
+* build tree: fix FileInfo.Name vs. FileMeta.FullName
+* fix mock FSs
+
 * remove directories that only contain .DS_Store and ._* files
 
 * scanner:

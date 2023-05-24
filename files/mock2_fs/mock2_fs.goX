@@ -2,24 +2,24 @@ package mock2_fs
 
 import (
 	"arch/files"
+	"arch/model"
 	"time"
 )
 
-type mockFs struct{}
-
-func NewFs() files.FS {
-	return &mockFs{}
+type mockFs struct {
+	path   string
+	events model.EventHandler
 }
 
-func (fs *mockFs) Abs(path string) (string, error) {
-	return path, nil
+func NewFs(path string, events model.EventHandler) files.FS {
+	return &mockFs{
+		path:   path,
+		events: events,
+	}
 }
 
-func (fs *mockFs) Stop() {
-}
-
-func (fsys *mockFs) Scan(path string) <-chan files.Event {
-	if path == "origin" {
+func (fsys *mockFs) Scan() {
+	if fsys.path == "origin" {
 		result := make(chan files.Event, 1)
 		result <- &files.ArchiveInfo{
 			Archive: "origin",
@@ -28,7 +28,7 @@ func (fsys *mockFs) Scan(path string) <-chan files.Event {
 		close(result)
 		return result
 	}
-	if path == "copy 1" {
+	if fsys.path == "copy 1" {
 		result := make(chan files.Event, 1)
 		result <- &files.ArchiveInfo{
 			Archive: "copy 1",
@@ -37,7 +37,7 @@ func (fsys *mockFs) Scan(path string) <-chan files.Event {
 		close(result)
 		return result
 	}
-	if path == "copy 2" {
+	if fsys.path == "copy 2" {
 		result := make(chan files.Event, 1)
 		result <- &files.ArchiveInfo{
 			Archive: "copy 2",

@@ -1,6 +1,9 @@
 package ui
 
-import "fmt"
+import (
+	"arch/device"
+	"fmt"
+)
 
 type text struct {
 	runes []rune
@@ -33,11 +36,11 @@ func (t *text) Pad(r rune) *text {
 	return t
 }
 
-func (t *text) Constraint() Constraint {
-	return Constraint{Size{t.width, 1}, Flex{t.flex, 0}}
+func (t *text) Constraint() device.Constraint {
+	return device.Constraint{Size: device.Size{Width: t.width, Height: 1}, Flex: device.Flex{X: t.flex, Y: 0}}
 }
 
-func (t *text) Render(ctx *Context, pos Position, size Size) {
+func (t *text) Render(d device.Device, pos device.Position, size device.Size) {
 	if size.Width < 1 {
 		return
 	}
@@ -50,5 +53,5 @@ func (t *text) Render(ctx *Context, pos Position, size Size) {
 		diff--
 	}
 
-	ctx.Device.Text(t.runes, pos.X, pos.Y, ctx.Style)
+	d.Text(t.runes, pos)
 }

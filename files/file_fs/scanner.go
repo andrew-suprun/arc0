@@ -1,7 +1,7 @@
 package file_fs
 
 import (
-	"arch/files"
+	"arch/model"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
@@ -20,30 +20,33 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-type fileInfos map[uint64]*files.FileInfo
+type fileMetas map[uint64]*model.FileMeta
 
-func (r *file_fs) scan(archivePath string, out chan files.Event) {
+func (r *file_fs) scan() { // TODO: r. -> f.
 	r.lc.Started()
 	defer r.lc.Done()
 
-	metas := r.collectMeta(archivePath, out)
+	metas := r.collectMeta()
 	defer func() {
-		storeMeta(archivePath, metas)
+		storeMeta(r.archivePath, metas)
 		if r.lc.ShoudStop() {
 			return
 		}
-		fileMetas := make([]*files.FileInfo, 0, len(metas))
+		archiveFiles := make(model.FileMetas, 0, len(metas))
 		for _, meta := range metas {
-			fileMetas = append(fileMetas, meta)
+			archiveFiles = append(archiveFiles, meta)
 		}
-		out <- &files.ArchiveInfo{
-			Archive: archivePath,
-			Files:   fileMetas,
+		r.events <- func(m *model.Model) {
+			for i, archivePath := range m.ArchivePaths {
+				if r.archivePath == archivePath {
+					m.Archives[i].Files = archiveFiles
+				}
+			}
 		}
-		close(out)
+		r.events <- analizeArchives
 	}()
 
-	storedMetas := readMeta(archivePath)
+	storedMetas := readMeta(r.archivePath)
 
 	for ino, storedInfo := range storedMetas {
 		if meta, ok := metas[ino]; ok {
@@ -51,7 +54,7 @@ func (r *file_fs) scan(archivePath string, out chan files.Event) {
 				meta.Hash = storedInfo.Hash
 			}
 		} else {
-			log.Println("not found", storedInfo.Name)
+			log.Println("not found", storedInfo.FullName)
 		}
 	}
 
@@ -75,17 +78,17 @@ func (r *file_fs) scan(archivePath string, out chan files.Event) {
 	}
 
 	scanStarted := time.Now()
-	hashFile := func(meta *files.FileInfo) {
+	hashFile := func(meta *model.FileMeta) {
 		defer func() {
 			totalHashed += meta.Size
 		}()
 
 		hash.Reset()
 
-		fsys := os.DirFS(archivePath)
-		file, err := fsys.Open(filepath.Join(meta.Path, meta.Name))
+		fsys := os.DirFS(r.archivePath)
+		file, err := fsys.Open(meta.FullName)
 		if err != nil {
-			out <- files.ScanError{Archive: archivePath, Path: meta.Name, Error: err}
+			r.scanError(meta.FullName, err)
 			return
 		}
 		defer file.Close()
@@ -102,12 +105,12 @@ func (r *file_fs) scan(archivePath string, out chan files.Event) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						out <- files.ScanError{Archive: archivePath, Path: meta.Name, Error: err}
+						r.scanError(meta.FullName, err)
 						return
 					}
 				}
 				if nr != nw {
-					out <- files.ScanError{Archive: archivePath, Path: meta.Name, Error: io.ErrShortWrite}
+					r.scanError(meta.FullName, io.ErrShortWrite)
 					return
 				}
 			}
@@ -118,30 +121,20 @@ func (r *file_fs) scan(archivePath string, out chan files.Event) {
 				break
 			}
 			if er != nil {
-				out <- files.ScanError{Archive: archivePath, Path: meta.Name, Error: err}
+				r.scanError(meta.FullName, err)
 				return
 			}
 
-			select {
-			case prevEvent := <-out:
-				switch prevEvent.(type) {
-				case *files.ScanState:
-					// Drop previous []files.ScanState msg, if any
-				default:
-					out <- prevEvent
-				}
-			default:
-			}
-
-			// TODO: Fix eta/remainig
 			dur := time.Since(scanStarted)
 			remaining := time.Duration(float64(dur) * float64(totalSizeToHash) / float64(totalHashed+hashed))
 
-			out <- &files.ScanState{
-				Archive:   archivePath,
-				Name:      meta.Name,
-				Remaining: remaining,
-				Progress:  float64(totalSize-totalSizeToHash+totalHashed+hashed) / float64(totalSize),
+			r.events <- func(m *model.Model) {
+				m.Archives[0].ScanState = &model.ScanState{
+					Path:      filepath.Dir(meta.FullName),
+					Name:      filepath.Base(meta.FullName),
+					Remaining: remaining,
+					Progress:  float64(totalSize-totalSizeToHash+totalHashed+hashed) / float64(totalSize),
+				}
 			}
 		}
 		meta.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
@@ -157,44 +150,49 @@ func (r *file_fs) scan(archivePath string, out chan files.Event) {
 	}
 }
 
-func (f *file_fs) collectMeta(archive string, out chan files.Event) (infos fileInfos) {
-	infos = fileInfos{}
-	fsys := os.DirFS(archive)
+func (f *file_fs) collectMeta() (infos fileMetas) {
+	infos = fileMetas{}
+	fsys := os.DirFS(f.archivePath)
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if f.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 
 		if err != nil {
-			out <- files.ScanError{Archive: archive, Path: path, Error: err}
+			f.scanError(path, err)
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			out <- files.ScanError{Archive: archive, Path: path, Error: err}
+			f.scanError(path, err)
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
 		modTime := meta.ModTime()
 		modTime = modTime.UTC().Round(time.Second)
 
-		infos[sys.Ino] = &files.FileInfo{
-			Archive: archive,
-			Path:    filepath.Dir(path),
-			Name:    filepath.Base(path),
-			Size:    int(sys.Size),
-			ModTime: modTime,
+		infos[sys.Ino] = &model.FileMeta{
+			Archive:  f.archivePath,
+			FullName: path,
+			Size:     int(sys.Size),
+			ModTime:  modTime,
 		}
 		return nil
 	})
 	return infos
 }
 
+func (f *file_fs) scanError(path string, err error) {
+	f.events <- func(m *model.Model) {
+		m.Errors = append(m.Errors, model.ScanError{Archive: f.archivePath, Path: path, Error: err})
+	}
+}
+
 const HashFileName = ".meta.csv"
 
-func readMeta(basePath string) (result fileInfos) {
-	result = fileInfos{}
+func readMeta(basePath string) (result fileMetas) {
+	result = fileMetas{}
 	absHashFileName := filepath.Join(basePath, HashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
 	if err != nil {
@@ -216,11 +214,11 @@ func readMeta(basePath string) (result fileInfos) {
 			if er1 != nil || er2 != nil || er3 != nil {
 				continue
 			}
-			result[ino] = &files.FileInfo{
-				Name:    record[1],
-				Size:    int(size),
-				ModTime: modTime,
-				Hash:    record[4],
+			result[ino] = &model.FileMeta{
+				FullName: record[1],
+				Size:     int(size),
+				ModTime:  modTime,
+				Hash:     record[4],
 			}
 		}
 	}
@@ -228,14 +226,14 @@ func readMeta(basePath string) (result fileInfos) {
 	return result
 }
 
-func storeMeta(basePath string, metas fileInfos) error {
+func storeMeta(basePath string, metas fileMetas) error {
 	result := make([][]string, 1, len(metas)+1)
 	result[0] = []string{"Inode", "Name", "Size", "ModTime", "Hash"}
 
 	for ino, meta := range metas {
 		result = append(result, []string{
 			fmt.Sprint(ino),
-			norm.NFC.String(meta.Name),
+			norm.NFC.String(meta.FullName),
 			fmt.Sprint(meta.Size),
 			meta.ModTime.UTC().Format(time.RFC3339Nano),
 			meta.Hash,

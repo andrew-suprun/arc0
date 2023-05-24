@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"arch/device"
 	"math"
 )
 
@@ -12,17 +13,17 @@ func Row(ws ...Widget) Widget {
 	return row{ws}
 }
 
-func (r row) Constraint() Constraint {
+func (r row) Constraint() device.Constraint {
 	width, flex := 0, 0
 	for _, widget := range r.widgets {
 		c := widget.Constraint()
 		width += c.Size.Width
 		flex += c.Flex.X
 	}
-	return Constraint{Size{width, 1}, Flex{1, 0}}
+	return device.Constraint{Size: device.Size{Width: width, Height: 1}, Flex: device.Flex{X: 1, Y: 0}}
 }
 
-func (r row) Render(ctx *Context, pos Position, size Size) {
+func (r row) Render(d device.Device, pos device.Position, size device.Size) {
 	sizes := make([]int, len(r.widgets))
 	flexes := make([]int, len(r.widgets))
 	for i, widget := range r.widgets {
@@ -31,7 +32,7 @@ func (r row) Render(ctx *Context, pos Position, size Size) {
 	}
 	widths := calcSizes(size.Width, sizes, flexes)
 	for i, widget := range r.widgets {
-		widget.Render(ctx, Position{pos.X, pos.Y}, Size{widths[i], size.Height})
+		widget.Render(d, pos, device.Size{Width: widths[i], Height: size.Height})
 		pos.X += widths[i]
 	}
 }

@@ -1,0 +1,303 @@
+package tcell
+
+import (
+	"arch/device"
+	"arch/model"
+	"log"
+	"os/exec"
+
+	"github.com/gdamore/tcell/v2"
+)
+
+type tcellDevice struct {
+	screen           tcell.Screen
+	lastMouseEvent   *tcell.EventMouse
+	mouseTargetAreas []mouseTargetArea
+	scrollAreas      []scrollArea
+	style            device.Style
+}
+
+type mouseTargetArea struct {
+	Command any
+	Pos     device.Position
+	Size    device.Size
+}
+
+type scrollArea struct {
+	Command any
+	Pos     device.Position
+	Size    device.Size
+}
+
+func NewDevice(events model.EventHandler) (*tcellDevice, error) {
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		return nil, err
+	}
+	if err := screen.Init(); err != nil {
+		return nil, err
+	}
+	screen.EnableMouse()
+
+	device := &tcellDevice{screen: screen}
+
+	go func() {
+		ev := device.screen.PollEvent()
+		if ev != nil {
+			events <- device.handleEvent(ev)
+		}
+	}()
+
+	return device, nil
+}
+
+func (d *tcellDevice) AddMouseTarget(cmd any, pos device.Position, size device.Size) {
+	d.mouseTargetAreas = append(d.mouseTargetAreas, mouseTargetArea{Command: cmd, Pos: pos, Size: size})
+}
+func (d *tcellDevice) AddScrollArea(cmd any, pos device.Position, size device.Size) {
+	d.scrollAreas = append(d.scrollAreas, scrollArea{Command: cmd, Pos: pos, Size: size})
+}
+func (d *tcellDevice) SetStyle(style device.Style) {
+	d.style = style
+}
+
+func (d *tcellDevice) CurrentStyle() device.Style {
+	return d.style
+}
+
+func (d *tcellDevice) handleEvent(ev tcell.Event) func(m *model.Model) {
+	if ev == nil {
+		return nil
+	}
+	for {
+		if ev, mouseEvent := ev.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
+			break
+		}
+		ev = d.screen.PollEvent()
+	}
+	switch ev := ev.(type) {
+	case *tcell.EventResize:
+		d.screen.Sync()
+		w, h := ev.Size()
+		return func(m *model.Model) {
+			m.ScreenSize = model.Size{Width: w, Height: h}
+		}
+
+	case *tcell.EventKey:
+		log.Printf("key: name=%v rune='%v' mod=%v", ev.Name(), ev.Rune(), ev.Modifiers())
+		return func(m *model.Model) {
+			d.handleKeyEvent(m, ev)
+			makeSelectedVisible(m)
+		}
+
+	case *tcell.EventMouse:
+		return func(m *model.Model) {
+			if ev.Buttons() == 512 {
+				m.CurerntFolder().LineOffset++
+			} else if ev.Buttons() == 256 {
+				m.CurerntFolder().LineOffset--
+			} else {
+				d.handleMouseEvent(m, ev)
+			}
+		}
+
+	default:
+		log.Printf("### unhandled tcell event: %#v", ev)
+		return nil
+	}
+}
+
+func (d *tcellDevice) handleKeyEvent(m *model.Model, key *tcell.EventKey) {
+	if key.Name() == "Ctrl+C" {
+		m.Quit = true
+	}
+
+	loc := m.CurerntFolder()
+	switch key.Name() {
+	case "Enter":
+		d.enter(m)
+
+	case "Esc":
+		if len(m.Breadcrumbs) > 1 {
+			m.Breadcrumbs = m.Breadcrumbs[:len(m.Breadcrumbs)-1]
+			m.Sort()
+		}
+
+	case "Rune[R]", "Rune[r]":
+		if loc != nil {
+			exec.Command("open", "-R", loc.Selected.AbsName()).Start()
+		}
+
+	case "Home":
+		if len(loc.File.Files) > 0 {
+			loc.Selected = loc.File.Files[0]
+		}
+
+	case "End":
+		if len(loc.File.Files) > 0 {
+			loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+		}
+
+	case "PgUp":
+		loc.LineOffset -= m.ArchiveViewLines
+		if loc.LineOffset < 0 {
+			loc.LineOffset = 0
+		}
+		idxSelected := 0
+		foundSelected := false
+		for i := 0; i < len(loc.File.Files); i++ {
+			if loc.File.Files[i] == loc.Selected {
+				idxSelected = i
+				foundSelected = true
+				break
+			}
+		}
+		if foundSelected {
+			idxSelected -= m.ArchiveViewLines
+			if idxSelected < 0 {
+				idxSelected = 0
+			}
+			loc.Selected = loc.File.Files[idxSelected]
+		}
+
+	case "PgDn":
+		loc.LineOffset += m.ArchiveViewLines
+		if loc.LineOffset > len(loc.File.Files)-m.ArchiveViewLines {
+			loc.LineOffset = len(loc.File.Files) - m.ArchiveViewLines
+		}
+		idxSelected := 0
+		foundSelected := false
+		for i := 0; i < len(loc.File.Files); i++ {
+			if loc.File.Files[i] == loc.Selected {
+				idxSelected = i
+				foundSelected = true
+				break
+			}
+		}
+		if foundSelected {
+			idxSelected += m.ArchiveViewLines
+			if idxSelected > len(loc.File.Files)-1 {
+				idxSelected = len(loc.File.Files) - 1
+			}
+			loc.Selected = loc.File.Files[idxSelected]
+		}
+
+	case "Up":
+		loc := m.CurerntFolder()
+		if loc.Selected != nil {
+			for i, file := range loc.File.Files {
+				if file == loc.Selected && i > 0 {
+					loc.Selected = loc.File.Files[i-1]
+					break
+				}
+			}
+		} else {
+			loc.Selected = loc.File.Files[len(loc.File.Files)-1]
+		}
+
+	case "Down":
+		loc := m.CurerntFolder()
+		if loc.Selected != nil {
+			for i, file := range loc.File.Files {
+				if file == loc.Selected && i+1 < len(loc.File.Files) {
+					loc.Selected = loc.File.Files[i+1]
+					break
+				}
+			}
+		} else {
+			loc.Selected = loc.File.Files[0]
+		}
+	}
+}
+
+func (d *tcellDevice) handleMouseEvent(m *model.Model, event *tcell.EventMouse) {
+	x, y := event.Position()
+	for _, target := range d.mouseTargetAreas {
+		if target.Pos.X <= x && target.Pos.X+target.Size.Width > x &&
+			target.Pos.Y <= y && target.Pos.Y+target.Size.Height > y {
+
+			switch cmd := target.Command.(type) {
+			case model.SelectFolder:
+				for i, loc := range m.Breadcrumbs {
+					if loc.File == cmd && i < len(m.Breadcrumbs) {
+						m.Breadcrumbs = m.Breadcrumbs[:i+1]
+						m.Sort()
+						return
+					}
+				}
+			case model.SelectFile:
+				m.CurerntFolder().Selected = cmd
+				last := d.lastMouseEvent
+				if event.When().Sub(last.When()).Seconds() < 0.5 {
+					d.enter(m)
+				}
+				d.lastMouseEvent = event
+			case model.SortColumn:
+				if cmd == m.SortColumn {
+					m.SortAscending[m.SortColumn] = !m.SortAscending[m.SortColumn]
+				} else {
+					m.SortColumn = cmd
+				}
+				m.Sort()
+			}
+		}
+	}
+}
+
+func (d *tcellDevice) enter(m *model.Model) {
+	selected := m.CurerntFolder().Selected
+	if selected == nil {
+		return
+	}
+	if selected.Kind == model.FileFolder {
+		m.Breadcrumbs = append(m.Breadcrumbs, model.Folder{File: selected})
+		m.Sort()
+	} else {
+		exec.Command("open", selected.AbsName()).Start()
+	}
+}
+
+func makeSelectedVisible(m *model.Model) {
+	folder := m.CurerntFolder()
+	if folder.Selected == nil {
+		return
+	}
+	idx := -1
+	for i := range folder.File.Files {
+		if folder.Selected == folder.File.Files[i] {
+			idx = i
+			break
+		}
+	}
+	if idx >= 0 {
+		if folder.LineOffset > idx {
+			folder.LineOffset = idx
+		}
+		if folder.LineOffset < idx+1-m.ArchiveViewLines {
+			folder.LineOffset = idx + 1 - m.ArchiveViewLines
+		}
+	}
+}
+
+func (d *tcellDevice) Text(runes []rune, pos device.Position) {
+	for i, rune := range runes {
+		style := tcell.StyleDefault.
+			Foreground(tcell.PaletteColor(int(d.style.FG))).
+			Background(tcell.PaletteColor(int(d.style.BG))).
+			Bold(d.style.Flags&device.Bold == device.Bold).
+			Italic(d.style.Flags&device.Italic == device.Italic).
+			Reverse(d.style.Flags&device.Reverse == device.Reverse)
+
+		d.screen.SetContent(pos.X+i, pos.Y, rune, nil, style)
+	}
+}
+
+func (d *tcellDevice) Show() {
+	d.scrollAreas = d.scrollAreas[:0]
+	d.mouseTargetAreas = d.mouseTargetAreas[:0]
+	d.screen.Show()
+}
+
+func (d *tcellDevice) Stop() {
+	d.screen.Fini()
+}

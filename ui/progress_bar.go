@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"arch/device"
 	"math"
 )
 
@@ -28,11 +29,11 @@ func (t *progressBar) Flex(flex int) *progressBar {
 	return t
 }
 
-func (pb progressBar) Constraint() Constraint {
-	return Constraint{Size{pb.width, 1}, Flex{pb.flex, 0}}
+func (pb progressBar) Constraint() device.Constraint {
+	return device.Constraint{Size: device.Size{Width: pb.width, Height: 1}, Flex: device.Flex{X: pb.flex, Y: 0}}
 }
 
-func (pb progressBar) Render(ctx *Context, pos Position, size Size) {
+func (pb progressBar) Render(d device.Device, pos device.Position, size device.Size) {
 	if size.Width < 1 {
 		return
 	}
@@ -51,5 +52,5 @@ func (pb progressBar) Render(ctx *Context, pos Position, size Size) {
 		runes[idx] = ' '
 	}
 
-	ctx.Device.Text(runes, pos.X, pos.Y, ctx.Style)
+	d.Text(runes, pos)
 }
