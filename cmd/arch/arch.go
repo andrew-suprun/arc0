@@ -29,12 +29,12 @@ func main() {
 	// } else {
 	lc := lifecycle.Lifecycle{}
 	m.ArchivePaths = os.Args[1:]
+	fsys, err := file_fs.NewFs(events, &lc)
 	for _, path := range os.Args[1:] {
-		fsys, err := file_fs.NewFs(path, events, &lc)
+		err := fsys.Scan(path)
 		if err != nil {
 			log.Panicf("Failed to scan archive %s: %#v", path, err)
 		}
-		fsys.Scan()
 	}
 	// }
 

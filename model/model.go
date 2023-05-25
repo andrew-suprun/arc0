@@ -146,5 +146,5 @@ type View interface {
 }
 
 type FS interface {
-	Scan()
+	Scan(path string) error
 }

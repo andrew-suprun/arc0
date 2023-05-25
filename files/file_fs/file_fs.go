@@ -10,20 +10,14 @@ import (
 )
 
 type file_fs struct {
-	archivePath string
-	events      model.EventHandler
-	lc          *lifecycle.Lifecycle
+	events model.EventHandler
+	lc     *lifecycle.Lifecycle
 }
 
-func NewFs(path string, events model.EventHandler, lc *lifecycle.Lifecycle) (m model.FS, err error) {
-	path, err = abs(path)
-	if err != nil {
-		return nil, err
-	}
+func NewFs(events model.EventHandler, lc *lifecycle.Lifecycle) (m model.FS, err error) {
 	return &file_fs{
-		archivePath: path,
-		events:      events,
-		lc:          lc,
+		events: events,
+		lc:     lc,
 	}, nil
 }
 
@@ -42,6 +36,11 @@ func abs(path string) (string, error) {
 	return path, nil
 }
 
-func (fs *file_fs) Scan() {
-	go fs.scan()
+func (fs *file_fs) Scan(path string) (err error) {
+	path, err = abs(path)
+	if err != nil {
+		return err
+	}
+	go fs.scan(path)
+	return nil
 }

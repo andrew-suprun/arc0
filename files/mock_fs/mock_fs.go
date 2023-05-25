@@ -10,25 +10,23 @@ import (
 )
 
 type mockFs struct {
-	path   string
 	events model.EventHandler
 }
 
 func NewFs(path string, events model.EventHandler) model.FS {
 	return &mockFs{
-		path:   path,
 		events: events,
 	}
 }
 
 type file struct {
+	path string
 	name string
 	size int
 	hash string
 }
 
-func (fsys *mockFs) Scan() {
-	result := make(chan func(*model.Model))
+func (fsys *mockFs) Scan(archivePath string) error {
 	go func() {
 		scanStarted := time.Now()
 		scanFiles, totalSize, totalHashed := genFiles()
@@ -51,51 +49,49 @@ func (fsys *mockFs) Scan() {
 					totalHashed = totalSize - newFilesHashed
 				}
 
-				select {
-				case prevEvent := <-result:
-					switch prevEvent.(type) {
-					case *files.ScanState:
-						// Drop previous []files.ScanState msg, if any
-					default:
-						result <- prevEvent
-					}
-				default:
-				}
-
 				progress := float64(totalHashed+newFilesHashed) / float64(totalSize)
 				dur := time.Since(scanStarted)
 				eta := scanStarted.Add(time.Duration(float64(dur) / float64(newFilesHashed) * float64(toHash)))
 
-				result <- &files.ScanState{
-					Archive:   fsys.path,
-					Name:      file.name,
-					Remaining: time.Until(eta),
-					Progress:  progress,
+				fsys.events <- func(m *model.Model) {
+					for i := range m.ArchivePaths {
+						if archivePath == m.ArchivePaths[i] {
+							m.Archives[i].ScanState = &model.ScanState{
+								Path:      file.path,
+								Name:      file.name,
+								Remaining: time.Until(eta),
+								Progress:  progress,
+							}
+						}
+					}
 				}
+
 				time.Sleep(time.Millisecond)
 			}
 			scanFiles[i].hash = faker.Phonenumber()
 		}
 
-		infos := make([]*files.FileInfo, len(scanFiles))
+		infos := make([]*model.FileMeta, len(scanFiles))
 
 		for i, file := range scanFiles {
-			infos[i] = &files.FileInfo{
-				Archive: fsys.path,
-				Name:    file.name,
-				Size:    file.size,
-				ModTime: beginning.Add(time.Duration(rand.Int63n(int64(duration)))),
-				Hash:    file.hash,
+			infos[i] = &model.FileMeta{
+				Archive:  archivePath,
+				FullName: filepath.Join(file.path, file.name),
+				Size:     file.size,
+				ModTime:  beginning.Add(time.Duration(rand.Int63n(int64(duration)))),
+				Hash:     file.hash,
 			}
 		}
 
-		result <- &files.ArchiveInfo{
-			Archive: fsys.path,
-			Files:   infos,
+		fsys.events <- func(m *model.Model) {
+			for i := range m.ArchivePaths {
+				if archivePath == m.ArchivePaths[i] {
+					m.Archives[i].Files = infos
+				}
+			}
 		}
-		close(result)
 	}()
-	return result
+	return nil
 }
 
 var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -126,7 +122,7 @@ func genFilesRec(dirs []string, level, pcHashed int, files *[]file, total_size, 
 			hash = faker.Phonenumber()
 			*total_hashed += size
 		}
-		*files = append(*files, file{name: filepath.Join(path, faker.Sentence()), size: size, hash: hash})
+		*files = append(*files, file{path: path, name: filepath.Join(path, faker.Sentence()), size: size, hash: hash})
 	}
 	for i := 0; i < nDirs[level]; i++ {
 		genFilesRec(append(dirs, faker.Sentence()), level+1, pcHashed, files, total_size, total_hashed)

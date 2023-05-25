@@ -22,31 +22,31 @@ import (
 
 type fileMetas map[uint64]*model.FileMeta
 
-func (r *file_fs) scan() { // TODO: r. -> f.
-	r.lc.Started()
-	defer r.lc.Done()
+func (f *file_fs) scan(archivePath string) {
+	f.lc.Started()
+	defer f.lc.Done()
 
-	metas := r.collectMeta()
+	metas := f.collectMeta(archivePath)
 	defer func() {
-		storeMeta(r.archivePath, metas)
-		if r.lc.ShoudStop() {
+		storeMeta(archivePath, metas)
+		if f.lc.ShoudStop() {
 			return
 		}
 		archiveFiles := make(model.FileMetas, 0, len(metas))
 		for _, meta := range metas {
 			archiveFiles = append(archiveFiles, meta)
 		}
-		r.events <- func(m *model.Model) {
+		f.events <- func(m *model.Model) {
 			for i, archivePath := range m.ArchivePaths {
-				if r.archivePath == archivePath {
+				if archivePath == archivePath {
 					m.Archives[i].Files = archiveFiles
 				}
 			}
 		}
-		r.events <- analizeArchives
+		f.events <- analizeArchives
 	}()
 
-	storedMetas := readMeta(r.archivePath)
+	storedMetas := readMeta(archivePath)
 
 	for ino, storedInfo := range storedMetas {
 		if meta, ok := metas[ino]; ok {
@@ -85,10 +85,10 @@ func (r *file_fs) scan() { // TODO: r. -> f.
 
 		hash.Reset()
 
-		fsys := os.DirFS(r.archivePath)
+		fsys := os.DirFS(archivePath)
 		file, err := fsys.Open(meta.FullName)
 		if err != nil {
-			r.scanError(meta.FullName, err)
+			f.scanError(archivePath, meta.FullName, err)
 			return
 		}
 		defer file.Close()
@@ -96,7 +96,7 @@ func (r *file_fs) scan() { // TODO: r. -> f.
 		var hashed int
 
 		for {
-			if r.lc.ShoudStop() {
+			if f.lc.ShoudStop() {
 				return
 			}
 
@@ -105,12 +105,12 @@ func (r *file_fs) scan() { // TODO: r. -> f.
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						r.scanError(meta.FullName, err)
+						f.scanError(archivePath, meta.FullName, err)
 						return
 					}
 				}
 				if nr != nw {
-					r.scanError(meta.FullName, io.ErrShortWrite)
+					f.scanError(archivePath, meta.FullName, io.ErrShortWrite)
 					return
 				}
 			}
@@ -121,14 +121,14 @@ func (r *file_fs) scan() { // TODO: r. -> f.
 				break
 			}
 			if er != nil {
-				r.scanError(meta.FullName, err)
+				f.scanError(archivePath, meta.FullName, err)
 				return
 			}
 
 			dur := time.Since(scanStarted)
 			remaining := time.Duration(float64(dur) * float64(totalSizeToHash) / float64(totalHashed+hashed))
 
-			r.events <- func(m *model.Model) {
+			f.events <- func(m *model.Model) {
 				m.Archives[0].ScanState = &model.ScanState{
 					Path:      filepath.Dir(meta.FullName),
 					Name:      filepath.Base(meta.FullName),
@@ -142,7 +142,7 @@ func (r *file_fs) scan() { // TODO: r. -> f.
 
 	for _, meta := range metas {
 		if meta.Hash == "" {
-			if r.lc.ShoudStop() {
+			if f.lc.ShoudStop() {
 				return
 			}
 			hashFile(meta)
@@ -150,22 +150,22 @@ func (r *file_fs) scan() { // TODO: r. -> f.
 	}
 }
 
-func (f *file_fs) collectMeta() (infos fileMetas) {
+func (f *file_fs) collectMeta(archivePath string) (infos fileMetas) {
 	infos = fileMetas{}
-	fsys := os.DirFS(f.archivePath)
+	fsys := os.DirFS(archivePath)
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if f.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 
 		if err != nil {
-			f.scanError(path, err)
+			f.scanError(archivePath, path, err)
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			f.scanError(path, err)
+			f.scanError(archivePath, path, err)
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
@@ -173,7 +173,7 @@ func (f *file_fs) collectMeta() (infos fileMetas) {
 		modTime = modTime.UTC().Round(time.Second)
 
 		infos[sys.Ino] = &model.FileMeta{
-			Archive:  f.archivePath,
+			Archive:  archivePath,
 			FullName: path,
 			Size:     int(sys.Size),
 			ModTime:  modTime,
@@ -183,9 +183,9 @@ func (f *file_fs) collectMeta() (infos fileMetas) {
 	return infos
 }
 
-func (f *file_fs) scanError(path string, err error) {
+func (f *file_fs) scanError(archivePath, path string, err error) {
 	f.events <- func(m *model.Model) {
-		m.Errors = append(m.Errors, model.ScanError{Archive: f.archivePath, Path: path, Error: err})
+		m.Errors = append(m.Errors, model.ScanError{Archive: archivePath, Path: path, Error: err})
 	}
 }
 
