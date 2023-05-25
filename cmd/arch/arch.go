@@ -4,6 +4,8 @@ import (
 	"arch/device"
 	"arch/device/tcell"
 	"arch/files/file_fs"
+	"arch/files/mock2_fs"
+	"arch/files/mock_fs"
 	"arch/lifecycle"
 	"arch/model"
 	"arch/view"
@@ -14,29 +16,30 @@ import (
 func main() {
 	log.SetFlags(0)
 
-	m := model.Model{}
-
-	events := make(model.EventHandler)
-
-	// if len(os.Args) >= 1 && os.Args[1] == "-sim" {
-	// 	startMock("origin", events)
-	// 	startMock("copy 1", events)
-	// 	startMock("copy 2", events)
-	// } else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
-	// 	startMock2("origin,", events)
-	// 	startMock2("copy 1", events)
-	// 	startMock2("copy 2", events)
-	// } else {
 	lc := lifecycle.Lifecycle{}
-	m.ArchivePaths = os.Args[1:]
-	fsys, err := file_fs.NewFs(events, &lc)
-	for _, path := range os.Args[1:] {
-		err := fsys.Scan(path)
-		if err != nil {
-			log.Panicf("Failed to scan archive %s: %#v", path, err)
+	m := model.Model{}
+	events := make(model.EventChan)
+
+	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
+		fsys := mock_fs.NewFs(events)
+		fsys.Scan("origin")
+		fsys.Scan("copy 1")
+		fsys.Scan("copy 2")
+	} else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
+		fsys := mock2_fs.NewFs(events)
+		fsys.Scan("origin")
+		fsys.Scan("copy 1")
+		fsys.Scan("copy 2")
+	} else {
+		m.ArchivePaths = os.Args[1:]
+		fsys := file_fs.NewFs(events, &lc)
+		for _, path := range os.Args[1:] {
+			err := fsys.Scan(path)
+			if err != nil {
+				log.Panicf("Failed to scan archive %s: %#v", path, err)
+			}
 		}
 	}
-	// }
 
 	d, err := tcell.NewDevice(events)
 	if err != nil {
@@ -44,22 +47,30 @@ func main() {
 		return
 	}
 
+	logTotalFrames, logSkippedFrames := 0, 0
 	for !m.Quit {
 		handler := <-events
+		log.Printf("###.1 handler %#v", handler)
 		if handler != nil {
-			handler(&m)
+			handler.HandleEvent(&m)
 		}
 		select {
 		case handler = <-events:
+			log.Printf("###.2 handler %#v", handler)
 			if handler != nil {
-				handler(&m)
+				handler.HandleEvent(&m)
+				logSkippedFrames++
 			}
 		default:
 		}
 		screen := view.Draw(&m)
 		screen.Render(d, device.Position{X: 0, Y: 0}, device.Size(m.ScreenSize))
 		d.Show()
+		logTotalFrames++
 	}
+
+	log.Println("### logTotalFrames", logTotalFrames)
+	log.Println("### logSkippedFrames", logSkippedFrames)
 
 	lc.Stop()
 	d.Stop()

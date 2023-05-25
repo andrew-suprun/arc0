@@ -10,10 +10,10 @@ import (
 )
 
 type mockFs struct {
-	events model.EventHandler
+	events model.EventChan
 }
 
-func NewFs(path string, events model.EventHandler) model.FS {
+func NewFs(events model.EventChan) model.FS {
 	return &mockFs{
 		events: events,
 	}
@@ -53,28 +53,17 @@ func (fsys *mockFs) Scan(archivePath string) error {
 				dur := time.Since(scanStarted)
 				eta := scanStarted.Add(time.Duration(float64(dur) / float64(newFilesHashed) * float64(toHash)))
 
-				fsys.events <- func(m *model.Model) {
-					for i := range m.ArchivePaths {
-						if archivePath == m.ArchivePaths[i] {
-							m.Archives[i].ScanState = &model.ScanState{
-								Path:      file.path,
-								Name:      file.name,
-								Remaining: time.Until(eta),
-								Progress:  progress,
-							}
-						}
-					}
-				}
+				fsys.events <- statsEvent{archivePath: archivePath, file: file, eta: eta, progress: progress}
 
 				time.Sleep(time.Millisecond)
 			}
 			scanFiles[i].hash = faker.Phonenumber()
 		}
 
-		infos := make([]*model.FileMeta, len(scanFiles))
+		metas := make([]*model.FileMeta, len(scanFiles))
 
 		for i, file := range scanFiles {
-			infos[i] = &model.FileMeta{
+			metas[i] = &model.FileMeta{
 				Archive:  archivePath,
 				FullName: filepath.Join(file.path, file.name),
 				Size:     file.size,
@@ -83,15 +72,42 @@ func (fsys *mockFs) Scan(archivePath string) error {
 			}
 		}
 
-		fsys.events <- func(m *model.Model) {
-			for i := range m.ArchivePaths {
-				if archivePath == m.ArchivePaths[i] {
-					m.Archives[i].Files = infos
-				}
-			}
-		}
+		fsys.events <- filesEvent{archivePath: archivePath, metas: metas}
 	}()
 	return nil
+}
+
+type statsEvent struct {
+	archivePath string
+	file        file
+	eta         time.Time
+	progress    float64
+}
+
+func (e statsEvent) HandleEvent(m *model.Model) {
+	for i := range m.ArchivePaths {
+		if e.archivePath == m.ArchivePaths[i] {
+			m.Archives[i].ScanState = &model.ScanState{
+				Path:      e.file.path,
+				Name:      e.file.name,
+				Remaining: time.Until(e.eta),
+				Progress:  e.progress,
+			}
+		}
+	}
+}
+
+type filesEvent struct {
+	archivePath string
+	metas       []*model.FileMeta
+}
+
+func (e filesEvent) HandleEvent(m *model.Model) {
+	for i := range m.ArchivePaths {
+		if e.archivePath == m.ArchivePaths[i] {
+			m.Archives[i].Files = e.metas
+		}
+	}
 }
 
 var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)

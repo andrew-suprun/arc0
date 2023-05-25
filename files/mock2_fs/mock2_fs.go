@@ -6,27 +6,33 @@ import (
 )
 
 type mockFs struct {
-	events model.EventHandler
+	events model.EventChan
 }
 
-func NewFs(path string, events model.EventHandler) model.FS {
+func NewFs(events model.EventChan) model.FS {
 	return &mockFs{
 		events: events,
 	}
 }
 
 func (fsys *mockFs) Scan(archivePath string) error {
-	fsys.events <- func(m *model.Model) {
-		switch archivePath {
-		case "origin":
-			m.Archives[0].Files = origin
-		case "copy 1":
-			m.Archives[0].Files = copy1
-		case "copy 2":
-			m.Archives[0].Files = copy2
-		}
-	}
+	fsys.events <- filesEvent{archivePath: archivePath}
 	return nil
+}
+
+type filesEvent struct {
+	archivePath string
+}
+
+func (e filesEvent) HandleEvent(m *model.Model) {
+	switch e.archivePath {
+	case "origin":
+		m.Archives[0].Files = origin
+	case "copy 1":
+		m.Archives[1].Files = copy1
+	case "copy 2":
+		m.Archives[2].Files = copy2
+	}
 }
 
 var origin = []*model.FileMeta{

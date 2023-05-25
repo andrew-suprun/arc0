@@ -29,7 +29,7 @@ type scrollArea struct {
 	Size    device.Size
 }
 
-func NewDevice(events model.EventHandler) (*tcellDevice, error) {
+func NewDevice(events model.EventChan) (*tcellDevice, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		return nil, err
@@ -42,9 +42,9 @@ func NewDevice(events model.EventHandler) (*tcellDevice, error) {
 	device := &tcellDevice{screen: screen}
 
 	go func() {
-		ev := device.screen.PollEvent()
-		if ev != nil {
-			events <- device.handleEvent(ev)
+		event := device.screen.PollEvent()
+		if event != nil {
+			events <- eventHandler{device: device, event: event}
 		}
 	}()
 
@@ -65,45 +65,43 @@ func (d *tcellDevice) CurrentStyle() device.Style {
 	return d.style
 }
 
-func (d *tcellDevice) handleEvent(ev tcell.Event) func(m *model.Model) {
-	if ev == nil {
-		return nil
+type eventHandler struct {
+	device *tcellDevice
+	event  tcell.Event
+}
+
+func (e eventHandler) HandleEvent(m *model.Model) {
+	if e.event == nil {
+		return
 	}
 	for {
-		if ev, mouseEvent := ev.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
+		if ev, mouseEvent := e.event.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
 			break
 		}
-		ev = d.screen.PollEvent()
+		e.event = e.device.screen.PollEvent()
 	}
-	switch ev := ev.(type) {
+	switch ev := e.event.(type) {
 	case *tcell.EventResize:
-		d.screen.Sync()
+		e.device.screen.Sync()
 		w, h := ev.Size()
-		return func(m *model.Model) {
-			m.ScreenSize = model.Size{Width: w, Height: h}
-		}
+		m.ScreenSize = model.Size{Width: w, Height: h}
 
 	case *tcell.EventKey:
 		log.Printf("key: name=%v rune='%v' mod=%v", ev.Name(), ev.Rune(), ev.Modifiers())
-		return func(m *model.Model) {
-			d.handleKeyEvent(m, ev)
-			makeSelectedVisible(m)
-		}
+		e.device.handleKeyEvent(m, ev)
+		makeSelectedVisible(m)
 
 	case *tcell.EventMouse:
-		return func(m *model.Model) {
-			if ev.Buttons() == 512 {
-				m.CurerntFolder().LineOffset++
-			} else if ev.Buttons() == 256 {
-				m.CurerntFolder().LineOffset--
-			} else {
-				d.handleMouseEvent(m, ev)
-			}
+		if ev.Buttons() == 512 {
+			m.CurerntFolder().LineOffset++
+		} else if ev.Buttons() == 256 {
+			m.CurerntFolder().LineOffset--
+		} else {
+			e.device.handleMouseEvent(m, ev)
 		}
 
 	default:
 		log.Printf("### unhandled tcell event: %#v", ev)
-		return nil
 	}
 }
 

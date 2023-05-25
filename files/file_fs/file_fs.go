@@ -10,15 +10,15 @@ import (
 )
 
 type file_fs struct {
-	events model.EventHandler
+	events model.EventChan
 	lc     *lifecycle.Lifecycle
 }
 
-func NewFs(events model.EventHandler, lc *lifecycle.Lifecycle) (m model.FS, err error) {
+func NewFs(events model.EventChan, lc *lifecycle.Lifecycle) model.FS {
 	return &file_fs{
 		events: events,
 		lc:     lc,
-	}, nil
+	}
 }
 
 func abs(path string) (string, error) {

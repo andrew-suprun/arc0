@@ -26,7 +26,9 @@ type analyzer struct {
 	links []*links // copy1, copy2, ...
 }
 
-func analizeArchives(m *model.Model) {
+type analizeArchives struct{}
+
+func (e analizeArchives) HandleEvent(m *model.Model) {
 	log.Println("analizeArchives")
 	a := newAnalyzer(m)
 	a.buildFileTree(m)

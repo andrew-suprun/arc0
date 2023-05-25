@@ -36,14 +36,8 @@ func (f *file_fs) scan(archivePath string) {
 		for _, meta := range metas {
 			archiveFiles = append(archiveFiles, meta)
 		}
-		f.events <- func(m *model.Model) {
-			for i, archivePath := range m.ArchivePaths {
-				if archivePath == archivePath {
-					m.Archives[i].Files = archiveFiles
-				}
-			}
-		}
-		f.events <- analizeArchives
+		f.events <- archiveFileEvent{archiveFiles: archiveFiles}
+		f.events <- analizeArchives{}
 	}()
 
 	storedMetas := readMeta(archivePath)
@@ -88,7 +82,7 @@ func (f *file_fs) scan(archivePath string) {
 		fsys := os.DirFS(archivePath)
 		file, err := fsys.Open(meta.FullName)
 		if err != nil {
-			f.scanError(archivePath, meta.FullName, err)
+			f.events <- scanError{archivePath: archivePath, path: meta.FullName, err: err}
 			return
 		}
 		defer file.Close()
@@ -105,12 +99,12 @@ func (f *file_fs) scan(archivePath string) {
 				nw, ew := hash.Write(buf[0:nr])
 				if ew != nil {
 					if err != nil {
-						f.scanError(archivePath, meta.FullName, err)
+						f.events <- scanError{archivePath: archivePath, path: meta.FullName, err: err}
 						return
 					}
 				}
 				if nr != nw {
-					f.scanError(archivePath, meta.FullName, io.ErrShortWrite)
+					f.events <- scanError{archivePath: archivePath, path: meta.FullName, err: io.ErrShortWrite}
 					return
 				}
 			}
@@ -121,21 +115,14 @@ func (f *file_fs) scan(archivePath string) {
 				break
 			}
 			if er != nil {
-				f.scanError(archivePath, meta.FullName, err)
+				f.events <- scanError{archivePath: archivePath, path: meta.FullName, err: err}
 				return
 			}
 
-			dur := time.Since(scanStarted)
-			remaining := time.Duration(float64(dur) * float64(totalSizeToHash) / float64(totalHashed+hashed))
-
-			f.events <- func(m *model.Model) {
-				m.Archives[0].ScanState = &model.ScanState{
-					Path:      filepath.Dir(meta.FullName),
-					Name:      filepath.Base(meta.FullName),
-					Remaining: remaining,
-					Progress:  float64(totalSize-totalSizeToHash+totalHashed+hashed) / float64(totalSize),
-				}
-			}
+			f.events <- scanStateEvent{
+				meta:      meta,
+				remaining: time.Duration(float64(time.Since(scanStarted)) * float64(totalSizeToHash) / float64(totalHashed+hashed)),
+				progress:  float64(totalSize-totalSizeToHash+totalHashed+hashed) / float64(totalSize)}
 		}
 		meta.Hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 	}
@@ -150,6 +137,33 @@ func (f *file_fs) scan(archivePath string) {
 	}
 }
 
+type archiveFileEvent struct {
+	archiveFiles model.FileMetas
+}
+
+func (e archiveFileEvent) HandleEvent(m *model.Model) {
+	for i, archivePath := range m.ArchivePaths {
+		if archivePath == m.ArchivePaths[i] {
+			m.Archives[i].Files = e.archiveFiles
+		}
+	}
+}
+
+type scanStateEvent struct {
+	meta      *model.FileMeta
+	remaining time.Duration
+	progress  float64
+}
+
+func (e scanStateEvent) HandleEvent(m *model.Model) {
+	m.Archives[0].ScanState = &model.ScanState{
+		Path:      filepath.Dir(e.meta.FullName),
+		Name:      filepath.Base(e.meta.FullName),
+		Remaining: e.remaining,
+		Progress:  e.progress,
+	}
+}
+
 func (f *file_fs) collectMeta(archivePath string) (infos fileMetas) {
 	infos = fileMetas{}
 	fsys := os.DirFS(archivePath)
@@ -159,13 +173,13 @@ func (f *file_fs) collectMeta(archivePath string) (infos fileMetas) {
 		}
 
 		if err != nil {
-			f.scanError(archivePath, path, err)
+			f.events <- scanError{archivePath: archivePath, path: path, err: err}
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			f.scanError(archivePath, path, err)
+			f.events <- scanError{archivePath: archivePath, path: path, err: err}
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
@@ -183,10 +197,13 @@ func (f *file_fs) collectMeta(archivePath string) (infos fileMetas) {
 	return infos
 }
 
-func (f *file_fs) scanError(archivePath, path string, err error) {
-	f.events <- func(m *model.Model) {
-		m.Errors = append(m.Errors, model.ScanError{Archive: archivePath, Path: path, Error: err})
-	}
+type scanError struct {
+	archivePath, path string
+	err               error
+}
+
+func (e scanError) HandleEvent(m *model.Model) {
+	m.Errors = append(m.Errors, model.ScanError{Archive: e.archivePath, Path: e.path, Error: e.err})
 }
 
 const HashFileName = ".meta.csv"

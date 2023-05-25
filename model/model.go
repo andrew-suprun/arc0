@@ -139,7 +139,11 @@ func (m *Model) CurerntFolder() *Folder {
 	return &m.Breadcrumbs[len(m.Breadcrumbs)-1]
 }
 
-type EventHandler chan func(m *Model)
+type EventChan chan Event
+
+type Event interface {
+	HandleEvent(m *Model)
+}
 
 type View interface {
 	View(model *Model)
