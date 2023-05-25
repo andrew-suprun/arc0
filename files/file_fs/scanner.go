@@ -23,11 +23,13 @@ import (
 type fileMetas map[uint64]*model.FileMeta
 
 func (f *file_fs) scan(archivePath string) {
+	log.Printf("### scan: archivePath = %s started", archivePath)
 	f.lc.Started()
 	defer f.lc.Done()
 
 	metas := f.collectMeta(archivePath)
 	defer func() {
+		log.Printf("### scan: archivePath = %s defer", archivePath)
 		storeMeta(archivePath, metas)
 		if f.lc.ShoudStop() {
 			return
@@ -37,7 +39,7 @@ func (f *file_fs) scan(archivePath string) {
 			archiveFiles = append(archiveFiles, meta)
 		}
 		f.events <- archiveFileEvent{archivePath: archivePath, archiveFiles: archiveFiles}
-		f.events <- analizeArchives{}
+		f.events <- model.AnalizeArchives{}
 	}()
 
 	storedMetas := readMeta(archivePath)
@@ -128,6 +130,7 @@ func (f *file_fs) scan(archivePath string) {
 	}
 
 	for _, meta := range metas {
+		log.Printf("### scan: archivePath = %s meta = %s", archivePath, meta.FullName)
 		if meta.Hash == "" {
 			if f.lc.ShoudStop() {
 				return
@@ -135,6 +138,7 @@ func (f *file_fs) scan(archivePath string) {
 			hashFile(meta)
 		}
 	}
+	log.Printf("### scan: archivePath = %s done", archivePath)
 }
 
 type archiveFileEvent struct {
@@ -143,8 +147,10 @@ type archiveFileEvent struct {
 }
 
 func (e archiveFileEvent) HandleEvent(m *model.Model) {
+	log.Println("### archiveFileEvent")
 	for i := range m.Archives {
 		if e.archivePath == m.Archives[i].Path {
+			m.Archives[i].ScanState = nil
 			m.Archives[i].Files = e.archiveFiles
 		}
 	}
