@@ -22,7 +22,8 @@ type Model struct {
 
 func NewModel(paths ...string) *Model {
 	m := &Model{
-		Archives: make([]Archive, len(paths)),
+		Archives:      make([]Archive, len(paths)),
+		SortAscending: []bool{true, false, false, false},
 	}
 	for i := range paths {
 		m.Archives[i].Path = paths[i]

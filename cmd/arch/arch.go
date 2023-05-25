@@ -16,7 +16,7 @@ import (
 func main() {
 	log.SetFlags(0)
 
-	lc := lifecycle.Lifecycle{}
+	lc := lifecycle.New()
 	events := make(model.EventChan)
 	var m *model.Model
 
@@ -34,7 +34,7 @@ func main() {
 		fsys.Scan("copy 2")
 	} else {
 		m = model.NewModel(os.Args[1:]...)
-		fsys := file_fs.NewFs(events, &lc)
+		fsys := file_fs.NewFs(events, lc)
 		for _, path := range os.Args[1:] {
 			err := fsys.Scan(path)
 			if err != nil {
@@ -49,7 +49,6 @@ func main() {
 		return
 	}
 
-	logTotalFrames, logSkippedFrames := 0, 0
 	for !m.Quit {
 		handler := <-events
 		if handler != nil {
@@ -59,18 +58,14 @@ func main() {
 		case handler = <-events:
 			if handler != nil {
 				handler.HandleEvent(m)
-				logSkippedFrames++
 			}
 		default:
 		}
+		d.Reset()
 		screen := view.Draw(m)
 		screen.Render(d, device.Position{X: 0, Y: 0}, device.Size(m.ScreenSize))
 		d.Show()
-		logTotalFrames++
 	}
-
-	log.Println("### logTotalFrames", logTotalFrames)
-	log.Println("### logSkippedFrames", logSkippedFrames)
 
 	lc.Stop()
 	d.Stop()

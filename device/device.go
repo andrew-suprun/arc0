@@ -7,6 +7,7 @@ type Device interface {
 	CurrentStyle() Style
 	Text(runes []rune, pos Position)
 	Show()
+	Reset()
 }
 
 type Position struct {

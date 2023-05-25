@@ -16,7 +16,11 @@ func NewFs(events model.EventChan) model.FS {
 }
 
 func (fsys *mockFs) Scan(archivePath string) error {
-	fsys.events <- filesEvent{archivePath: archivePath}
+	go func() {
+		fsys.events <- filesEvent{archivePath: archivePath}
+		fsys.events <- model.AnalizeArchives{}
+
+	}()
 	return nil
 }
 
@@ -27,10 +31,13 @@ type filesEvent struct {
 func (e filesEvent) HandleEvent(m *model.Model) {
 	switch e.archivePath {
 	case "origin":
+		m.Archives[0].Path = "origin"
 		m.Archives[0].Files = origin
 	case "copy 1":
+		m.Archives[1].Path = "copy 1"
 		m.Archives[1].Files = copy1
 	case "copy 2":
+		m.Archives[2].Path = "copy 2"
 		m.Archives[2].Files = copy2
 	}
 }

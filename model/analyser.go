@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 )
@@ -28,10 +27,8 @@ type analyzer struct {
 }
 
 func (e AnalizeArchives) HandleEvent(m *Model) {
-	log.Println("### analizeArchives")
 	for i := range m.Archives {
 		if m.Archives[i].Files == nil {
-			log.Println("### analizeArchives: exit")
 			return
 		}
 	}
@@ -56,12 +53,12 @@ func newAnalyzer(m *Model) *analyzer {
 	return analyzer
 }
 
-func (a *analyzer) linkArchives(copyInfos FileMetas) *links {
+func (a *analyzer) linkArchives(copyMetas FileMetas) *links {
 	result := &links{
 		sourceLinks:  map[*FileMeta]*FileMeta{},
 		reverseLinks: map[*FileMeta]*FileMeta{},
 	}
-	for _, copy := range copyInfos {
+	for _, copy := range copyMetas {
 		if sources, ok := a.maps[0].byHash[copy.Hash]; ok {
 			match(sources, copy, result.sourceLinks)
 		}
@@ -74,6 +71,7 @@ func (a *analyzer) linkArchives(copyInfos FileMetas) *links {
 	return result
 }
 
+// TODO: make comparison by path a priority over comparison by name
 func match(sources FileMetas, copy *FileMeta, sourceMap map[*FileMeta]*FileMeta) *FileMeta {
 	for _, source := range sources {
 		if copy.FullName == source.FullName {
@@ -141,7 +139,8 @@ func byHash(metas FileMetas) groupByHash {
 }
 
 func (a *analyzer) buildFileTree(m *Model) {
-	m.Root = &FileInfo{FileMeta: &FileMeta{FullName: "/"}, Name: "/"}
+	m.Root = &FileInfo{FileMeta: &FileMeta{FullName: "/"}, Name: "Архив"}
+	m.Breadcrumbs = []Folder{{File: m.Root}}
 	hashes := map[string][]int{}
 	for idx, arch := range m.Archives {
 		for _, file := range arch.Files {
@@ -163,8 +162,10 @@ func (a *analyzer) buildFileTree(m *Model) {
 
 			current := m.Root
 			fileStack := FileInfos{current}
-			if archIdx > 0 && hash[0] > 0 && hash[0] == hash[archIdx] {
-				continue
+			if archIdx > 0 {
+				if _, ok := a.links[archIdx-1].reverseLinks[file]; ok {
+					continue
+				}
 			}
 			if archIdx == 0 {
 				current.Size += file.Size
@@ -176,7 +177,6 @@ func (a *analyzer) buildFileTree(m *Model) {
 				}
 				if sub.Archive == "" {
 					sub.Archive = file.Archive
-					sub.FullName = name
 				}
 				if sub.ModTime.Before(file.ModTime) {
 					sub.ModTime = file.ModTime
@@ -207,11 +207,12 @@ func (a *analyzer) buildFileTree(m *Model) {
 			}
 		}
 	}
+	m.Sort()
 }
 
 func subFolder(folder *FileInfo, name string) *FileInfo {
 	for i := range folder.Files {
-		if name == folder.Files[i].FullName && folder.Files[i].Kind == FileFolder {
+		if name == folder.Files[i].Name && folder.Files[i].Kind == FileFolder {
 			return folder.Files[i]
 		}
 	}
@@ -220,6 +221,7 @@ func subFolder(folder *FileInfo, name string) *FileInfo {
 			Archive:  folder.Archive,
 			FullName: name,
 		},
+		Name: name,
 		Kind: FileFolder,
 	}
 	folder.Files = append(folder.Files, subFolder)

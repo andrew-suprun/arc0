@@ -1,14 +1,12 @@
 package model
 
 import (
-	"log"
 	"sort"
 	"strings"
 )
 
 func (m *Model) Sort() {
 	files := sliceBy(m.CurerntFolder().File.Files)
-	log.Println("sortBy", m.SortColumn, "sortAscending", m.SortAscending[m.SortColumn])
 	var slice sort.Interface
 	switch m.SortColumn {
 	case SortByName:

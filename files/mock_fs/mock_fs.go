@@ -2,7 +2,6 @@ package mock_fs
 
 import (
 	"arch/model"
-	"log"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -109,7 +108,6 @@ func (e filesEvent) HandleEvent(m *model.Model) {
 
 	for i := range m.Archives {
 		if e.archivePath == m.Archives[i].Path {
-			log.Printf("### mock_fs: filesEvent = %s", e.archivePath)
 			m.Archives[i].ScanState = nil
 			m.Archives[i].Files = e.metas
 		}

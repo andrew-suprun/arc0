@@ -41,11 +41,21 @@ func NewDevice(events model.EventChan) (*tcellDevice, error) {
 	}
 	screen.EnableMouse()
 
-	device := &tcellDevice{screen: screen, style: defaultStyle}
+	device := &tcellDevice{
+		screen:         screen,
+		lastMouseEvent: tcell.NewEventMouse(0, 0, 0, 0),
+		style:          defaultStyle,
+	}
 
 	go func() {
-		event := device.screen.PollEvent()
-		if event != nil {
+		for {
+			event := device.screen.PollEvent()
+			for {
+				if ev, mouseEvent := event.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
+					break
+				}
+				event = device.screen.PollEvent()
+			}
 			events <- eventHandler{device: device, event: event}
 		}
 	}()
@@ -76,12 +86,6 @@ func (e eventHandler) HandleEvent(m *model.Model) {
 	if e.event == nil {
 		return
 	}
-	for {
-		if ev, mouseEvent := e.event.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
-			break
-		}
-		e.event = e.device.screen.PollEvent()
-	}
 	switch ev := e.event.(type) {
 	case *tcell.EventResize:
 		e.device.screen.Sync()
@@ -89,7 +93,6 @@ func (e eventHandler) HandleEvent(m *model.Model) {
 		m.ScreenSize = model.Size{Width: w, Height: h}
 
 	case *tcell.EventKey:
-		log.Printf("key: name=%v rune='%v' mod=%v", ev.Name(), ev.Rune(), ev.Modifiers())
 		e.device.handleKeyEvent(m, ev)
 		makeSelectedVisible(m)
 
@@ -103,7 +106,7 @@ func (e eventHandler) HandleEvent(m *model.Model) {
 		}
 
 	default:
-		log.Printf("### unhandled tcell event: %#v", ev)
+		log.Panicf("### unhandled tcell event: %#v", ev)
 	}
 }
 
@@ -227,8 +230,7 @@ func (d *tcellDevice) handleMouseEvent(m *model.Model, event *tcell.EventMouse) 
 				}
 			case model.SelectFile:
 				m.CurerntFolder().Selected = cmd
-				last := d.lastMouseEvent
-				if event.When().Sub(last.When()).Seconds() < 0.5 {
+				if event.When().Sub(d.lastMouseEvent.When()).Seconds() < 0.5 {
 					d.enter(m)
 				}
 				d.lastMouseEvent = event
@@ -259,7 +261,7 @@ func (d *tcellDevice) enter(m *model.Model) {
 
 func makeSelectedVisible(m *model.Model) {
 	folder := m.CurerntFolder()
-	if folder.Selected == nil {
+	if folder == nil || folder.Selected == nil {
 		return
 	}
 	idx := -1
@@ -293,9 +295,12 @@ func (d *tcellDevice) Text(runes []rune, pos device.Position) {
 }
 
 func (d *tcellDevice) Show() {
+	d.screen.Show()
+}
+
+func (d *tcellDevice) Reset() {
 	d.scrollAreas = d.scrollAreas[:0]
 	d.mouseTargetAreas = d.mouseTargetAreas[:0]
-	d.screen.Show()
 }
 
 func (d *tcellDevice) Stop() {

@@ -72,7 +72,7 @@ func treeView(m *model.Model) Widget {
 		Styled(styleArchiveHeader,
 			Row(
 				MouseTarget(model.SortByStatus, Text(" Статус"+sortIndicator(m, model.SortByStatus)).Width(13)),
-				MouseTarget(model.SortByName, Text("  Документ"+sortIndicator(m, model.SortByName)).Width(20).Flex(1)),
+				MouseTarget(model.SortByName, Text("    Документ"+sortIndicator(m, model.SortByName)).Width(20).Flex(1)),
 				MouseTarget(model.SortByTime, Text("  Время Изменения"+sortIndicator(m, model.SortByTime)).Width(19)),
 				MouseTarget(model.SortBySize, Text(fmt.Sprintf("%22s", "Размер"+sortIndicator(m, model.SortBySize)+" "))),
 			),
