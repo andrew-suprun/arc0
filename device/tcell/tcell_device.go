@@ -29,6 +29,8 @@ type scrollArea struct {
 	Size    device.Size
 }
 
+var defaultStyle = device.Style{FG: 231, BG: 17}
+
 func NewDevice(events model.EventChan) (*tcellDevice, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
@@ -39,7 +41,7 @@ func NewDevice(events model.EventChan) (*tcellDevice, error) {
 	}
 	screen.EnableMouse()
 
-	device := &tcellDevice{screen: screen}
+	device := &tcellDevice{screen: screen, style: defaultStyle}
 
 	go func() {
 		event := device.screen.PollEvent()

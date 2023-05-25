@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	defaultStyle       = device.Style{FG: 231, BG: 17}
 	styleAppTitle      = device.Style{FG: 226, BG: 0, Flags: device.Bold + device.Italic}
 	styleStatusLine    = device.Style{FG: 226, BG: 0}
 	styleProgressBar   = device.Style{FG: 231, BG: 19}
