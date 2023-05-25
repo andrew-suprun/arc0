@@ -85,8 +85,8 @@ type statsEvent struct {
 }
 
 func (e statsEvent) HandleEvent(m *model.Model) {
-	for i := range m.ArchivePaths {
-		if e.archivePath == m.ArchivePaths[i] {
+	for i := range m.Archives {
+		if e.archivePath == m.Archives[i].Path {
 			m.Archives[i].ScanState = &model.ScanState{
 				Path:      e.file.path,
 				Name:      e.file.name,
@@ -103,8 +103,8 @@ type filesEvent struct {
 }
 
 func (e filesEvent) HandleEvent(m *model.Model) {
-	for i := range m.ArchivePaths {
-		if e.archivePath == m.ArchivePaths[i] {
+	for i := range m.Archives {
+		if e.archivePath == m.Archives[i].Path {
 			m.Archives[i].Files = e.metas
 		}
 	}

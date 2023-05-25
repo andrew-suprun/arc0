@@ -36,7 +36,7 @@ func (f *file_fs) scan(archivePath string) {
 		for _, meta := range metas {
 			archiveFiles = append(archiveFiles, meta)
 		}
-		f.events <- archiveFileEvent{archiveFiles: archiveFiles}
+		f.events <- archiveFileEvent{archivePath: archivePath, archiveFiles: archiveFiles}
 		f.events <- analizeArchives{}
 	}()
 
@@ -138,12 +138,13 @@ func (f *file_fs) scan(archivePath string) {
 }
 
 type archiveFileEvent struct {
+	archivePath  string
 	archiveFiles model.FileMetas
 }
 
 func (e archiveFileEvent) HandleEvent(m *model.Model) {
-	for i, archivePath := range m.ArchivePaths {
-		if archivePath == m.ArchivePaths[i] {
+	for i := range m.Archives {
+		if e.archivePath == m.Archives[i].Path {
 			m.Archives[i].Files = e.archiveFiles
 		}
 	}

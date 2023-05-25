@@ -137,7 +137,7 @@ func (d *tcellDevice) handleKeyEvent(m *model.Model, key *tcell.EventKey) {
 		}
 
 	case "PgUp":
-		loc.LineOffset -= m.ArchiveViewLines
+		loc.LineOffset -= m.FileTreeLines
 		if loc.LineOffset < 0 {
 			loc.LineOffset = 0
 		}
@@ -151,7 +151,7 @@ func (d *tcellDevice) handleKeyEvent(m *model.Model, key *tcell.EventKey) {
 			}
 		}
 		if foundSelected {
-			idxSelected -= m.ArchiveViewLines
+			idxSelected -= m.FileTreeLines
 			if idxSelected < 0 {
 				idxSelected = 0
 			}
@@ -159,9 +159,9 @@ func (d *tcellDevice) handleKeyEvent(m *model.Model, key *tcell.EventKey) {
 		}
 
 	case "PgDn":
-		loc.LineOffset += m.ArchiveViewLines
-		if loc.LineOffset > len(loc.File.Files)-m.ArchiveViewLines {
-			loc.LineOffset = len(loc.File.Files) - m.ArchiveViewLines
+		loc.LineOffset += m.FileTreeLines
+		if loc.LineOffset > len(loc.File.Files)-m.FileTreeLines {
+			loc.LineOffset = len(loc.File.Files) - m.FileTreeLines
 		}
 		idxSelected := 0
 		foundSelected := false
@@ -173,7 +173,7 @@ func (d *tcellDevice) handleKeyEvent(m *model.Model, key *tcell.EventKey) {
 			}
 		}
 		if foundSelected {
-			idxSelected += m.ArchiveViewLines
+			idxSelected += m.FileTreeLines
 			if idxSelected > len(loc.File.Files)-1 {
 				idxSelected = len(loc.File.Files) - 1
 			}
@@ -271,8 +271,8 @@ func makeSelectedVisible(m *model.Model) {
 		if folder.LineOffset > idx {
 			folder.LineOffset = idx
 		}
-		if folder.LineOffset < idx+1-m.ArchiveViewLines {
-			folder.LineOffset = idx + 1 - m.ArchiveViewLines
+		if folder.LineOffset < idx+1-m.FileTreeLines {
+			folder.LineOffset = idx + 1 - m.FileTreeLines
 		}
 	}
 }

@@ -17,26 +17,28 @@ func main() {
 	log.SetFlags(0)
 
 	lc := lifecycle.Lifecycle{}
-	m := model.Model{}
 	events := make(model.EventChan)
+	var m *model.Model
 
 	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
+		m = model.NewModel("origin", "copy 1", "copy 2")
 		fsys := mock_fs.NewFs(events)
 		fsys.Scan("origin")
 		fsys.Scan("copy 1")
 		fsys.Scan("copy 2")
 	} else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
+		m = model.NewModel("origin", "copy 1", "copy 2")
 		fsys := mock2_fs.NewFs(events)
 		fsys.Scan("origin")
 		fsys.Scan("copy 1")
 		fsys.Scan("copy 2")
 	} else {
-		m.ArchivePaths = os.Args[1:]
+		m = model.NewModel(os.Args[1:]...)
 		fsys := file_fs.NewFs(events, &lc)
 		for _, path := range os.Args[1:] {
 			err := fsys.Scan(path)
 			if err != nil {
-				log.Panicf("Failed to scan archive %s: %#v", path, err)
+				log.Panicf("Failed to scan archives: %#v", err)
 			}
 		}
 	}
@@ -50,20 +52,18 @@ func main() {
 	logTotalFrames, logSkippedFrames := 0, 0
 	for !m.Quit {
 		handler := <-events
-		log.Printf("###.1 handler %#v", handler)
 		if handler != nil {
-			handler.HandleEvent(&m)
+			handler.HandleEvent(m)
 		}
 		select {
 		case handler = <-events:
-			log.Printf("###.2 handler %#v", handler)
 			if handler != nil {
-				handler.HandleEvent(&m)
+				handler.HandleEvent(m)
 				logSkippedFrames++
 			}
 		default:
 		}
-		screen := view.Draw(&m)
+		screen := view.Draw(m)
 		screen.Render(d, device.Position{X: 0, Y: 0}, device.Size(m.ScreenSize))
 		d.Show()
 		logTotalFrames++
@@ -75,13 +75,3 @@ func main() {
 	lc.Stop()
 	d.Stop()
 }
-
-// func startMock(path string, events model.EventHandler) {
-// 	fsys := mock_fs.NewFs(path, events)
-// 	fsys.Scan()
-// }
-
-// func startMock2(path string, events model.EventHandler) {
-// 	fsys := mock2_fs.NewFs(path, events)
-// 	fsys.Scan()
-// }

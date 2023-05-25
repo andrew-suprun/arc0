@@ -41,7 +41,7 @@ func scanStats(m *model.Model) Widget {
 			if !first {
 				forms = append(forms, Row(Text("").Flex(1).Pad('─')))
 			}
-			forms = append(forms, scanStatsForm(m.ArchivePaths[i], m.Archives[i].ScanState))
+			forms = append(forms, scanStatsForm(m.Archives[i].Path, m.Archives[i].ScanState))
 			first = false
 		}
 	}
@@ -80,7 +80,7 @@ func treeView(m *model.Model) Widget {
 		),
 		Scroll(nil, device.Constraint{Size: device.Size{Width: 0, Height: 0}, Flex: device.Flex{X: 1, Y: 1}},
 			func(size device.Size) Widget {
-				m.ArchiveViewLines = size.Height
+				m.FileTreeLines = size.Height
 				folder := m.CurerntFolder()
 				if folder.LineOffset > len(folder.File.Files)+1-size.Height {
 					folder.LineOffset = len(folder.File.Files) + 1 - size.Height

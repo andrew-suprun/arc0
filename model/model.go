@@ -6,27 +6,39 @@ import (
 )
 
 type Model struct {
-	ArchivePaths []string
-	Archives     []Archive
+	Archives []Archive
 
-	Root             *FileInfo
-	Breadcrumbs      []Folder
-	ScreenSize       Size
-	SortColumn       SortColumn
-	SortAscending    []bool
-	ArchiveViewLines int
+	Root          *FileInfo
+	Breadcrumbs   []Folder
+	ScreenSize    Size
+	SortColumn    SortColumn
+	SortAscending []bool
+	FileTreeLines int
 
 	Errors []any
 
 	Quit bool
+}
 
-	// maps             []maps   // source, copy1, copy2, ...
-	// links            []*links // copy1, copy2, ...
-	// archiveViewLines int
-	// ctx              *Context
+func NewModel(paths ...string) *Model {
+	m := &Model{
+		Archives: make([]Archive, len(paths)),
+	}
+	for i := range paths {
+		m.Archives[i].Path = paths[i]
+	}
+	return m
+}
+
+func (m *Model) CurerntFolder() *Folder {
+	if len(m.Breadcrumbs) == 0 {
+		return nil
+	}
+	return &m.Breadcrumbs[len(m.Breadcrumbs)-1]
 }
 
 type Archive struct {
+	Path      string
 	ScanState *ScanState
 	Files     FileMetas
 }
@@ -131,13 +143,6 @@ const (
 	SortByTime
 	SortBySize
 )
-
-func (m *Model) CurerntFolder() *Folder {
-	if len(m.Breadcrumbs) == 0 {
-		return nil
-	}
-	return &m.Breadcrumbs[len(m.Breadcrumbs)-1]
-}
 
 type EventChan chan Event
 
