@@ -1,14 +1,13 @@
 package main
 
 import (
-	"arch/device"
-	"arch/device/tcell"
+	"arch/events"
+	"arch/files"
 	"arch/files/file_fs"
-	"arch/files/mock2_fs"
 	"arch/files/mock_fs"
 	"arch/lifecycle"
 	"arch/model"
-	"arch/view"
+	"arch/renderers/tcell"
 	"log"
 	"os"
 )
@@ -16,57 +15,40 @@ import (
 func main() {
 	log.SetFlags(0)
 
-	lc := lifecycle.New()
-	events := make(model.EventChan)
-	var m *model.Model
-
-	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
-		m = model.NewModel("origin", "copy 1", "copy 2")
-		fsys := mock_fs.NewFs(events)
-		fsys.Scan("origin")
-		fsys.Scan("copy 1")
-		fsys.Scan("copy 2")
-	} else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
-		m = model.NewModel("origin", "copy 1", "copy 2")
-		fsys := mock2_fs.NewFs(events)
-		fsys.Scan("origin")
-		fsys.Scan("copy 1")
-		fsys.Scan("copy 2")
+	var paths []string
+	if len(os.Args) >= 1 && (os.Args[1] == "-sim" || os.Args[1] == "-sim2") {
+		paths = []string{"origin", "copy 1", "copy 2"}
 	} else {
-		m = model.NewModel(os.Args[1:]...)
-		fsys := file_fs.NewFs(events, lc)
-		for _, path := range os.Args[1:] {
-			err := fsys.Scan(path)
+		paths = make([]string, len(os.Args)-1)
+		var err error
+		for i, path := range os.Args[1:] {
+			paths[i], err = file_fs.AbsPath(path)
 			if err != nil {
 				log.Panicf("Failed to scan archives: %#v", err)
 			}
 		}
 	}
 
-	d, err := tcell.NewDevice(events)
+	lc := lifecycle.New()
+	events := make(events.EventChan, 10)
+	renderer, err := tcell.NewRenderer(events)
 	if err != nil {
 		log.Printf("Failed to open terminal: %#v", err)
 		return
 	}
 
-	for !m.Quit {
-		handler := <-events
-		if handler != nil {
-			handler.HandleEvent(m)
-		}
-		select {
-		case handler = <-events:
-			if handler != nil {
-				handler.HandleEvent(m)
-			}
-		default:
-		}
-		d.Reset()
-		screen := view.Draw(m)
-		screen.Render(d, device.Position{X: 0, Y: 0}, device.Size(m.ScreenSize))
-		d.Show()
+	var fs files.FS
+
+	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
+		fs = mock_fs.NewFs(events, true)
+	} else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
+		fs = mock_fs.NewFs(events, false)
+	} else {
+		fs = file_fs.NewFs(events, lc)
 	}
 
+	model.Run(fs, renderer, events, paths)
+
 	lc.Stop()
-	d.Stop()
+	renderer.Stop()
 }

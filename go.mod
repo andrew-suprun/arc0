@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/gdamore/tcell/v2 v2.6.0
-	github.com/go-faker/faker/v4 v4.1.0
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	golang.org/x/text v0.8.0
 )

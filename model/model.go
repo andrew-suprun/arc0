@@ -1,79 +1,115 @@
 package model
 
 import (
-	"path/filepath"
+	"arch/events"
+	"arch/files"
+	"arch/widgets"
+	"fmt"
 	"time"
 )
 
-type Model struct {
-	Archives []Archive
+type model struct {
+	fs       files.FS
+	events   events.EventChan
+	renderer widgets.Renderer
 
-	Root          *FileInfo
-	Breadcrumbs   []Folder
-	ScreenSize    Size
-	SortColumn    SortColumn
-	SortAscending []bool
-	FileTreeLines int
+	archives           []*archive
+	byHash             map[string][]*File
+	folders            map[string]*folder
+	breadcrumbs        []*folder
+	screenSize         ScreenSize
+	fileTreeLines      int
+	lastMouseEventTime time.Time
 
 	Errors []any
 
-	Quit bool
+	quit bool
 }
 
-func NewModel(paths ...string) *Model {
-	m := &Model{
-		Archives:      make([]Archive, len(paths)),
-		SortAscending: []bool{true, false, false, false},
+type archive struct {
+	archivePath string
+	scanner     files.Scanner
+	scanState   events.ScanProgress
+	archiveSize uint64
+	totalHashed uint64
+	metas       []events.FileMeta
+}
+
+type folder struct {
+	info          *File
+	selected      *File
+	lineOffset    int
+	sortColumn    sortColumn
+	sortAscending []bool
+	entries       []*File
+}
+
+func Run(fs files.FS, renderer widgets.Renderer, ev events.EventChan, paths []string) {
+	rootFolder := &folder{
+		info:          &File{FileMeta: events.FileMeta{Name: "Root"}, Kind: FileFolder},
+		sortAscending: []bool{true, false, false, false},
 	}
-	for i := range paths {
-		m.Archives[i].Path = paths[i]
+	m := &model{
+		fs:          fs,
+		renderer:    renderer,
+		events:      ev,
+		archives:    make([]*archive, len(paths)),
+		byHash:      map[string][]*File{},
+		folders:     map[string]*folder{"": rootFolder},
+		breadcrumbs: []*folder{rootFolder},
 	}
-	return m
-}
-
-func (m *Model) CurerntFolder() *Folder {
-	if len(m.Breadcrumbs) == 0 {
-		return nil
+	for i, path := range paths {
+		m.archives[i] = &archive{
+			archivePath: path,
+			scanner:     fs.NewScanner(path),
+		}
 	}
-	return &m.Breadcrumbs[len(m.Breadcrumbs)-1]
+
+	for _, archive := range m.archives {
+		archive.scanner.ScanArchive()
+	}
+
+	for !m.quit {
+		event := <-m.events
+		m.handleEvent(event)
+		events := 0
+		select {
+		case event = <-m.events:
+			m.handleEvent(event)
+			events++
+		default:
+		}
+
+		m.renderer.Reset()
+		m.view().Render(m.renderer, widgets.Position{X: 0, Y: 0}, widgets.Size(m.ScreenSize()))
+		m.renderer.Show()
+	}
 }
 
-type Archive struct {
-	Path      string
-	ScanState *ScanState
-	Files     FileMetas
+func (m *model) currentFolder() *folder {
+	return m.breadcrumbs[len(m.breadcrumbs)-1]
 }
 
-type ScanState struct {
-	Path      string
-	Name      string
-	Remaining time.Duration
-	Progress  float64
+func (m *model) ScreenSize() ScreenSize {
+	return m.screenSize
 }
 
-type FileMeta struct {
-	Archive  string
-	FullName string
-	Size     int
-	ModTime  time.Time
-	Hash     string
+type ScreenSize struct {
+	Width, Height int
 }
 
-type FileMetas []*FileMeta
-
-type FileInfo struct {
-	*FileMeta
-	Name   string
+type File struct {
+	events.FileMeta
 	Kind   FileKind
 	Status FileStatus
-	Files  FileInfos
+	Hash   string
 }
 
-func (f *FileInfo) AbsName() string {
-	return filepath.Join(f.Archive, f.FullName)
+func (f File) String() string {
+	return fmt.Sprintf("File{Meta: %s, Kind: %s, Status: %s}", f.FileMeta.String(), f.Kind, f.Status)
 }
 
-type FileInfos []*FileInfo
+type Files []*File
 
 type FileKind int
 
@@ -81,6 +117,16 @@ const (
 	FileRegular FileKind = iota
 	FileFolder
 )
+
+func (k FileKind) String() string {
+	switch k {
+	case FileFolder:
+		return "FileFolder"
+	case FileRegular:
+		return "FileRegular"
+	}
+	return "UNKNOWN FILE KIND"
+}
 
 type FileStatus int
 
@@ -90,6 +136,18 @@ const (
 	CopyOnly
 )
 
+func (s FileStatus) String() string {
+	switch s {
+	case Identical:
+		return "Identical"
+	case SourceOnly:
+		return "SourceOnly"
+	case CopyOnly:
+		return "CopyOnly"
+	}
+	return "UNKNOWN FILE KIND"
+}
+
 func (s FileStatus) Merge(other FileStatus) FileStatus {
 	if s > other {
 		return s
@@ -97,64 +155,15 @@ func (s FileStatus) Merge(other FileStatus) FileStatus {
 	return other
 }
 
-type Folder struct {
-	File       *FileInfo
-	Selected   *FileInfo
-	LineOffset int
-}
+type selectFile *File
 
-type ScanError struct {
-	Archive string
-	Path    string
-	Error   error
-}
+type selectFolder *File
 
-type Size struct {
-	Width, Height int
-}
-
-type Position struct {
-	X int
-	Y int
-}
-
-type MouseTargetArea struct {
-	Command any
-	Pos     Position
-	Size    Size
-}
-
-type ScrollArea struct {
-	Command any
-	Pos     Position
-	Size    Size
-}
-
-// Commands:
-
-type SelectFile *FileInfo
-
-type SelectFolder *FileInfo
-
-type SortColumn int
+type sortColumn int
 
 const (
-	SortByName SortColumn = iota
-	SortByStatus
-	SortByTime
-	SortBySize
+	sortByName sortColumn = iota
+	sortByStatus
+	sortByTime
+	sortBySize
 )
-
-type EventChan chan Event
-
-type Event interface {
-	HandleEvent(m *Model)
-}
-
-type View interface {
-	View(model *Model)
-}
-
-type FS interface {
-	Scan(path string) error
-}

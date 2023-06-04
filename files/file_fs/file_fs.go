@@ -1,8 +1,9 @@
 package file_fs
 
 import (
+	"arch/events"
+	"arch/files"
 	"arch/lifecycle"
-	"arch/model"
 	"os"
 	"path/filepath"
 
@@ -10,18 +11,27 @@ import (
 )
 
 type file_fs struct {
-	events model.EventChan
+	events events.EventChan
 	lc     *lifecycle.Lifecycle
 }
 
-func NewFs(events model.EventChan, lc *lifecycle.Lifecycle) model.FS {
+func NewFs(events events.EventChan, lc *lifecycle.Lifecycle) files.FS {
 	return &file_fs{
 		events: events,
 		lc:     lc,
 	}
 }
 
-func abs(path string) (string, error) {
+func (fs *file_fs) NewScanner(archivePath string) files.Scanner {
+	return &scanner{
+		events:      fs.events,
+		lc:          fs.lc,
+		archivePath: archivePath,
+		byIno:       map[uint64]*events.FileMeta{},
+	}
+}
+
+func AbsPath(path string) (string, error) {
 	var err error
 	path, err = filepath.Abs(path)
 	path = norm.NFC.String(path)
@@ -34,13 +44,4 @@ func abs(path string) (string, error) {
 		return "", err
 	}
 	return path, nil
-}
-
-func (fs *file_fs) Scan(path string) (err error) {
-	path, err = abs(path)
-	if err != nil {
-		return err
-	}
-	go fs.scan(path)
-	return nil
 }

@@ -5,26 +5,27 @@ import (
 	"strings"
 )
 
-func (m *Model) Sort() {
-	files := sliceBy(m.CurerntFolder().File.Files)
+func (m *model) sort() {
+	folder := m.currentFolder()
+	files := sliceBy(folder.entries)
 	var slice sort.Interface
-	switch m.SortColumn {
-	case SortByName:
+	switch folder.sortColumn {
+	case sortByName:
 		slice = sliceByName{sliceBy: files}
-	case SortByStatus:
+	case sortByStatus:
 		slice = sliceByStatus{sliceBy: files}
-	case SortByTime:
+	case sortByTime:
 		slice = sliceByTime{sliceBy: files}
-	case SortBySize:
+	case sortBySize:
 		slice = sliceBySize{sliceBy: files}
 	}
-	if !m.SortAscending[m.SortColumn] {
+	if !folder.sortAscending[folder.sortColumn] {
 		slice = sort.Reverse(slice)
 	}
 	sort.Sort(slice)
 }
 
-type sliceBy FileInfos
+type sliceBy Files
 
 func (s sliceBy) Len() int {
 	return len(s)
@@ -39,8 +40,8 @@ type sliceByName struct {
 }
 
 func (s sliceByName) Less(i, j int) bool {
-	iName := strings.ToLower(s.sliceBy[i].FullName)
-	jName := strings.ToLower(s.sliceBy[j].FullName)
+	iName := strings.ToLower(s.sliceBy[i].Name)
+	jName := strings.ToLower(s.sliceBy[j].Name)
 	if iName < jName {
 		return true
 	} else if iName > jName {
@@ -60,7 +61,7 @@ func (s sliceByStatus) Less(i, j int) bool {
 		return false
 	}
 
-	return strings.ToLower(s.sliceBy[i].FullName) > strings.ToLower(s.sliceBy[j].FullName)
+	return strings.ToLower(s.sliceBy[i].Name) > strings.ToLower(s.sliceBy[j].Name)
 }
 
 type sliceByTime struct {
@@ -70,11 +71,11 @@ type sliceByTime struct {
 func (s sliceByTime) Less(i, j int) bool {
 	if s.sliceBy[i].ModTime.Before(s.sliceBy[j].ModTime) {
 		return true
-	} else if s.sliceBy[i].Status > s.sliceBy[j].Status {
+	} else if s.sliceBy[i].ModTime.After(s.sliceBy[j].ModTime) {
 		return false
 	}
 
-	return strings.ToLower(s.sliceBy[i].FullName) < strings.ToLower(s.sliceBy[j].FullName)
+	return strings.ToLower(s.sliceBy[i].Name) < strings.ToLower(s.sliceBy[j].Name)
 }
 
 type sliceBySize struct {
@@ -88,5 +89,5 @@ func (s sliceBySize) Less(i, j int) bool {
 		return false
 	}
 
-	return strings.ToLower(s.sliceBy[i].FullName) < strings.ToLower(s.sliceBy[j].FullName)
+	return strings.ToLower(s.sliceBy[i].Name) < strings.ToLower(s.sliceBy[j].Name)
 }

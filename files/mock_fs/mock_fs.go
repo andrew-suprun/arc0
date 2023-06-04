@@ -1,150 +1,256 @@
 package mock_fs
 
 import (
-	"arch/model"
+	"arch/events"
+	"arch/files"
 	"math/rand"
-	"path/filepath"
 	"time"
-
-	"github.com/go-faker/faker/v4"
 )
 
 type mockFs struct {
-	events model.EventChan
+	scan   bool
+	events events.EventChan
 }
 
-func NewFs(events model.EventChan) model.FS {
+func NewFs(events events.EventChan, scan bool) files.FS {
 	return &mockFs{
+		scan:   scan,
 		events: events,
 	}
 }
 
-type file struct {
-	path string
-	name string
-	size int
-	hash string
+type scanner struct {
+	scan        bool
+	events      events.EventChan
+	archivePath string
 }
 
-func (fsys *mockFs) Scan(archivePath string) error {
+func (fsys *mockFs) NewScanner(archivePath string) files.Scanner {
+	return &scanner{
+		scan:        fsys.scan,
+		events:      fsys.events,
+		archivePath: archivePath,
+	}
+}
+
+func (s *scanner) ScanArchive() {
+	archFiles := metas[s.archivePath]
+	scans := make([]bool, len(archFiles))
+	totalSize, totalHashed := uint64(0), uint64(0)
+
+	for i := range archFiles {
+		size := uint64(rand.Intn(100000000))
+		totalSize += size
+		archFiles[i].Ino = uint64(i)
+		archFiles[i].Size = size
+		archFiles[i].ModTime = beginning.Add(time.Duration(rand.Int63n(int64(duration))))
+		scans[i] = s.scan && rand.Intn(2) == 0
+	}
 	go func() {
-		scanStarted := time.Now()
-		scanFiles, totalSize, totalHashed := genFiles()
-		toHash := totalSize - totalHashed
-		newFilesHashed := 0
-		for i, file := range scanFiles {
-			if file.hash != "" {
-				continue
-			}
-			fileHashed := 0
-			for fileHashed < file.size {
-				hashSize := 100000
-				if fileHashed+hashSize > file.size {
-					hashSize = file.size - fileHashed
-				}
-				fileHashed += hashSize
-				newFilesHashed += hashSize
-
-				if totalHashed+newFilesHashed > totalSize {
-					totalHashed = totalSize - newFilesHashed
-				}
-
-				progress := float64(totalHashed+newFilesHashed) / float64(totalSize)
-				dur := time.Since(scanStarted)
-				eta := scanStarted.Add(time.Duration(float64(dur) / float64(newFilesHashed) * float64(toHash)))
-
-				fsys.events <- statsEvent{archivePath: archivePath, file: file, eta: eta, progress: progress}
-
-				time.Sleep(time.Millisecond)
-			}
-			scanFiles[i].hash = faker.Phonenumber()
-		}
-
-		metas := make([]*model.FileMeta, len(scanFiles))
-
-		for i, file := range scanFiles {
-			metas[i] = &model.FileMeta{
-				Archive:  archivePath,
-				FullName: filepath.Join(file.path, file.name),
-				Size:     file.size,
-				ModTime:  beginning.Add(time.Duration(rand.Int63n(int64(duration)))),
-				Hash:     file.hash,
+		for _, meta := range archFiles {
+			s.events <- events.FileMeta{
+				Ino:         meta.Ino,
+				ArchivePath: s.archivePath,
+				Path:        meta.Path,
+				Name:        meta.Name,
+				Size:        meta.Size,
+				ModTime:     meta.ModTime,
 			}
 		}
-
-		fsys.events <- filesEvent{archivePath: archivePath, metas: metas}
-		fsys.events <- model.AnalizeArchives{}
-
+		s.events <- events.ScanProgress{
+			ArchivePath: s.archivePath,
+			ScanState:   events.WalkFileTreeComplete,
+		}
+		for i := range archFiles {
+			if !scans[i] {
+				meta := archFiles[i]
+				s.events <- events.FileHash{
+					Ino:         meta.Ino,
+					ArchivePath: meta.ArchivePath,
+					Hash:        meta.Hash,
+				}
+			}
+		}
+		for i := range archFiles {
+			if scans[i] {
+				meta := archFiles[i]
+				for hashed := uint64(0); ; hashed += 20000 {
+					if hashed > meta.Size {
+						hashed = meta.Size
+					}
+					s.events <- events.ScanProgress{
+						ArchivePath: meta.ArchivePath,
+						ScanState:   events.HashFileTree,
+						FileHashed:  hashed,
+					}
+					if hashed == meta.Size {
+						break
+					}
+					time.Sleep(time.Millisecond)
+				}
+				totalHashed += meta.Size
+				s.events <- events.FileHash{
+					Ino:         meta.Ino,
+					ArchivePath: meta.ArchivePath,
+					Hash:        meta.Hash,
+				}
+			}
+		}
+		s.events <- events.ScanProgress{
+			ArchivePath: s.archivePath,
+			ScanState:   events.HashFileTreeComplete,
+		}
 	}()
-	return nil
 }
 
-type statsEvent struct {
-	archivePath string
-	file        file
-	eta         time.Time
-	progress    float64
-}
-
-func (e statsEvent) HandleEvent(m *model.Model) {
-	for i := range m.Archives {
-		if e.archivePath == m.Archives[i].Path {
-			m.Archives[i].ScanState = &model.ScanState{
-				Path:      e.file.path,
-				Name:      e.file.name,
-				Remaining: time.Until(e.eta),
-				Progress:  e.progress,
-			}
-		}
-	}
-}
-
-type filesEvent struct {
-	archivePath string
-	metas       []*model.FileMeta
-}
-
-func (e filesEvent) HandleEvent(m *model.Model) {
-
-	for i := range m.Archives {
-		if e.archivePath == m.Archives[i].Path {
-			m.Archives[i].ScanState = nil
-			m.Archives[i].Files = e.metas
-		}
-	}
+func (s *scanner) HashArchive() {
 }
 
 var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
 var end = time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 var duration = end.Sub(beginning)
 
-func (fs *mockFs) Stop() {
+type fileMeta struct {
+	Ino         uint64
+	ArchivePath string
+	Path        string
+	Name        string
+	Hash        string
+	Size        uint64
+	ModTime     time.Time
 }
 
-var nDirs = []int{10, 5, 3, 0}
-var nFiles = []int{40, 20, 10, 5}
-
-func genFiles() ([]file, int, int) {
-	scanFiles := []file{}
-	total_size := 0
-	total_hashed := 0
-	genFilesRec([]string{}, 0, rand.Intn(100), &scanFiles, &total_size, &total_hashed)
-	return scanFiles, total_size, total_hashed
-}
-
-func genFilesRec(dirs []string, level, pcHashed int, files *[]file, total_size, total_hashed *int) {
-	path := filepath.Join(dirs...)
-	for i := 0; i < nFiles[level]; i++ {
-		size := rand.Int() % 1000000
-		*total_size += size
-		hash := ""
-		if rand.Intn(100) < pcHashed {
-			hash = faker.Phonenumber()
-			*total_hashed += size
-		}
-		*files = append(*files, file{path: path, name: filepath.Join(path, faker.Sentence()), size: size, hash: hash})
-	}
-	for i := 0; i < nDirs[level]; i++ {
-		genFilesRec(append(dirs, faker.Sentence()), level+1, pcHashed, files, total_size, total_hashed)
-	}
+var metas = map[string][]*fileMeta{
+	"origin": {
+		{
+			ArchivePath: "origin",
+			Path:        "a/b/c",
+			Name:        "x.txt",
+			Hash:        "hhhh",
+		},
+		{
+			ArchivePath: "origin",
+			Path:        "a/b/e",
+			Name:        "f.txt",
+			Hash:        "gggg",
+		},
+		{
+			ArchivePath: "origin",
+			Path:        "a/b/e",
+			Name:        "g.txt",
+			Hash:        "tttt",
+		},
+		{
+			ArchivePath: "origin",
+			Path:        "",
+			Name:        "x.txt",
+			Hash:        "hhhh",
+		},
+		{
+			ArchivePath: "origin",
+			Path:        "q/w/e/r/t",
+			Name:        "y.txt",
+			Hash:        "qwerty",
+		},
+		{
+			ArchivePath: "origin",
+			Path:        "",
+			Name:        "yyy.txt",
+			Hash:        "yyyy",
+		},
+	},
+	"copy 1": {
+		{
+			ArchivePath: "copy 1",
+			Path:        "a/b/c",
+			Name:        "d.txt",
+			Hash:        "llll",
+		},
+		{
+			ArchivePath: "copy 1",
+			Path:        "a/b/e",
+			Name:        "f.txt",
+			Hash:        "hhhh",
+		},
+		{
+			ArchivePath: "copy 1",
+			Path:        "a/b/e",
+			Name:        "g.txt",
+			Hash:        "tttt",
+		},
+		{
+			ArchivePath: "copy 1",
+			Path:        "",
+			Name:        "x.txt",
+			Hash:        "mmmm",
+		},
+		{
+			ArchivePath: "copy 1",
+			Path:        "",
+			Name:        "y.txt",
+			Hash:        "gggg",
+		},
+		{
+			ArchivePath: "copy 1",
+			Path:        "a/b/c",
+			Name:        "x.txt",
+			Hash:        "hhhh",
+		},
+		{
+			ArchivePath: "copy 1",
+			Path:        "",
+			Name:        "zzzz.txt",
+			Hash:        "hhhh",
+		},
+		{
+			ArchivePath: "copy 1",
+			Path:        "x/y",
+			Name:        "z.txt",
+			Hash:        "zzzz",
+		},
+		{
+			ArchivePath: "copy 1",
+			Path:        "",
+			Name:        "yyy.txt",
+			Hash:        "yyyy",
+		},
+	},
+	"copy 2": {
+		{
+			ArchivePath: "copy 2",
+			Path:        "a/b/c",
+			Name:        "f.txt",
+			Hash:        "hhhh",
+		},
+		{
+			ArchivePath: "copy 2",
+			Path:        "a/b/e",
+			Name:        "x.txt",
+			Hash:        "gggg",
+		},
+		{
+			ArchivePath: "copy 2",
+			Path:        "a/b/e",
+			Name:        "g.txt",
+			Hash:        "tttt",
+		},
+		{
+			ArchivePath: "copy 2",
+			Path:        "",
+			Name:        "x",
+			Hash:        "asdfg",
+		},
+		{
+			ArchivePath: "copy 2",
+			Path:        "q/w/e/r/t",
+			Name:        "y.txt",
+			Hash:        "12345",
+		},
+		{
+			ArchivePath: "copy 2",
+			Path:        "",
+			Name:        "yyy.txt",
+			Hash:        "yyyy",
+		},
+	},
 }
