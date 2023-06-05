@@ -24,7 +24,6 @@ func (m *model) handleEvent(event any) {
 		m.scanProgressEvent(event)
 
 	case events.ScanError:
-		m.archives[m.archiveIdx(event.Meta.ArchivePath)].totalHashed += event.Meta.Size
 		m.Errors = append(m.Errors, event)
 
 	case events.ScreenSize:

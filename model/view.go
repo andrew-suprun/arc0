@@ -129,13 +129,12 @@ func (m *model) scanProgress() w.Widget {
 	for i, archive := range m.archives {
 		state := archive.scanState
 		if state.ScanState == events.HashFileTree {
-			progress := float64(archive.totalHashed+state.FileHashed) / float64(archive.archiveSize)
 			stats = append(stats,
 				w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}},
 					w.Text(" Scanning: "+m.archives[i].archivePath).Width(pathLen+11),
-					w.Text(fmt.Sprintf(" %5.1f%%", progress*100)), w.Text(" "),
+					w.Text(fmt.Sprintf(" %5.1f%%", state.ScanProgress*100)), w.Text(" "),
 					w.Styled(styleProgressBar,
-						w.ProgressBar(progress),
+						w.ProgressBar(state.ScanProgress),
 					),
 					w.Text(" "),
 				),

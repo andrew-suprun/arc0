@@ -27,7 +27,7 @@ func (fs *file_fs) NewScanner(archivePath string) files.Scanner {
 		events:      fs.events,
 		lc:          fs.lc,
 		archivePath: archivePath,
-		byIno:       map[uint64]*events.FileMeta{},
+		infos:       map[uint64]*fileInfo{},
 	}
 }
 

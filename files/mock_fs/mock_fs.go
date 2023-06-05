@@ -23,6 +23,8 @@ type scanner struct {
 	scan        bool
 	events      events.EventChan
 	archivePath string
+	totalSize   uint64
+	totalHashed uint64
 }
 
 func (fsys *mockFs) NewScanner(archivePath string) files.Scanner {
@@ -36,11 +38,10 @@ func (fsys *mockFs) NewScanner(archivePath string) files.Scanner {
 func (s *scanner) ScanArchive() {
 	archFiles := metas[s.archivePath]
 	scans := make([]bool, len(archFiles))
-	totalSize, totalHashed := uint64(0), uint64(0)
 
 	for i := range archFiles {
 		size := uint64(rand.Intn(100000000))
-		totalSize += size
+		s.totalSize += size
 		archFiles[i].Ino = uint64(i)
 		archFiles[i].Size = size
 		archFiles[i].ModTime = beginning.Add(time.Duration(rand.Int63n(int64(duration))))
@@ -69,6 +70,12 @@ func (s *scanner) ScanArchive() {
 					ArchivePath: meta.ArchivePath,
 					Hash:        meta.Hash,
 				}
+				s.totalHashed += meta.Size
+				s.events <- events.ScanProgress{
+					ArchivePath:  s.archivePath,
+					ScanState:    events.HashFileTree,
+					ScanProgress: float64(s.totalHashed) / float64(s.totalSize),
+				}
 			}
 		}
 		for i := range archFiles {
@@ -79,16 +86,16 @@ func (s *scanner) ScanArchive() {
 						hashed = meta.Size
 					}
 					s.events <- events.ScanProgress{
-						ArchivePath: meta.ArchivePath,
-						ScanState:   events.HashFileTree,
-						FileHashed:  hashed,
+						ArchivePath:  meta.ArchivePath,
+						ScanState:    events.HashFileTree,
+						ScanProgress: float64(s.totalHashed+hashed) / float64(s.totalSize),
 					}
 					if hashed == meta.Size {
 						break
 					}
 					time.Sleep(time.Millisecond)
 				}
-				totalHashed += meta.Size
+				s.totalHashed += meta.Size
 				s.events <- events.FileHash{
 					Ino:         meta.Ino,
 					ArchivePath: meta.ArchivePath,

@@ -30,9 +30,7 @@ type archive struct {
 	archivePath string
 	scanner     files.Scanner
 	scanState   events.ScanProgress
-	archiveSize uint64
-	totalHashed uint64
-	metas       []events.FileMeta
+	byIno       map[uint64]*File
 }
 
 type folder struct {
@@ -62,6 +60,7 @@ func Run(fs files.FS, renderer widgets.Renderer, ev events.EventChan, paths []st
 		m.archives[i] = &archive{
 			archivePath: path,
 			scanner:     fs.NewScanner(path),
+			byIno:       map[uint64]*File{},
 		}
 	}
 

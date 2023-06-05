@@ -17,15 +17,22 @@ import (
 	"time"
 
 	"syscall"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 type scanner struct {
 	events      events.EventChan
 	lc          *lifecycle.Lifecycle
 	archivePath string
-	metas       []*events.FileMeta
-	byIno       map[uint64]*events.FileMeta
-	hashes      map[uint64]string
+	infos       map[uint64]*fileInfo
+	totalSize   uint64
+	totalHashed uint64
+}
+
+type fileInfo struct {
+	meta events.FileMeta
+	hash string
 }
 
 func (scanner *scanner) ScanArchive() {
@@ -81,7 +88,7 @@ func (s *scanner) scanArchive() {
 		modTime := meta.ModTime()
 		modTime = modTime.UTC().Round(time.Second)
 
-		fileMeta := &events.FileMeta{
+		fileMeta := events.FileMeta{
 			Ino:         sys.Ino,
 			ArchivePath: s.archivePath,
 			Path:        dir(path),
@@ -90,15 +97,20 @@ func (s *scanner) scanArchive() {
 			Size:        uint64(meta.Size()),
 		}
 
-		s.metas = append(s.metas, fileMeta)
-		s.byIno[sys.Ino] = fileMeta
-		s.events <- *fileMeta
+		s.infos[sys.Ino] = &fileInfo{
+			meta: fileMeta,
+		}
+		s.events <- fileMeta
+		s.totalSize += fileMeta.Size
 
 		return nil
 	})
 }
 
 func (s *scanner) hashArchive() {
+	s.lc.Started()
+	defer s.lc.Done()
+
 	s.readMeta()
 	defer func() {
 		s.storeMeta()
@@ -111,46 +123,46 @@ func (s *scanner) hashArchive() {
 		}
 	}()
 
-	s.byIno = map[uint64]*events.FileMeta{}
-	s.hashes = map[uint64]string{}
+	fileInfos := make([]*fileInfo, 0, len(s.infos))
+	for _, info := range s.infos {
+		fileInfos = append(fileInfos, info)
+	}
 
-	sort.Slice(s.metas, func(i, j int) bool {
-		return s.metas[i].Size < s.metas[j].Size
+	sort.Slice(fileInfos, func(i, j int) bool {
+		return fileInfos[i].meta.Size < fileInfos[j].meta.Size
 	})
 
-	for _, meta := range s.metas {
-		if s.hashes[meta.Ino] == "" {
+	for i, info := range fileInfos {
+		if info.hash == "" {
 			if s.lc.ShoudStop() {
 				return
 			}
-			hash := s.hashFile(meta)
-			s.hashes[meta.Ino] = hash
+			s.hashFile(fileInfos[i])
+
 			s.events <- events.FileHash{
-				Ino:         meta.Ino,
-				ArchivePath: meta.ArchivePath,
-				Hash:        hash,
+				Ino:         info.meta.Ino,
+				ArchivePath: info.meta.ArchivePath,
+				Hash:        info.hash,
 			}
 		}
 	}
 }
 
-func (s *scanner) hashFile(meta *events.FileMeta) string {
+func (s *scanner) hashFile(info *fileInfo) {
 	hash := sha256.New()
-	buf := make([]byte, 256*1024)
+	buf := make([]byte, 1024*1024)
 
 	fsys := os.DirFS(s.archivePath)
-	file, err := fsys.Open(filepath.Join(meta.Path, meta.Name))
+	file, err := fsys.Open(filepath.Join(info.meta.Path, info.meta.Name))
 	if err != nil {
-		s.events <- events.ScanError{Meta: *meta, Error: err}
-		return ""
+		s.events <- events.ScanError{Meta: info.meta, Error: err}
+		return
 	}
 	defer file.Close()
 
-	var hashed uint64
-
 	for {
 		if s.lc.ShoudStop() {
-			return ""
+			return
 		}
 
 		nr, er := file.Read(buf)
@@ -158,37 +170,35 @@ func (s *scanner) hashFile(meta *events.FileMeta) string {
 			nw, ew := hash.Write(buf[0:nr])
 			if ew != nil {
 				if err != nil {
-					s.events <- events.ScanError{Meta: *meta, Error: err}
-					return ""
+					s.events <- events.ScanError{Meta: info.meta, Error: err}
+					return
 				}
 			}
 			if nr != nw {
-				s.events <- events.ScanError{Meta: *meta, Error: err}
-				return ""
+				s.events <- events.ScanError{Meta: info.meta, Error: err}
+				return
 			}
 		}
-
-		hashed += uint64(nr)
 
 		if er == io.EOF {
 			break
 		}
 		if er != nil {
-			s.events <- events.ScanError{Meta: *meta, Error: er}
-			return ""
+			s.events <- events.ScanError{Meta: info.meta, Error: er}
+			return
 		}
 
+		s.totalHashed += uint64(nr)
 		s.events <- events.ScanProgress{
-			ArchivePath: s.archivePath,
-			ScanState:   events.HashFileTree,
-			FileHashed:  hashed,
+			ArchivePath:  s.archivePath,
+			ScanState:    events.HashFileTree,
+			ScanProgress: float64(s.totalHashed) / float64(s.totalSize),
 		}
 	}
-	return base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
+	info.hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 }
 
 func (s *scanner) readMeta() {
-	s.hashes = map[uint64]string{}
 	absHashFileName := filepath.Join(s.archivePath, hashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
 	if err != nil {
@@ -202,38 +212,46 @@ func (s *scanner) readMeta() {
 	}
 
 	for _, record := range records[1:] {
-		var ino uint64
-		var hash string
-
-		// TODO: 5 field records are depricated
 		if len(record) == 5 {
-			hash = record[4]
-		} else if len(record) == 2 {
-			hash = record[1]
-		}
-		ino, err := strconv.ParseUint(record[0], 10, 64)
-		if err != nil {
-			continue
-		}
-		if _, ok := s.byIno[ino]; ok {
-			s.hashes[ino] = hash
-			s.events <- events.FileHash{
-				Ino:         ino,
-				ArchivePath: s.archivePath,
-				Hash:        hash,
+			ino, er1 := strconv.ParseUint(record[0], 10, 64)
+			size, er2 := strconv.ParseUint(record[2], 10, 64)
+			modTime, er3 := time.Parse(time.RFC3339, record[3])
+			modTime = modTime.UTC().Round(time.Second)
+			hash := record[4]
+			if hash == "" || er1 != nil || er2 != nil || er3 != nil {
+				continue
+			}
+
+			info, ok := s.infos[ino]
+			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
+				info.hash = hash
+				s.events <- events.FileHash{
+					Ino:         ino,
+					ArchivePath: s.archivePath,
+					Hash:        hash,
+				}
+				s.totalHashed += info.meta.Size
+				s.events <- events.ScanProgress{
+					ArchivePath:  s.archivePath,
+					ScanState:    events.HashFileTree,
+					ScanProgress: float64(s.totalHashed) / float64(s.totalSize),
+				}
 			}
 		}
 	}
 }
 
 func (s *scanner) storeMeta() error {
-	result := make([][]string, 1, len(s.metas)+1)
-	result[0] = []string{"Inode", "Hash"}
+	result := make([][]string, 1, len(s.infos)+1)
+	result[0] = []string{"Inode", "Name", "Size", "ModTime", "Hash"}
 
-	for ino, hash := range s.hashes {
+	for ino, info := range s.infos {
 		result = append(result, []string{
 			fmt.Sprint(ino),
-			hash,
+			norm.NFC.String(filepath.Join(info.meta.Path, info.meta.Name)),
+			fmt.Sprint(info.meta.Size),
+			info.meta.ModTime.UTC().Format(time.RFC3339Nano),
+			info.hash,
 		})
 	}
 

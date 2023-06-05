@@ -17,10 +17,12 @@ func (m *model) fileMeta(meta events.FileMeta) {
 		Kind:     FileRegular,
 	}
 
+	archive := m.archives[m.archiveIdx(meta.ArchivePath)]
+	archive.byIno[meta.Ino] = file
+
 	if m.archiveIdx(file.ArchivePath) == 0 {
 		m.addToFolder(file, meta.Size, meta.ModTime)
 	}
-	m.archives[m.archiveIdx(meta.ArchivePath)].archiveSize += meta.Size
 }
 
 func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
@@ -98,8 +100,7 @@ func (m *model) makeSelectedVisible() {
 }
 
 func (m *model) fileHash(hash events.FileHash) {
-	archive := m.archives[m.archiveIdx(hash.ArchivePath)]
-	archive.scanState.FileHashed = 0
+	// TODO: implement
 }
 
 func (m *model) scanProgressEvent(event events.ScanProgress) {

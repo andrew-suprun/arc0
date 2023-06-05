@@ -13,8 +13,8 @@ type Event interface {
 }
 
 type FileMeta struct {
-	Ino         uint64
 	ArchivePath string
+	Ino         uint64
 	Path        string
 	Name        string
 	Size        uint64
@@ -33,17 +33,17 @@ func (f FileMeta) AbsName() string {
 }
 
 type FileHash struct {
-	Ino         uint64
 	ArchivePath string
+	Ino         uint64
 	Hash        string
 }
 
 func (FileHash) event() {}
 
 type ScanProgress struct {
-	ArchivePath string
-	ScanState   ScanState
-	FileHashed  uint64
+	ArchivePath  string
+	ScanState    ScanState
+	ScanProgress float64
 }
 
 func (ScanProgress) event() {}
