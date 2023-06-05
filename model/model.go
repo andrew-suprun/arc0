@@ -16,7 +16,7 @@ type model struct {
 	archives           []*archive
 	byHash             map[string][]*File
 	folders            map[string]*folder
-	breadcrumbs        []*folder
+	currentPath        string
 	screenSize         ScreenSize
 	fileTreeLines      int
 	lastMouseEventTime time.Time
@@ -44,17 +44,16 @@ type folder struct {
 
 func Run(fs files.FS, renderer widgets.Renderer, ev events.EventChan, paths []string) {
 	rootFolder := &folder{
-		info:          &File{FileMeta: events.FileMeta{Name: "Root"}, Kind: FileFolder},
+		info:          &File{Kind: FileFolder},
 		sortAscending: []bool{true, false, false, false},
 	}
 	m := &model{
-		fs:          fs,
-		renderer:    renderer,
-		events:      ev,
-		archives:    make([]*archive, len(paths)),
-		byHash:      map[string][]*File{},
-		folders:     map[string]*folder{"": rootFolder},
-		breadcrumbs: []*folder{rootFolder},
+		fs:       fs,
+		renderer: renderer,
+		events:   ev,
+		archives: make([]*archive, len(paths)),
+		byHash:   map[string][]*File{},
+		folders:  map[string]*folder{"": rootFolder},
 	}
 	for i, path := range paths {
 		m.archives[i] = &archive{
@@ -83,10 +82,6 @@ func Run(fs files.FS, renderer widgets.Renderer, ev events.EventChan, paths []st
 		m.view().Render(m.renderer, widgets.Position{X: 0, Y: 0}, widgets.Size(m.ScreenSize()))
 		m.renderer.Show()
 	}
-}
-
-func (m *model) currentFolder() *folder {
-	return m.breadcrumbs[len(m.breadcrumbs)-1]
 }
 
 func (m *model) ScreenSize() ScreenSize {

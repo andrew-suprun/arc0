@@ -77,7 +77,7 @@ func dir(path string) string {
 }
 
 func (m *model) makeSelectedVisible() {
-	folder := m.currentFolder()
+	folder := m.folders[m.currentPath]
 	if folder.selected == nil {
 		return
 	}

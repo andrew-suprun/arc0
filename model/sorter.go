@@ -6,7 +6,7 @@ import (
 )
 
 func (m *model) sort() {
-	folder := m.currentFolder()
+	folder := m.folders[m.currentPath]
 	files := sliceBy(folder.entries)
 	var slice sort.Interface
 	switch folder.sortColumn {

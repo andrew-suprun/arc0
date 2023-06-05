@@ -5,6 +5,7 @@ import (
 	"log"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -33,15 +34,20 @@ func (m *model) handleEvent(event any) {
 		m.enter()
 
 	case events.Esc:
-		if len(m.breadcrumbs) > 1 {
-			m.breadcrumbs = m.breadcrumbs[:len(m.breadcrumbs)-1]
-			m.sort()
+		if m.currentPath == "" {
+			return
 		}
+		parts := strings.Split(m.currentPath, "/")
+		if len(parts) == 1 {
+			m.currentPath = ""
+		}
+		m.currentPath = filepath.Join(parts[:len(parts)-1]...)
+		m.sort()
 
 	case events.RevealInFinder:
-		selected := m.currentFolder().selected
-		if selected != nil {
-			exec.Command("open", "-R", selected.AbsName()).Start()
+		folder := m.folders[m.currentPath]
+		if folder.selected != nil {
+			exec.Command("open", "-R", folder.selected.AbsName()).Start()
 		}
 
 	case events.MoveSelection:
@@ -79,7 +85,7 @@ func (m *model) handleEvent(event any) {
 }
 
 func (m *model) mouseTarget(cmd any) {
-	folder := m.currentFolder()
+	folder := m.folders[m.currentPath]
 	switch cmd := cmd.(type) {
 	case selectFile:
 		if folder.selected == cmd && time.Since(m.lastMouseEventTime).Seconds() < 0.5 {
@@ -88,6 +94,9 @@ func (m *model) mouseTarget(cmd any) {
 			folder.selected = cmd
 		}
 		m.lastMouseEventTime = time.Now()
+
+	case selectFolder:
+		m.currentPath = filepath.Join(cmd.Path, cmd.Name)
 
 	case sortColumn:
 		if cmd == folder.sortColumn {
@@ -102,17 +111,18 @@ func (m *model) mouseTarget(cmd any) {
 }
 
 func (m *model) selectFirst() {
-	m.currentFolder().selected = m.currentFolder().entries[0]
+	folder := m.folders[m.currentPath]
+	folder.selected = folder.entries[0]
 }
 
 func (m *model) selectLast() {
-	folder := m.currentFolder()
+	folder := m.folders[m.currentPath]
 	entries := folder.entries
 	folder.selected = entries[len(entries)-1]
 }
 
 func (m *model) moveSelection(lines int) {
-	folder := m.currentFolder()
+	folder := m.folders[m.currentPath]
 	selected := folder.selected
 	if selected == nil {
 		if lines > 0 {
@@ -144,11 +154,11 @@ func (m *model) moveSelection(lines int) {
 }
 
 func (m *model) enter() {
-	selected := m.currentFolder().selected
+	folder := m.folders[m.currentPath]
+	selected := folder.selected
 	if selected != nil {
 		if selected.Kind == FileFolder {
-			path := filepath.Join(selected.Path, selected.Name)
-			m.breadcrumbs = append(m.breadcrumbs, m.folders[path])
+			m.currentPath = filepath.Join(selected.Path, selected.Name)
 			m.sort()
 		} else {
 			exec.Command("open", selected.AbsName()).Start()
@@ -167,7 +177,7 @@ func (m *model) archiveIdx(archivePath string) int {
 }
 
 func (m *model) shiftOffset(lines int) {
-	folder := m.currentFolder()
+	folder := m.folders[m.currentPath]
 	nEntries := len(folder.entries)
 	folder.lineOffset += lines
 	if folder.lineOffset < 0 {

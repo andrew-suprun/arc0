@@ -36,9 +36,9 @@ func (m *model) title() w.Widget {
 }
 
 func (m *model) folderView() w.Widget {
-	folder := m.currentFolder()
+	folder := m.folders[m.currentPath]
 	return w.Column(col,
-		m.breadcrumbsWidget(),
+		m.breadcrumbs(),
 		w.Styled(styleArchiveHeader,
 			w.Row(row,
 				w.MouseTarget(sortByStatus, w.Text(" State"+sortIndicator(m, sortByStatus)).Width(13)),
@@ -63,7 +63,7 @@ func (m *model) folderView() w.Widget {
 					if i >= size.Height {
 						break
 					}
-					rows = append(rows, w.Styled(styleFile(file, m.currentFolder().selected == file),
+					rows = append(rows, w.Styled(styleFile(file, m.folders[m.currentPath].selected == file),
 						w.MouseTarget(selectFile(file), w.Row(row,
 							w.Text(" "+repr(file.Status)).Width(13),
 							w.Text("  "),
@@ -90,7 +90,7 @@ func displayName(file *File) string {
 }
 
 func sortIndicator(m *model, column sortColumn) string {
-	folder := m.currentFolder()
+	folder := m.folders[m.currentPath]
 	if column == folder.sortColumn {
 		if folder.sortAscending[column] {
 			return " ▲"
@@ -100,8 +100,8 @@ func sortIndicator(m *model, column sortColumn) string {
 	return ""
 }
 
-func (m *model) breadcrumbsWidget() w.Widget {
-	names := strings.Split(m.currentFolder().info.Path, "/")
+func (m *model) breadcrumbs() w.Widget {
+	names := strings.Split(m.currentPath, "/")
 	widgets := make([]w.Widget, 0, len(names)*2+2)
 	widgets = append(widgets, w.MouseTarget(selectFolder(m.folders[""].info),
 		w.Styled(styleBreadcrumbs, w.Text(" Root")),
@@ -109,7 +109,7 @@ func (m *model) breadcrumbsWidget() w.Widget {
 	for i := range names {
 		widgets = append(widgets, w.Text(" / "))
 		widgets = append(widgets,
-			w.MouseTarget(selectFolder(m.folders[filepath.Join(names[:i]...)].info),
+			w.MouseTarget(selectFolder(m.folders[filepath.Join(names[:i+1]...)].info),
 				w.Styled(styleBreadcrumbs, w.Text(names[i])),
 			),
 		)
