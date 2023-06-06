@@ -14,7 +14,7 @@ type Event interface {
 
 type FileMeta struct {
 	ArchivePath string
-	Ino         uint64
+	INode       uint64
 	Path        string
 	Name        string
 	Size        uint64
@@ -34,7 +34,7 @@ func (f FileMeta) AbsName() string {
 
 type FileHash struct {
 	ArchivePath string
-	Ino         uint64
+	INode       uint64
 	Hash        string
 }
 

@@ -42,7 +42,7 @@ func (s *scanner) ScanArchive() {
 	for i := range archFiles {
 		size := uint64(rand.Intn(100000000))
 		s.totalSize += size
-		archFiles[i].Ino = uint64(i)
+		archFiles[i].INode = uint64(i)
 		archFiles[i].Size = size
 		archFiles[i].ModTime = beginning.Add(time.Duration(rand.Int63n(int64(duration))))
 		scans[i] = s.scan && rand.Intn(2) == 0
@@ -50,7 +50,7 @@ func (s *scanner) ScanArchive() {
 	go func() {
 		for _, meta := range archFiles {
 			s.events <- events.FileMeta{
-				Ino:         meta.Ino,
+				INode:       meta.INode,
 				ArchivePath: s.archivePath,
 				Path:        meta.Path,
 				Name:        meta.Name,
@@ -66,7 +66,7 @@ func (s *scanner) ScanArchive() {
 			if !scans[i] {
 				meta := archFiles[i]
 				s.events <- events.FileHash{
-					Ino:         meta.Ino,
+					INode:       meta.INode,
 					ArchivePath: meta.ArchivePath,
 					Hash:        meta.Hash,
 				}
@@ -97,7 +97,7 @@ func (s *scanner) ScanArchive() {
 				}
 				s.totalHashed += meta.Size
 				s.events <- events.FileHash{
-					Ino:         meta.Ino,
+					INode:       meta.INode,
 					ArchivePath: meta.ArchivePath,
 					Hash:        meta.Hash,
 				}
@@ -118,7 +118,7 @@ var end = time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 var duration = end.Sub(beginning)
 
 type fileMeta struct {
-	Ino         uint64
+	INode       uint64
 	ArchivePath string
 	Path        string
 	Name        string

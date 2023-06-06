@@ -18,7 +18,7 @@ func (m *model) fileMeta(meta events.FileMeta) {
 	}
 
 	archive := m.archives[m.archiveIdx(meta.ArchivePath)]
-	archive.byIno[meta.Ino] = file
+	archive.byINode[meta.INode] = file
 
 	if m.archiveIdx(file.ArchivePath) == 0 {
 		m.addToFolder(file, meta.Size, meta.ModTime)

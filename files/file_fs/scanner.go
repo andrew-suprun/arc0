@@ -89,7 +89,7 @@ func (s *scanner) scanArchive() {
 		modTime = modTime.UTC().Round(time.Second)
 
 		fileMeta := events.FileMeta{
-			Ino:         sys.Ino,
+			INode:       sys.Ino,
 			ArchivePath: s.archivePath,
 			Path:        dir(path),
 			Name:        filepath.Base(path),
@@ -140,7 +140,7 @@ func (s *scanner) hashArchive() {
 			s.hashFile(fileInfos[i])
 
 			s.events <- events.FileHash{
-				Ino:         info.meta.Ino,
+				INode:       info.meta.INode,
 				ArchivePath: info.meta.ArchivePath,
 				Hash:        info.hash,
 			}
@@ -213,7 +213,7 @@ func (s *scanner) readMeta() {
 
 	for _, record := range records[1:] {
 		if len(record) == 5 {
-			ino, er1 := strconv.ParseUint(record[0], 10, 64)
+			iNode, er1 := strconv.ParseUint(record[0], 10, 64)
 			size, er2 := strconv.ParseUint(record[2], 10, 64)
 			modTime, er3 := time.Parse(time.RFC3339, record[3])
 			modTime = modTime.UTC().Round(time.Second)
@@ -222,11 +222,11 @@ func (s *scanner) readMeta() {
 				continue
 			}
 
-			info, ok := s.infos[ino]
+			info, ok := s.infos[iNode]
 			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
 				info.hash = hash
 				s.events <- events.FileHash{
-					Ino:         ino,
+					INode:       iNode,
 					ArchivePath: s.archivePath,
 					Hash:        hash,
 				}
@@ -243,11 +243,11 @@ func (s *scanner) readMeta() {
 
 func (s *scanner) storeMeta() error {
 	result := make([][]string, 1, len(s.infos)+1)
-	result[0] = []string{"Inode", "Name", "Size", "ModTime", "Hash"}
+	result[0] = []string{"INode", "Name", "Size", "ModTime", "Hash"}
 
-	for ino, info := range s.infos {
+	for iNode, info := range s.infos {
 		result = append(result, []string{
-			fmt.Sprint(ino),
+			fmt.Sprint(iNode),
 			norm.NFC.String(filepath.Join(info.meta.Path, info.meta.Name)),
 			fmt.Sprint(info.meta.Size),
 			info.meta.ModTime.UTC().Format(time.RFC3339Nano),
