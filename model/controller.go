@@ -96,7 +96,7 @@ func (m *model) mouseTarget(cmd any) {
 		m.lastMouseEventTime = time.Now()
 
 	case selectFolder:
-		m.currentPath = filepath.Join(cmd.Path, cmd.Name)
+		m.currentPath = cmd.FullName
 
 	case sortColumn:
 		if cmd == folder.sortColumn {
@@ -158,7 +158,7 @@ func (m *model) enter() {
 	selected := folder.selected
 	if selected != nil {
 		if selected.Kind == FileFolder {
-			m.currentPath = filepath.Join(selected.Path, selected.Name)
+			m.currentPath = selected.FullName
 			m.sort()
 		} else {
 			exec.Command("open", selected.AbsName()).Start()

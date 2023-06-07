@@ -15,8 +15,7 @@ type Event interface {
 type FileMeta struct {
 	ArchivePath string
 	INode       uint64
-	Path        string
-	Name        string
+	FullName    string
 	Size        uint64
 	ModTime     time.Time
 }
@@ -24,12 +23,12 @@ type FileMeta struct {
 func (FileMeta) event() {}
 
 func (m *FileMeta) String() string {
-	return fmt.Sprintf("Meta{ArchivePath: %q, Path: %q, Name: %q, Size: %d, ModTime: %s}",
-		m.ArchivePath, m.Path, m.Name, m.Size, m.ModTime.Format(time.DateTime))
+	return fmt.Sprintf("Meta{ArchivePath: %q, Name: %q, Size: %d, ModTime: %s}",
+		m.ArchivePath, m.FullName, m.Size, m.ModTime.Format(time.DateTime))
 }
 
 func (f FileMeta) AbsName() string {
-	return filepath.Join(f.ArchivePath, f.Path, f.Name)
+	return filepath.Join(f.ArchivePath, f.FullName)
 }
 
 type FileHash struct {

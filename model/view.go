@@ -84,9 +84,9 @@ func (m *model) folderView() w.Widget {
 
 func displayName(file *File) string {
 	if file.Kind == FileFolder {
-		return "▶ " + file.Name
+		return "▶ " + name(file.FullName)
 	}
-	return "  " + file.Name
+	return "  " + name(file.FullName)
 }
 
 func sortIndicator(m *model, column sortColumn) string {

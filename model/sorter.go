@@ -40,8 +40,8 @@ type sliceByName struct {
 }
 
 func (s sliceByName) Less(i, j int) bool {
-	iName := strings.ToLower(s.sliceBy[i].Name)
-	jName := strings.ToLower(s.sliceBy[j].Name)
+	iName := strings.ToLower(s.sliceBy[i].FullName)
+	jName := strings.ToLower(s.sliceBy[j].FullName)
 	if iName < jName {
 		return true
 	} else if iName > jName {
@@ -61,7 +61,7 @@ func (s sliceByStatus) Less(i, j int) bool {
 		return false
 	}
 
-	return strings.ToLower(s.sliceBy[i].Name) > strings.ToLower(s.sliceBy[j].Name)
+	return strings.ToLower(s.sliceBy[i].FullName) > strings.ToLower(s.sliceBy[j].FullName)
 }
 
 type sliceByTime struct {
@@ -75,7 +75,7 @@ func (s sliceByTime) Less(i, j int) bool {
 		return false
 	}
 
-	return strings.ToLower(s.sliceBy[i].Name) < strings.ToLower(s.sliceBy[j].Name)
+	return strings.ToLower(s.sliceBy[i].FullName) < strings.ToLower(s.sliceBy[j].FullName)
 }
 
 type sliceBySize struct {
@@ -89,5 +89,5 @@ func (s sliceBySize) Less(i, j int) bool {
 		return false
 	}
 
-	return strings.ToLower(s.sliceBy[i].Name) < strings.ToLower(s.sliceBy[j].Name)
+	return strings.ToLower(s.sliceBy[i].FullName) < strings.ToLower(s.sliceBy[j].FullName)
 }

@@ -9,7 +9,6 @@ import (
 
 func (m *model) fileMeta(meta events.FileMeta) {
 	defer func() {
-		m.analyze()
 		m.sort()
 	}()
 
@@ -30,16 +29,15 @@ func (m *model) fileMeta(meta events.FileMeta) {
 
 // TODO: merge file status
 func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
-	log.Printf("### addToFolder: path=%q name=%q, status=%v", file.Path, file.Name, file.Status)
-	parentFolder := m.folders[file.Path]
+	log.Printf("### addToFolder: name=%q, status=%v", file.FullName, file.Status)
+	parentFolder := m.folders[dir(file.FullName)]
 	if parentFolder == nil {
 		parentFolder = &folder{
 			info: &File{
 				FileMeta: events.FileMeta{
-					Path:    dir(file.Path),
-					Name:    filepath.Base(file.Path),
-					Size:    file.Size,
-					ModTime: file.ModTime,
+					FullName: dir(file.FullName),
+					Size:     file.Size,
+					ModTime:  file.ModTime,
 				},
 				Kind:   FileFolder,
 				Status: file.Status,
@@ -47,7 +45,7 @@ func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
 			sortAscending: []bool{true, false, false, false},
 			entries:       []*File{file},
 		}
-		m.folders[file.Path] = parentFolder
+		m.folders[dir(file.FullName)] = parentFolder
 	} else {
 		if file.Kind == FileRegular {
 			parentFolder.entries = append(parentFolder.entries, file)
@@ -56,7 +54,7 @@ func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
 		sameFolder := false
 		if file.Kind == FileFolder {
 			for _, entry := range parentFolder.entries {
-				if file.Name == entry.Name && entry.Kind == FileFolder {
+				if entry.Kind == FileFolder && name(file.FullName) == name(entry.FullName) {
 					sameFolder = true
 					break
 				}
@@ -71,7 +69,7 @@ func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
 			parentFolder.info.ModTime = modTime
 		}
 	}
-	if file.Path != "" {
+	if dir(file.FullName) != "" {
 		m.addToFolder(parentFolder.info, size, modTime)
 	}
 }
@@ -82,6 +80,10 @@ func dir(path string) string {
 		return ""
 	}
 	return path
+}
+
+func name(path string) string {
+	return filepath.Base(path)
 }
 
 func (m *model) makeSelectedVisible() {
@@ -133,7 +135,7 @@ func (m *model) fileHash(hash events.FileHash) {
 		for idx := range m.archives {
 			log.Printf("### archive %q", m.archives[idx].archivePath)
 			for _, f := range filesForHash[idx] {
-				log.Printf("###      %q %q %q %d %q", f.ArchivePath, f.Path, f.Name, f.Size, f.Hash)
+				log.Printf("###      %q %q %d %q", f.ArchivePath, f.FullName, f.Size, f.Hash)
 			}
 		}
 		if len(filesForHash[0]) == 0 {

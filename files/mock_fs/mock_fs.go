@@ -46,9 +46,8 @@ func init() {
 	for archPath, metaStrings := range metaMap {
 		for _, meta := range metaStrings {
 			parts := strings.Split(meta, ":")
-			path := parts[0]
-			name := parts[1]
-			hash := parts[2]
+			name := parts[0]
+			hash := parts[1]
 			size, ok := sizes[hash]
 			if !ok {
 				size = uint64(rand.Intn(100000000))
@@ -63,8 +62,7 @@ func init() {
 			file := &fileMeta{
 				INode:       inode,
 				ArchivePath: archPath,
-				Path:        path,
-				Name:        name,
+				FullName:    name,
 				Hash:        hash,
 				Size:        size,
 				ModTime:     modTime,
@@ -81,8 +79,7 @@ func (s *scanner) ScanArchive() {
 			s.events <- events.FileMeta{
 				INode:       meta.INode,
 				ArchivePath: s.archivePath,
-				Path:        meta.Path,
-				Name:        meta.Name,
+				FullName:    meta.FullName,
 				Size:        meta.Size,
 				ModTime:     meta.ModTime,
 			}
@@ -158,8 +155,7 @@ var duration = end.Sub(beginning)
 type fileMeta struct {
 	INode       uint64
 	ArchivePath string
-	Path        string
-	Name        string
+	FullName    string
 	Hash        string
 	Size        uint64
 	ModTime     time.Time
@@ -168,30 +164,30 @@ type fileMeta struct {
 var metas = map[string][]*fileMeta{}
 var metaMap = map[string][]string{
 	"origin": {
-		"a/b/c:x.txt:hhhh",
-		"a/b/e:f.txt:gggg",
-		"a/b/e:g.txt:tttt",
-		":x.txt:hhhh",
-		"q/w/e/r/t:y.txt:qwerty",
-		":yyy.txt:yyyy",
+		"a/b/c/x.txt:hhhh",
+		"a/b/e/f.txt:gggg",
+		"a/b/e/g.txt:tttt",
+		"x.txt:hhhh",
+		"q/w/e/r/t/y.txt:qwerty",
+		"yyy.txt:yyyy",
 	},
 	"copy 1": {
-		"a/b/c:d.txt:llll",
-		"a/b/e:f.txt:hhhh",
-		"a/b/e:g.txt:tttt",
-		":x.txt:mmmm",
-		":y.txt:gggg",
-		"a/b/c:x.txt:hhhh",
-		":zzzz.txt:hhhh",
-		"x/y:z.txt:zzzz",
-		":yyy.txt:yyyy",
+		"a/b/c/d.txt:llll",
+		"a/b/e/f.txt:hhhh",
+		"a/b/e/g.txt:tttt",
+		"x.txt:mmmm",
+		"y.txt:gggg",
+		"a/b/c/x.txt:hhhh",
+		"zzzz.txt:hhhh",
+		"x/y/z.txt:zzzz",
+		"yyy.txt:yyyy",
 	},
 	"copy 2": {
-		"a/b/c:f.txt:hhhh",
-		"a/b/e:x.txt:gggg",
-		"a/b/e:g.txt:tttt",
-		":x:asdfg",
-		"q/w/e/r/t:y.txt:12345",
-		":yyy.txt:yyyy",
+		"a/b/c/f.txt:hhhh",
+		"a/b/e/x.txt:gggg",
+		"a/b/e/g.txt:tttt",
+		"x:asdfg",
+		"q/w/e/r/t/y.txt:12345",
+		"yyy.txt:yyyy",
 	},
 }

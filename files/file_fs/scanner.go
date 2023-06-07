@@ -66,8 +66,7 @@ func (s *scanner) scanArchive() {
 			s.events <- events.ScanError{
 				Meta: events.FileMeta{
 					ArchivePath: s.archivePath,
-					Path:        dir(path),
-					Name:        filepath.Base(path),
+					FullName:    path,
 				},
 				Error: err}
 			return nil
@@ -78,8 +77,7 @@ func (s *scanner) scanArchive() {
 			s.events <- events.ScanError{
 				Meta: events.FileMeta{
 					ArchivePath: s.archivePath,
-					Path:        dir(path),
-					Name:        filepath.Base(path),
+					FullName:    path,
 				},
 				Error: err}
 			return nil
@@ -91,8 +89,7 @@ func (s *scanner) scanArchive() {
 		fileMeta := events.FileMeta{
 			INode:       sys.Ino,
 			ArchivePath: s.archivePath,
-			Path:        dir(path),
-			Name:        filepath.Base(path),
+			FullName:    path,
 			ModTime:     modTime,
 			Size:        uint64(meta.Size()),
 		}
@@ -153,7 +150,7 @@ func (s *scanner) hashFile(info *fileInfo) {
 	buf := make([]byte, 1024*1024)
 
 	fsys := os.DirFS(s.archivePath)
-	file, err := fsys.Open(filepath.Join(info.meta.Path, info.meta.Name))
+	file, err := fsys.Open(info.meta.FullName)
 	if err != nil {
 		s.events <- events.ScanError{Meta: info.meta, Error: err}
 		return
@@ -248,7 +245,7 @@ func (s *scanner) storeMeta() error {
 	for iNode, info := range s.infos {
 		result = append(result, []string{
 			fmt.Sprint(iNode),
-			norm.NFC.String(filepath.Join(info.meta.Path, info.meta.Name)),
+			norm.NFC.String(info.meta.FullName),
 			fmt.Sprint(info.meta.Size),
 			info.meta.ModTime.UTC().Format(time.RFC3339Nano),
 			info.hash,
