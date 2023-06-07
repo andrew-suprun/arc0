@@ -193,9 +193,9 @@ func repr(status FileStatus) string {
 	case Identical:
 		return ""
 	case SourceOnly:
-		return "Оригинал"
+		return "Origin Only"
 	case CopyOnly:
-		return "Только Копия"
+		return "Copy Only"
 	}
 	return "UNDEFINED"
 }

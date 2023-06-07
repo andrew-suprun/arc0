@@ -86,6 +86,7 @@ func (s *scanner) ScanArchive() {
 				Size:        meta.Size,
 				ModTime:     meta.ModTime,
 			}
+			s.totalSize += meta.Size
 		}
 		s.events <- events.ScanProgress{
 			ArchivePath: s.archivePath,
