@@ -1,6 +1,7 @@
 * mouse events in breadcrumbs
 * analyzer
 * reflect stats in status line
+* add descriptors to ScanErrors
 * conflict resolution
 * file operations
 * store hashes as hex encoded strings

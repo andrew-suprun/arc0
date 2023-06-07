@@ -51,7 +51,8 @@ func (ScanProgress) event() {}
 type ScanState int
 
 const (
-	WalkFileTreeComplete ScanState = iota
+	WalkFileTree ScanState = iota
+	WalkFileTreeComplete
 	HashFileTree
 	HashFileTreeComplete
 )

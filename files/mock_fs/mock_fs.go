@@ -4,6 +4,7 @@ import (
 	"arch/events"
 	"arch/files"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -35,18 +36,46 @@ func (fsys *mockFs) NewScanner(archivePath string) files.Scanner {
 	}
 }
 
+var sizes = map[string]uint64{}
+var modTimes = map[string]time.Time{}
+var inode = uint64(0)
+
+func init() {
+	sizes["yyyy"] = 50000000
+	sizes["hhhh"] = 50000000
+	for archPath, metaStrings := range metaMap {
+		for _, meta := range metaStrings {
+			parts := strings.Split(meta, ":")
+			path := parts[0]
+			name := parts[1]
+			hash := parts[2]
+			size, ok := sizes[hash]
+			if !ok {
+				size = uint64(rand.Intn(100000000))
+				sizes[hash] = size
+			}
+			modTime, ok := modTimes[hash]
+			if !ok {
+				modTime = beginning.Add(time.Duration(rand.Int63n(int64(duration))))
+				modTimes[hash] = modTime
+			}
+			inode++
+			file := &fileMeta{
+				INode:       inode,
+				ArchivePath: archPath,
+				Path:        path,
+				Name:        name,
+				Hash:        hash,
+				Size:        size,
+				ModTime:     modTime,
+			}
+			metas[archPath] = append(metas[archPath], file)
+		}
+	}
+}
+
 func (s *scanner) ScanArchive() {
 	archFiles := metas[s.archivePath]
-	scans := make([]bool, len(archFiles))
-
-	for i := range archFiles {
-		size := uint64(rand.Intn(100000000))
-		s.totalSize += size
-		archFiles[i].INode = uint64(i)
-		archFiles[i].Size = size
-		archFiles[i].ModTime = beginning.Add(time.Duration(rand.Int63n(int64(duration))))
-		scans[i] = s.scan && rand.Intn(2) == 0
-	}
 	go func() {
 		for _, meta := range archFiles {
 			s.events <- events.FileMeta{
@@ -62,6 +91,17 @@ func (s *scanner) ScanArchive() {
 			ArchivePath: s.archivePath,
 			ScanState:   events.WalkFileTreeComplete,
 		}
+	}()
+}
+
+func (s *scanner) HashArchive() {
+	archFiles := metas[s.archivePath]
+	scans := make([]bool, len(archFiles))
+
+	for i := range archFiles {
+		scans[i] = s.scan && rand.Intn(2) == 0
+	}
+	go func() {
 		for i := range archFiles {
 			if !scans[i] {
 				meta := archFiles[i]
@@ -110,9 +150,6 @@ func (s *scanner) ScanArchive() {
 	}()
 }
 
-func (s *scanner) HashArchive() {
-}
-
 var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
 var end = time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 var duration = end.Sub(beginning)
@@ -127,7 +164,54 @@ type fileMeta struct {
 	ModTime     time.Time
 }
 
-var metas = map[string][]*fileMeta{
+var metas = map[string][]*fileMeta{}
+var metaMap = map[string][]string{
+	"origin": {
+		"a/b/c:x.txt:hhhh",
+		"a/b/e:f.txt:gggg",
+		"a/b/e:g.txt:tttt",
+		":x.txt:hhhh",
+		"q/w/e/r/t:y.txt:qwerty",
+		":yyy.txt:yyyy",
+	},
+	"copy 1": {
+		"a/b/c:d.txt:llll",
+		"a/b/e:f.txt:hhhh",
+		"a/b/e:g.txt:tttt",
+		":x.txt:mmmm",
+		":y.txt:gggg",
+		"a/b/c:x.txt:hhhh",
+		":zzzz.txt:hhhh",
+		"x/y:z.txt:zzzz",
+		":yyy.txt:yyyy",
+	},
+	"copy 2": {
+		"a/b/c:f.txt:hhhh",
+		"a/b/e:x.txt:gggg",
+		"a/b/e:g.txt:tttt",
+		":x:asdfg",
+		"q/w/e/r/t:y.txt:12345",
+		":yyy.txt:yyyy",
+	},
+}
+
+// var paths = []string{"origin", "copy 1", "copy 2"}
+
+// func PrintMetas() {
+// 	fmt.Println("var metas = map[string][]string{")
+// 	for _, path := range paths {
+// 		fmt.Printf("    %q: {\n", path)
+
+// 		for _, file := range metas[path] {
+// 			fmt.Printf("        \"%s:%s:%s\",\n", file.Path, file.Name, file.Hash)
+// 		}
+
+// 		fmt.Println("    },")
+// 	}
+// 	fmt.Println("}")
+// }
+
+var metasXXX = map[string][]*fileMeta{
 	"origin": {
 		{
 			ArchivePath: "origin",

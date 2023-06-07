@@ -2,6 +2,7 @@ package model
 
 import (
 	"arch/events"
+	"log"
 	"path/filepath"
 	"time"
 )
@@ -17,6 +18,8 @@ func (m *model) fileMeta(meta events.FileMeta) {
 		Kind:     FileRegular,
 	}
 
+	m.bySize[meta.Size] = append(m.bySize[meta.Size], file)
+
 	archive := m.archives[m.archiveIdx(meta.ArchivePath)]
 	archive.byINode[meta.INode] = file
 
@@ -25,7 +28,9 @@ func (m *model) fileMeta(meta events.FileMeta) {
 	}
 }
 
+// TODO: merge file status
 func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
+	log.Printf("### addToFolder: path=%q name=%q, status=%v", file.Path, file.Name, file.Status)
 	parentFolder := m.folders[file.Path]
 	if parentFolder == nil {
 		parentFolder = &folder{
@@ -36,7 +41,8 @@ func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
 					Size:    file.Size,
 					ModTime: file.ModTime,
 				},
-				Kind: FileFolder,
+				Kind:   FileFolder,
+				Status: file.Status,
 			},
 			sortAscending: []bool{true, false, false, false},
 			entries:       []*File{file},
@@ -45,6 +51,7 @@ func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
 	} else {
 		if file.Kind == FileRegular {
 			parentFolder.entries = append(parentFolder.entries, file)
+			parentFolder.info.Status = parentFolder.info.Status.Merge(file.Status)
 		}
 		sameFolder := false
 		if file.Kind == FileFolder {
@@ -58,6 +65,7 @@ func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
 				parentFolder.entries = append(parentFolder.entries, file)
 			}
 		}
+		parentFolder.info.Status = parentFolder.info.Status.Merge(file.Status)
 		parentFolder.info.Size += size
 		if parentFolder.info.ModTime.Before(modTime) {
 			parentFolder.info.ModTime = modTime
@@ -100,7 +108,43 @@ func (m *model) makeSelectedVisible() {
 }
 
 func (m *model) fileHash(hash events.FileHash) {
-	// TODO: implement
+	archive := m.archives[m.archiveIdx(hash.ArchivePath)]
+	file := archive.byINode[hash.INode]
+	file.Hash = hash.Hash
+	files := m.bySize[file.Size]
+
+	hashes := map[string]struct{}{}
+	for _, file := range files {
+		hashes[file.Hash] = struct{}{}
+	}
+	if _, ok := hashes[""]; ok {
+		return
+	}
+	for hash := range hashes {
+		log.Printf("### hash %q", hash)
+		filesForHash := make([][]*File, len(m.archives))
+		for _, file := range files {
+			if file.Hash != hash {
+				continue
+			}
+			idx := m.archiveIdx(file.ArchivePath)
+			filesForHash[idx] = append(filesForHash[idx], file)
+		}
+		for idx := range m.archives {
+			log.Printf("### archive %q", m.archives[idx].archivePath)
+			for _, f := range filesForHash[idx] {
+				log.Printf("###      %q %q %q %d %q", f.ArchivePath, f.Path, f.Name, f.Size, f.Hash)
+			}
+		}
+		if len(filesForHash[0]) == 0 {
+			for _, files := range filesForHash[1:] {
+				for _, file := range files {
+					file.Status = CopyOnly
+					m.addToFolder(file, file.Size, file.ModTime)
+				}
+			}
+		}
+	}
 }
 
 func (m *model) scanProgressEvent(event events.ScanProgress) {

@@ -14,6 +14,7 @@ type model struct {
 	renderer widgets.Renderer
 
 	archives           []*archive
+	bySize             map[uint64][]*File
 	byHash             map[string][]*File
 	folders            map[string]*folder
 	currentPath        string
@@ -52,6 +53,7 @@ func Run(fs files.FS, renderer widgets.Renderer, ev events.EventChan, paths []st
 		renderer: renderer,
 		events:   ev,
 		archives: make([]*archive, len(paths)),
+		bySize:   map[uint64][]*File{},
 		byHash:   map[string][]*File{},
 		folders:  map[string]*folder{"": rootFolder},
 	}
