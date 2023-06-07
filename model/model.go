@@ -1,6 +1,7 @@
 package model
 
 import (
+	"arch/actor"
 	"arch/events"
 	"arch/files"
 	"arch/widgets"
@@ -29,7 +30,7 @@ type model struct {
 
 type archive struct {
 	archivePath string
-	scanner     files.Scanner
+	scanner     actor.Actor
 	scanState   events.ScanProgress
 	byINode     map[uint64]*File
 }
@@ -58,15 +59,16 @@ func Run(fs files.FS, renderer widgets.Renderer, ev events.EventChan, paths []st
 		folders:  map[string]*folder{"": rootFolder},
 	}
 	for i, path := range paths {
+		s := fs.NewScanner(path)
 		m.archives[i] = &archive{
 			archivePath: path,
-			scanner:     fs.NewScanner(path),
+			scanner:     actor.NewActor(s.Handler),
 			byINode:     map[uint64]*File{},
 		}
 	}
 
 	for _, archive := range m.archives {
-		archive.scanner.ScanArchive()
+		archive.scanner.Send(files.ScanArchive{})
 	}
 
 	for !m.quit {

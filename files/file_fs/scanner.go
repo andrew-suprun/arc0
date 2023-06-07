@@ -2,6 +2,7 @@ package file_fs
 
 import (
 	"arch/events"
+	"arch/files"
 	"arch/lifecycle"
 	"crypto/sha256"
 	"encoding/base64"
@@ -33,6 +34,15 @@ type scanner struct {
 type fileInfo struct {
 	meta events.FileMeta
 	hash string
+}
+
+func (s *scanner) Handler(msg any) {
+	switch msg.(type) {
+	case files.ScanArchive:
+		s.scanArchive()
+	case files.HashArchive:
+		s.hashArchive()
+	}
 }
 
 func (scanner *scanner) ScanArchive() {

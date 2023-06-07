@@ -36,43 +36,16 @@ func (fsys *mockFs) NewScanner(archivePath string) files.Scanner {
 	}
 }
 
-var sizes = map[string]uint64{}
-var modTimes = map[string]time.Time{}
-var inode = uint64(0)
-
-func init() {
-	sizes["yyyy"] = 50000000
-	sizes["hhhh"] = 50000000
-	for archPath, metaStrings := range metaMap {
-		for _, meta := range metaStrings {
-			parts := strings.Split(meta, ":")
-			name := parts[0]
-			hash := parts[1]
-			size, ok := sizes[hash]
-			if !ok {
-				size = uint64(rand.Intn(100000000))
-				sizes[hash] = size
-			}
-			modTime, ok := modTimes[hash]
-			if !ok {
-				modTime = beginning.Add(time.Duration(rand.Int63n(int64(duration))))
-				modTimes[hash] = modTime
-			}
-			inode++
-			file := &fileMeta{
-				INode:       inode,
-				ArchivePath: archPath,
-				FullName:    name,
-				Hash:        hash,
-				Size:        size,
-				ModTime:     modTime,
-			}
-			metas[archPath] = append(metas[archPath], file)
-		}
+func (s *scanner) Handler(msg any) {
+	switch msg.(type) {
+	case files.ScanArchive:
+		s.scanArchive()
+	case files.HashArchive:
+		s.hashArchive()
 	}
 }
 
-func (s *scanner) ScanArchive() {
+func (s *scanner) scanArchive() {
 	archFiles := metas[s.archivePath]
 	go func() {
 		for _, meta := range archFiles {
@@ -92,7 +65,7 @@ func (s *scanner) ScanArchive() {
 	}()
 }
 
-func (s *scanner) HashArchive() {
+func (s *scanner) hashArchive() {
 	archFiles := metas[s.archivePath]
 	scans := make([]bool, len(archFiles))
 
@@ -159,6 +132,42 @@ type fileMeta struct {
 	Hash        string
 	Size        uint64
 	ModTime     time.Time
+}
+
+var sizes = map[string]uint64{}
+var modTimes = map[string]time.Time{}
+var inode = uint64(0)
+
+func init() {
+	sizes["yyyy"] = 50000000
+	sizes["hhhh"] = 50000000
+	for archPath, metaStrings := range metaMap {
+		for _, meta := range metaStrings {
+			parts := strings.Split(meta, ":")
+			name := parts[0]
+			hash := parts[1]
+			size, ok := sizes[hash]
+			if !ok {
+				size = uint64(rand.Intn(100000000))
+				sizes[hash] = size
+			}
+			modTime, ok := modTimes[hash]
+			if !ok {
+				modTime = beginning.Add(time.Duration(rand.Int63n(int64(duration))))
+				modTimes[hash] = modTime
+			}
+			inode++
+			file := &fileMeta{
+				INode:       inode,
+				ArchivePath: archPath,
+				FullName:    name,
+				Hash:        hash,
+				Size:        size,
+				ModTime:     modTime,
+			}
+			metas[archPath] = append(metas[archPath], file)
+		}
+	}
 }
 
 var metas = map[string][]*fileMeta{}

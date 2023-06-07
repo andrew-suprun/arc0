@@ -2,6 +2,7 @@ package model
 
 import (
 	"arch/events"
+	"arch/files"
 	"log"
 	"path/filepath"
 	"time"
@@ -162,7 +163,7 @@ func (m *model) scanProgressEvent(event events.ScanProgress) {
 		}
 		if allWalksComplete {
 			for _, archive := range m.archives {
-				archive.scanner.HashArchive()
+				archive.scanner.Send(files.HashArchive{})
 			}
 		}
 	}
