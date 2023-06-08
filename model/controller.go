@@ -28,7 +28,7 @@ func (m *model) handleEvent(event any) {
 		m.Errors = append(m.Errors, event)
 
 	case events.ScreenSize:
-		m.screenSize = ScreenSize{Width: event.Width, Height: event.Height}
+		m.screenSize = events.ScreenSize{Width: event.Width, Height: event.Height}
 
 	case events.Enter:
 		m.enter()

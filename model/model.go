@@ -19,7 +19,7 @@ type model struct {
 	byHash             map[string][]*File
 	folders            map[string]*folder
 	currentPath        string
-	screenSize         ScreenSize
+	screenSize         events.ScreenSize
 	fileTreeLines      int
 	lastMouseEventTime time.Time
 
@@ -88,12 +88,8 @@ func Run(fs files.FS, renderer widgets.Renderer, ev events.EventChan, paths []st
 	}
 }
 
-func (m *model) ScreenSize() ScreenSize {
+func (m *model) ScreenSize() events.ScreenSize {
 	return m.screenSize
-}
-
-type ScreenSize struct {
-	Width, Height int
 }
 
 type File struct {

@@ -211,15 +211,3 @@ func statusColor(status FileStatus) byte {
 	}
 	return 231
 }
-
-func repr(status FileStatus) string {
-	switch status {
-	case Identical:
-		return ""
-	case Resolved:
-		return "Resolved"
-	case Conflict:
-		return "Conflict"
-	}
-	return "UNDEFINED"
-}

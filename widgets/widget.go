@@ -36,6 +36,7 @@ type Position struct {
 	X, Y int
 }
 
+//lint:ignore U1000 Casted into events.ScreenSize
 type Size struct {
 	Width, Height int
 }
