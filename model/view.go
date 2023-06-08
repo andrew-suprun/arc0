@@ -41,8 +41,8 @@ func (m *model) folderView() w.Widget {
 		m.breadcrumbs(),
 		w.Styled(styleArchiveHeader,
 			w.Row(row,
-				w.MouseTarget(sortByStatus, w.Text(" State"+sortIndicator(m, sortByStatus)).Width(13)),
-				w.MouseTarget(sortByName, w.Text("    Document"+sortIndicator(m, sortByName)).Width(20).Flex(1)),
+				w.MouseTarget(sortByStatus, w.Text(" St"+sortIndicator(m, sortByStatus)).Width(3+len(m.archives))),
+				w.MouseTarget(sortByName, w.Text(" Document"+sortIndicator(m, sortByName)).Width(20).Flex(1)),
 				w.MouseTarget(sortByTime, w.Text("  Date Modified"+sortIndicator(m, sortByTime)).Width(19)),
 				w.MouseTarget(sortBySize, w.Text(fmt.Sprintf("%22s", "Size"+sortIndicator(m, sortBySize)+" "))),
 			),
@@ -65,13 +65,7 @@ func (m *model) folderView() w.Widget {
 					}
 					rows = append(rows, w.Styled(styleFile(file, m.folders[m.currentPath].selected == file),
 						w.MouseTarget(selectFile(file), w.Row(row,
-							w.Text(" "+repr(file.Status)).Width(13),
-							w.Text("  "),
-							w.Text(displayName(file)).Width(20).Flex(1),
-							w.Text("  "),
-							w.Text(file.ModTime.Format(time.DateTime)),
-							w.Text("  "),
-							w.Text(formatSize(file.Size)).Width(18),
+							m.fileStatus(file)...,
 						)),
 					))
 				}
@@ -82,11 +76,41 @@ func (m *model) folderView() w.Widget {
 	)
 }
 
-func displayName(file *File) string {
-	if file.Kind == FileFolder {
-		return "▶ " + name(file.FullName)
+func (m *model) fileStatus(file *File) []w.Widget {
+	result := []w.Widget{}
+
+	allOnes := true
+
+	for _, count := range file.Counts {
+		if count != 1 {
+			allOnes = false
+			break
+		}
 	}
-	return "  " + name(file.FullName)
+	if file.Kind == FileRegular {
+		result = append(result, w.Text(" "))
+		for _, count := range file.Counts {
+			if allOnes {
+				result = append(result, w.Text(" "))
+			} else if count == 0 {
+				result = append(result, w.Text("-"))
+			} else if count > 9 {
+				result = append(result, w.Text("*"))
+			} else {
+				result = append(result, w.Text(fmt.Sprint(count)))
+			}
+		}
+		result = append(result, w.Text("   "))
+	} else {
+		result = append(result, w.Text(" ").Width(len(m.archives)+1))
+		result = append(result, w.Text(" ▶ ").Width(len(m.archives)))
+	}
+	result = append(result, w.Text(name(file.FullName)).Width(20).Flex(1))
+	result = append(result, w.Text("  "))
+	result = append(result, w.Text(file.ModTime.Format(time.DateTime)))
+	result = append(result, w.Text("  "))
+	result = append(result, w.Text(formatSize(file.Size)).Width(18))
+	return result
 }
 
 func sortIndicator(m *model, column sortColumn) string {
@@ -180,9 +204,9 @@ func statusColor(status FileStatus) byte {
 	switch status {
 	case Identical:
 		return 250
-	case SourceOnly:
+	case Resolved:
 		return 82
-	case CopyOnly:
+	case Conflict:
 		return 196
 	}
 	return 231
@@ -192,10 +216,10 @@ func repr(status FileStatus) string {
 	switch status {
 	case Identical:
 		return ""
-	case SourceOnly:
-		return "Origin Only"
-	case CopyOnly:
-		return "Copy Only"
+	case Resolved:
+		return "Resolved"
+	case Conflict:
+		return "Conflict"
 	}
 	return "UNDEFINED"
 }

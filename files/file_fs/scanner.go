@@ -38,22 +38,20 @@ type fileInfo struct {
 }
 
 func (s *scanner) Handler(msg files.Msg) bool {
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case files.ScanArchive:
 		return s.scanArchive()
 	case files.HashArchive:
 		return s.hashArchive()
+	case files.Copy:
+		return s.copy(msg.From)
+	case files.Move:
+		return s.move(msg.From, msg.To)
+	case files.Remove:
+		return s.remove(msg.File)
 	}
 	log.Panicf("### ERROR: Unhandled scanner message: %#v", msg)
 	return false
-}
-
-func (scanner *scanner) ScanArchive() {
-	go scanner.scanArchive()
-}
-
-func (scanner *scanner) HashArchive() {
-	go scanner.hashArchive()
 }
 
 const hashFileName = ".meta.csv"
@@ -276,6 +274,21 @@ func (s *scanner) storeMeta() error {
 	err = csv.NewWriter(hashInfoFile).WriteAll(result)
 	hashInfoFile.Close()
 	return err
+}
+
+func (s *scanner) copy(from events.FileMeta) bool {
+	log.Printf("### copy from %#v", from.AbsName())
+	return true
+}
+
+func (s *scanner) move(from, to events.FileMeta) bool {
+	log.Printf("### move from %#v to %#v", from.AbsName(), to.AbsName())
+	return true
+}
+
+func (s *scanner) remove(file events.FileMeta) bool {
+	log.Printf("### remove file %#v", file.AbsName())
+	return true
 }
 
 func dir(path string) string {

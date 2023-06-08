@@ -101,6 +101,7 @@ type File struct {
 	Kind   FileKind
 	Status FileStatus
 	Hash   string
+	Counts []int
 }
 
 func (f File) String() string {
@@ -130,18 +131,18 @@ type FileStatus int
 
 const (
 	Identical FileStatus = iota
-	SourceOnly
-	CopyOnly
+	Resolved
+	Conflict
 )
 
 func (s FileStatus) String() string {
 	switch s {
 	case Identical:
 		return "Identical"
-	case SourceOnly:
-		return "SourceOnly"
-	case CopyOnly:
-		return "CopyOnly"
+	case Resolved:
+		return "Resolved"
+	case Conflict:
+		return "Conflict"
 	}
 	return "UNKNOWN FILE KIND"
 }
