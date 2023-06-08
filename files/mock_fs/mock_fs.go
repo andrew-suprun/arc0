@@ -3,6 +3,7 @@ package mock_fs
 import (
 	"arch/events"
 	"arch/files"
+	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -36,16 +37,18 @@ func (fsys *mockFs) NewScanner(archivePath string) files.Scanner {
 	}
 }
 
-func (s *scanner) Handler(msg any) {
+func (s *scanner) Handler(msg files.Msg) bool {
 	switch msg.(type) {
 	case files.ScanArchive:
-		s.scanArchive()
+		return s.scanArchive()
 	case files.HashArchive:
-		s.hashArchive()
+		return s.hashArchive()
 	}
+	log.Panicf("### ERROR: Unhandled scanner message: %#v", msg)
+	return false
 }
 
-func (s *scanner) scanArchive() {
+func (s *scanner) scanArchive() bool {
 	archFiles := metas[s.archivePath]
 	go func() {
 		for _, meta := range archFiles {
@@ -63,9 +66,10 @@ func (s *scanner) scanArchive() {
 			ScanState:   events.WalkFileTreeComplete,
 		}
 	}()
+	return true
 }
 
-func (s *scanner) hashArchive() {
+func (s *scanner) hashArchive() bool {
 	archFiles := metas[s.archivePath]
 	scans := make([]bool, len(archFiles))
 
@@ -119,6 +123,7 @@ func (s *scanner) hashArchive() {
 			ScanState:   events.HashFileTreeComplete,
 		}
 	}()
+	return true
 }
 
 var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)

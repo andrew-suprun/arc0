@@ -1,15 +1,17 @@
 package actor
 
 import (
-	"fmt"
-	"runtime/debug"
 	"sync"
 )
 
-type Handler func(any)
+type Actor[T any] interface {
+	Send(message T)
+}
 
-func NewActor(handler Handler) Actor {
-	actor := &actor{
+type Handler[T any] func(T) bool
+
+func NewActor[T any](handler Handler[T]) Actor[T] {
+	actor := &actor[T]{
 		handler: handler,
 		Cond:    sync.NewCond(&sync.Mutex{}),
 	}
@@ -17,18 +19,22 @@ func NewActor(handler Handler) Actor {
 	return actor
 }
 
-type Actor interface {
-	Send(message any)
-}
-
-type actor struct {
-	handler Handler
-	pending []any
+type actor[T any] struct {
+	handler Handler[T]
+	pending []T
 	*sync.Cond
 }
 
-func run(a *actor) {
-	for {
+func (a *actor[T]) Send(msg T) {
+	a.Cond.L.Lock()
+	a.pending = append(a.pending, msg)
+	a.Cond.Signal()
+	a.Cond.L.Unlock()
+}
+
+func run[T any](a *actor[T]) {
+	running := true
+	for running {
 		a.Cond.L.Lock()
 
 		if len(a.pending) == 0 {
@@ -41,25 +47,6 @@ func run(a *actor) {
 		a.pending = a.pending[1:]
 
 		a.Cond.L.Unlock()
-		a.handleMessage(msg)
+		running = a.handler(msg)
 	}
-}
-
-func (a *actor) handleMessage(msg any) {
-	defer func() {
-		if r := recover(); r != nil {
-			a.Cond.L.Lock()
-			fmt.Printf("Actor %v panicked: %v\n", a, r)
-			fmt.Println(string(debug.Stack()))
-			a.Cond.L.Unlock()
-		}
-	}()
-	a.handler(msg)
-}
-
-func (a *actor) Send(msg any) {
-	a.Cond.L.Lock()
-	a.pending = append(a.pending, msg)
-	a.Cond.Signal()
-	a.Cond.L.Unlock()
 }

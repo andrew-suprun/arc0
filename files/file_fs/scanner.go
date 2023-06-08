@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,13 +37,15 @@ type fileInfo struct {
 	hash string
 }
 
-func (s *scanner) Handler(msg any) {
+func (s *scanner) Handler(msg files.Msg) bool {
 	switch msg.(type) {
 	case files.ScanArchive:
-		s.scanArchive()
+		return s.scanArchive()
 	case files.HashArchive:
-		s.hashArchive()
+		return s.hashArchive()
 	}
+	log.Panicf("### ERROR: Unhandled scanner message: %#v", msg)
+	return false
 }
 
 func (scanner *scanner) ScanArchive() {
@@ -55,7 +58,7 @@ func (scanner *scanner) HashArchive() {
 
 const hashFileName = ".meta.csv"
 
-func (s *scanner) scanArchive() {
+func (s *scanner) scanArchive() bool {
 	s.lc.Started()
 	defer s.lc.Done()
 
@@ -112,9 +115,10 @@ func (s *scanner) scanArchive() {
 
 		return nil
 	})
+	return s.lc.ShoudStop()
 }
 
-func (s *scanner) hashArchive() {
+func (s *scanner) hashArchive() bool {
 	s.lc.Started()
 	defer s.lc.Done()
 
@@ -142,7 +146,7 @@ func (s *scanner) hashArchive() {
 	for i, info := range fileInfos {
 		if info.hash == "" {
 			if s.lc.ShoudStop() {
-				return
+				return false
 			}
 			s.hashFile(fileInfos[i])
 
@@ -153,6 +157,7 @@ func (s *scanner) hashArchive() {
 			}
 		}
 	}
+	return true
 }
 
 func (s *scanner) hashFile(info *fileInfo) {

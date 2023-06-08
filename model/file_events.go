@@ -146,6 +146,14 @@ func (m *model) fileHash(hash events.FileHash) {
 					m.addToFolder(file, file.Size, file.ModTime)
 				}
 			}
+		} else if len(filesForHash[0]) == 1 {
+			for i, files := range filesForHash[1:] {
+				if len(files) == 0 {
+					m.archives[i+1].scanner.Send(nil) // TODO
+				}
+			}
+		} else {
+
 		}
 	}
 }

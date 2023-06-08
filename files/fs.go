@@ -5,8 +5,17 @@ type FS interface {
 }
 
 type Scanner interface {
-	Handler(msg any)
+	Handler(msg Msg) bool
+}
+
+type Msg interface {
+	msg()
 }
 
 type ScanArchive struct{}
+
+func (ScanArchive) msg() {}
+
 type HashArchive struct{}
+
+func (HashArchive) msg() {}

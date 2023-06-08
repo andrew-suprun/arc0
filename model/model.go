@@ -30,7 +30,7 @@ type model struct {
 
 type archive struct {
 	archivePath string
-	scanner     actor.Actor
+	scanner     actor.Actor[files.Msg]
 	scanState   events.ScanProgress
 	byINode     map[uint64]*File
 }
