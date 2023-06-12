@@ -93,6 +93,18 @@ type MoveSelection struct{ Lines int }
 
 func (MoveSelection) event() {}
 
+type KeepOne struct{}
+
+func (KeepOne) event() {}
+
+type KeepAll struct{}
+
+func (KeepAll) event() {}
+
+type Delete struct{}
+
+func (Delete) event() {}
+
 type Scroll struct {
 	Lines int
 }

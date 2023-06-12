@@ -108,11 +108,12 @@ func (m *model) makeSelectedVisible() {
 	}
 }
 
-func (m *model) fileHash(hash events.FileHash) {
-	archive := m.archives[m.archiveIdx(hash.ArchivePath)]
-	file := archive.byINode[hash.INode]
-	file.Hash = hash.Hash
+func (m *model) fileHash(fileHash events.FileHash) {
+	archive := m.archives[m.archiveIdx(fileHash.ArchivePath)]
+	file := archive.byINode[fileHash.INode]
+	file.Hash = fileHash.Hash
 	filesBySize := m.bySize[file.Size]
+	m.byHash[fileHash.Hash] = append(m.byHash[fileHash.Hash], file)
 
 	hashes := map[string]struct{}{}
 	for _, file := range filesBySize {
@@ -175,7 +176,7 @@ func (m *model) fileHash(hash events.FileHash) {
 
 					for i, copy := range copies {
 						if i != moveIdx {
-							m.archives[i+1].scanner.Send(files.Remove{File: copy.FileMeta})
+							m.archives[i+1].scanner.Send(files.Delete{File: copy.FileMeta})
 							filesForHash[0][0].Status = Resolved
 						}
 					}

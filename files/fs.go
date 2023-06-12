@@ -35,8 +35,8 @@ type Move struct {
 
 func (Move) msg() {}
 
-type Remove struct {
+type Delete struct {
 	File events.FileMeta
 }
 
-func (Remove) msg() {}
+func (Delete) msg() {}

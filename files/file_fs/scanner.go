@@ -47,7 +47,7 @@ func (s *scanner) Handler(msg files.Msg) bool {
 		return s.copy(msg.From)
 	case files.Move:
 		return s.move(msg.From, msg.To)
-	case files.Remove:
+	case files.Delete:
 		return s.remove(msg.File)
 	}
 	log.Panicf("### ERROR: Unhandled scanner message: %#v", msg)

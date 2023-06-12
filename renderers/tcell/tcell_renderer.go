@@ -100,12 +100,8 @@ func (d *tcellRenderer) CurrentStyle() widgets.Style {
 	return d.style
 }
 
-type eventHandler struct {
-	device *tcellRenderer
-	event  tcell.Event
-}
-
 func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
+	log.Printf("### key: %q  %v  %c", key.Name(), key.Modifiers(), key.Rune())
 	switch key.Name() {
 	case "Ctrl+C":
 		device.events <- events.Quit{}
@@ -116,7 +112,7 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 	case "Esc":
 		device.events <- events.Esc{}
 
-	case "Rune[R]", "Rune[r]":
+	case "Ctrl+R":
 		device.events <- events.RevealInFinder{}
 
 	case "Home":
@@ -136,6 +132,15 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 
 	case "Down":
 		device.events <- events.MoveSelection{Lines: 1}
+
+	case "Ctrl+O":
+		device.events <- events.KeepOne{}
+
+	case "Ctrl+A":
+		device.events <- events.KeepAll{}
+
+	case "Backspace2": // Ctrl+Delete
+		device.events <- events.Delete{}
 	}
 }
 
