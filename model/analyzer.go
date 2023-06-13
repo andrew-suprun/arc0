@@ -2,11 +2,17 @@ package model
 
 import (
 	"arch/files"
-	"log"
 )
 
 func (m *model) keepOneFile(selected *File) {
-	log.Printf("### keep one: selected %q %q %q", selected.ArchivePath, selected.FullName, selected.Hash)
+	if selected.Kind == FileRegular {
+		m.keepOneRegularFile(selected)
+	} else {
+		m.keepOneFolderFile(selected)
+	}
+}
+
+func (m *model) keepOneRegularFile(selected *File) {
 	filesForHash := m.byHash[selected.Hash]
 	byArch := map[string][]*File{}
 	for _, fileForHash := range filesForHash {
@@ -17,11 +23,9 @@ func (m *model) keepOneFile(selected *File) {
 
 	for _, archPath := range m.archivePaths {
 		archFiles := byArch[archPath]
-		log.Printf("### keep one: archPath %q, archFiles %d", archPath, len(archFiles))
 		if len(archFiles) == 0 {
 			m.archives[archPath].scanner.Send(files.Copy{Source: selected.FileMeta})
 			pending = true
-			log.Printf("### keep one: copy from %q %q to %q", selected.ArchivePath, selected.FullName, archPath)
 			continue
 		}
 		keepIdx := 0
@@ -36,12 +40,10 @@ func (m *model) keepOneFile(selected *File) {
 				if selected.FullName != archFile.FullName {
 					m.archives[archPath].scanner.Send(files.Move{OldMeta: archFile.FileMeta, NewMeta: selected.FileMeta})
 					pending = true
-					log.Printf("### keep one: move from %q %q to %q", selected.ArchivePath, selected.FullName, archPath)
 				}
 			} else {
 				m.archives[archPath].scanner.Send(files.Delete{File: archFile.FileMeta})
 				pending = true
-				log.Printf("### keep one: delete %q %q", archFile.ArchivePath, archFile.FullName)
 			}
 		}
 	}
@@ -51,4 +53,22 @@ func (m *model) keepOneFile(selected *File) {
 			archFile.Status = Pending
 		}
 	}
+	m.updateFolderStatus(dir(selected.FullName))
+}
+
+func (m *model) keepOneFolderFile(selected *File) {
+	// TODO
+}
+
+func (m *model) updateFolderStatus(path string) {
+	currentFolder := m.folders[path]
+	status := Identical
+	for _, entry := range currentFolder.entries {
+		status = status.Merge(entry.Status)
+	}
+	currentFolder.info.Status = status
+	if path == "" {
+		return
+	}
+	m.updateFolderStatus(dir(path))
 }

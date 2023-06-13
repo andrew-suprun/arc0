@@ -1,4 +1,3 @@
-* propagate 'pending' status to parent folders
 * handle 'keep one' event on folders
 * handle 'keep all' event
 * handle 'delete' event

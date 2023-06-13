@@ -136,12 +136,14 @@ func (s FileStatus) String() string {
 	switch s {
 	case Identical:
 		return "Identical"
+	case Pending:
+		return "Pending"
 	case Resolved:
 		return "Resolved"
 	case Conflict:
 		return "Conflict"
 	}
-	return "UNKNOWN FILE KIND"
+	return "UNKNOWN FILE STATUS"
 }
 
 func (s FileStatus) Merge(other FileStatus) FileStatus {
