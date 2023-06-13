@@ -175,9 +175,13 @@ func (m *model) enter() {
 	}
 }
 
+func (m *model) isOrigin(archPath string) bool {
+	return archPath == m.archivePaths[0]
+}
+
 func (m *model) archiveIdx(archivePath string) int {
-	for i, archive := range m.archives {
-		if archivePath == archive.archivePath {
+	for i := 0; i < len(m.archivePaths); i++ {
+		if archivePath == m.archivePaths[i] {
 			return i
 		}
 	}

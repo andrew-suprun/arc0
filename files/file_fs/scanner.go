@@ -44,9 +44,9 @@ func (s *scanner) Handler(msg files.Msg) bool {
 	case files.HashArchive:
 		return s.hashArchive()
 	case files.Copy:
-		return s.copy(msg.From)
+		return s.copy(msg.Source)
 	case files.Move:
-		return s.move(msg.From, msg.To)
+		return s.move(msg.OldMeta, msg.NewMeta)
 	case files.Delete:
 		return s.remove(msg.File)
 	}
@@ -281,8 +281,8 @@ func (s *scanner) copy(from events.FileMeta) bool {
 	return true
 }
 
-func (s *scanner) move(from, to events.FileMeta) bool {
-	log.Printf("### move from %#v to %#v", from.AbsName(), to.AbsName())
+func (s *scanner) move(oldMeta, newMeta events.FileMeta) bool {
+	log.Printf("### move from %#v to %#v", oldMeta.AbsName(), newMeta.AbsName())
 	return true
 }
 

@@ -23,14 +23,14 @@ type HashArchive struct{}
 func (HashArchive) msg() {}
 
 type Copy struct {
-	From events.FileMeta
+	Source events.FileMeta
 }
 
 func (Copy) msg() {}
 
 type Move struct {
-	From events.FileMeta
-	To   events.FileMeta
+	OldMeta events.FileMeta
+	NewMeta events.FileMeta
 }
 
 func (Move) msg() {}

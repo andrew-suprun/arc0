@@ -14,7 +14,8 @@ type model struct {
 	events   events.EventChan
 	renderer widgets.Renderer
 
-	archives           []*archive
+	archivePaths       []string
+	archives           map[string]*archive
 	bySize             map[uint64][]*File
 	byHash             map[string][]*File
 	folders            map[string]*folder
@@ -29,10 +30,9 @@ type model struct {
 }
 
 type archive struct {
-	archivePath string
-	scanner     actor.Actor[files.Msg]
-	scanState   events.ScanProgress
-	byINode     map[uint64]*File
+	scanner   actor.Actor[files.Msg]
+	scanState events.ScanProgress
+	byINode   map[uint64]*File
 }
 
 type folder struct {
@@ -50,20 +50,20 @@ func Run(fs files.FS, renderer widgets.Renderer, ev events.EventChan, paths []st
 		sortAscending: []bool{true, false, false, false},
 	}
 	m := &model{
-		fs:       fs,
-		renderer: renderer,
-		events:   ev,
-		archives: make([]*archive, len(paths)),
-		bySize:   map[uint64][]*File{},
-		byHash:   map[string][]*File{},
-		folders:  map[string]*folder{"": rootFolder},
+		fs:           fs,
+		renderer:     renderer,
+		events:       ev,
+		archivePaths: paths,
+		archives:     map[string]*archive{},
+		bySize:       map[uint64][]*File{},
+		byHash:       map[string][]*File{},
+		folders:      map[string]*folder{"": rootFolder},
 	}
-	for i, path := range paths {
+	for _, path := range paths {
 		s := fs.NewScanner(path)
-		m.archives[i] = &archive{
-			archivePath: path,
-			scanner:     actor.NewActor(s.Handler),
-			byINode:     map[uint64]*File{},
+		m.archives[path] = &archive{
+			scanner: actor.NewActor(s.Handler),
+			byINode: map[uint64]*File{},
 		}
 	}
 
@@ -127,6 +127,7 @@ type FileStatus int
 
 const (
 	Identical FileStatus = iota
+	Pending
 	Resolved
 	Conflict
 )

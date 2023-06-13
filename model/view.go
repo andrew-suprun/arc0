@@ -144,18 +144,18 @@ func (m *model) breadcrumbs() w.Widget {
 
 func (m *model) scanProgress() w.Widget {
 	pathLen := 0
-	for _, archive := range m.archives {
-		if pathLen < len(archive.archivePath) {
-			pathLen = len(archive.archivePath)
+	for path := range m.archives {
+		if pathLen < len(path) {
+			pathLen = len(path)
 		}
 	}
 	stats := []w.Widget{}
-	for i, archive := range m.archives {
+	for path, archive := range m.archives {
 		state := archive.scanState
 		if state.ScanState == events.HashFileTree {
 			stats = append(stats,
 				w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}},
-					w.Text(" Scanning: "+m.archives[i].archivePath).Width(pathLen+11),
+					w.Text(" Scanning: "+path).Width(pathLen+11),
 					w.Text(fmt.Sprintf(" %5.1f%%", state.ScanProgress*100)), w.Text(" "),
 					w.Styled(styleProgressBar,
 						w.ProgressBar(state.ScanProgress),
@@ -204,6 +204,8 @@ func statusColor(status FileStatus) byte {
 	switch status {
 	case Identical:
 		return 250
+	case Pending:
+		return 226
 	case Resolved:
 		return 82
 	case Conflict:

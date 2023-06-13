@@ -44,9 +44,9 @@ func (s *scanner) Handler(msg files.Msg) bool {
 	case files.HashArchive:
 		return s.hashArchive()
 	case files.Copy:
-		return s.copy(msg.From)
+		return s.copy(msg.Source)
 	case files.Move:
-		return s.move(msg.From, msg.To)
+		return s.move(msg.OldMeta, msg.NewMeta)
 	case files.Delete:
 		return s.remove(msg.File)
 	}

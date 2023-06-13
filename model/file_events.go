@@ -20,10 +20,10 @@ func (m *model) fileMeta(meta events.FileMeta) {
 
 	m.bySize[meta.Size] = append(m.bySize[meta.Size], file)
 
-	archive := m.archives[m.archiveIdx(meta.ArchivePath)]
+	archive := m.archives[meta.ArchivePath]
 	archive.byINode[meta.INode] = file
 
-	if m.archiveIdx(file.ArchivePath) == 0 {
+	if m.isOrigin(file.ArchivePath) {
 		m.addToFolder(file, meta.Size, meta.ModTime)
 	}
 }
@@ -109,7 +109,7 @@ func (m *model) makeSelectedVisible() {
 }
 
 func (m *model) fileHash(fileHash events.FileHash) {
-	archive := m.archives[m.archiveIdx(fileHash.ArchivePath)]
+	archive := m.archives[fileHash.ArchivePath]
 	file := archive.byINode[fileHash.INode]
 	file.Hash = fileHash.Hash
 	filesBySize := m.bySize[file.Size]
@@ -124,73 +124,42 @@ func (m *model) fileHash(fileHash events.FileHash) {
 	}
 	for hash := range hashes {
 		log.Printf("### hash %q", hash)
-		filesForHash := make([][]*File, len(m.archives))
+		filesForHash := map[string][]*File{}
 		for _, file := range filesBySize {
 			if file.Hash != hash {
 				continue
 			}
-			idx := m.archiveIdx(file.ArchivePath)
-			filesForHash[idx] = append(filesForHash[idx], file)
+			filesForHash[file.ArchivePath] = append(filesForHash[file.ArchivePath], file)
 		}
 		counts := make([]int, len(m.archives))
-		for i := range counts {
-			counts[i] = len(filesForHash[i])
+		for path, files := range filesForHash {
+			counts[m.archiveIdx(path)] = len(files)
 		}
-		for i := range filesForHash {
-			for j := range filesForHash[i] {
-				filesForHash[i][j].Counts = counts
+		for archPath := range filesForHash {
+			for i := range filesForHash[archPath] {
+				filesForHash[archPath][i].Counts = counts
 			}
 		}
 
-		for idx := range m.archives {
-			log.Printf("### archive %q", m.archives[idx].archivePath)
-			for _, f := range filesForHash[idx] {
+		for path := range m.archives {
+			log.Printf("### archive %q", path)
+			for _, f := range filesForHash[path] {
 				log.Printf("###      %q %q %d %q", f.ArchivePath, f.FullName, f.Size, f.Hash)
 			}
 		}
-		if len(filesForHash[0]) == 0 {
-			for _, files := range filesForHash[1:] {
+		originFiles := filesForHash[m.archivePaths[0]]
+		if len(originFiles) == 0 {
+			for _, files := range filesForHash {
 				for _, file := range files {
 					file.Status = Conflict
 					m.addToFolder(file, file.Size, file.ModTime)
 				}
 			}
-		} else if len(filesForHash[0]) == 1 {
-			original := filesForHash[0][0]
-			for i, copies := range filesForHash[1:] {
-				if len(copies) == 0 {
-					m.archives[i+1].scanner.Send(files.Copy{From: filesForHash[0][0].FileMeta})
-					original.Status = Resolved
-				} else {
-					moveIdx := 0
-					identicalCopyIdx := -1
-					for i, copy := range copies {
-						if original.FullName == copy.FullName && original.ModTime == copy.ModTime {
-							identicalCopyIdx = i
-							break
-						}
-					}
-					if identicalCopyIdx >= 0 {
-						moveIdx = identicalCopyIdx
-					}
-
-					for i, copy := range copies {
-						if i != moveIdx {
-							m.archives[i+1].scanner.Send(files.Delete{File: copy.FileMeta})
-							filesForHash[0][0].Status = Resolved
-						}
-					}
-
-					if identicalCopyIdx == -1 {
-						m.archives[i+1].scanner.Send(files.Move{
-							From: filesForHash[0][0].FileMeta,
-							To:   copies[0].FileMeta,
-						})
-					}
-				}
-			}
+		} else if len(originFiles) == 1 {
+			original := originFiles[0]
+			m.keepOneFile(original)
 		} else {
-			for _, origin := range filesForHash[0] {
+			for _, origin := range originFiles {
 				origin.Status = Conflict
 			}
 		}
@@ -198,7 +167,7 @@ func (m *model) fileHash(fileHash events.FileHash) {
 }
 
 func (m *model) scanProgressEvent(event events.ScanProgress) {
-	m.archives[m.archiveIdx(event.ArchivePath)].scanState = event
+	m.archives[event.ArchivePath].scanState = event
 
 	if event.ScanState == events.WalkFileTreeComplete {
 		allWalksComplete := true
