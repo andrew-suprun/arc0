@@ -150,7 +150,8 @@ func (m *model) scanProgress() w.Widget {
 		}
 	}
 	stats := []w.Widget{}
-	for path, archive := range m.archives {
+	for _, path := range m.archivePaths {
+		archive := *m.archives[path]
 		state := archive.scanState
 		if state.ScanState == events.HashFileTree {
 			stats = append(stats,
