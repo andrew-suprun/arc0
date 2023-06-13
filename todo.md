@@ -1,8 +1,9 @@
-* mouse events in breadcrumbs
-* analyzer
+* propagate 'pending' status to parent folders
+* handle 'keep one' event on folders
+* handle 'keep all' event
+* handle 'delete' event
 * reflect stats in status line
 * add descriptors to ScanErrors
-* conflict resolution
 * file operations
 * store hashes as hex encoded strings
 * remove directories that only contain .DS_Store and ._* files
