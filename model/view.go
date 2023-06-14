@@ -206,7 +206,7 @@ func statusColor(status FileStatus) byte {
 	case Identical:
 		return 250
 	case Pending:
-		return 226
+		return 214
 	case Resolved:
 		return 82
 	case Conflict:

@@ -5,11 +5,19 @@ import (
 )
 
 func (m *model) keepOneFile(selected *File) {
+	if selected.Status != Conflict {
+		return
+	}
 	if selected.Kind == FileRegular {
 		m.keepOneRegularFile(selected)
 	} else {
 		m.keepOneFolderFile(selected)
 	}
+	for _, archFile := range m.byHash[selected.Hash] {
+		archFile.Status = Pending
+	}
+	m.updateFolderStatus(dir(selected.FullName))
+	m.sort()
 }
 
 func (m *model) keepOneRegularFile(selected *File) {
@@ -19,13 +27,10 @@ func (m *model) keepOneRegularFile(selected *File) {
 		byArch[fileForHash.ArchivePath] = append(byArch[fileForHash.ArchivePath], fileForHash)
 	}
 
-	pending := false
-
 	for _, archPath := range m.archivePaths {
 		archFiles := byArch[archPath]
 		if len(archFiles) == 0 {
 			m.archives[archPath].scanner.Send(files.Copy{Source: selected.FileMeta})
-			pending = true
 			continue
 		}
 		keepIdx := 0
@@ -39,25 +44,19 @@ func (m *model) keepOneRegularFile(selected *File) {
 			if i == keepIdx {
 				if selected.FullName != archFile.FullName {
 					m.archives[archPath].scanner.Send(files.Move{OldMeta: archFile.FileMeta, NewMeta: selected.FileMeta})
-					pending = true
 				}
 			} else {
 				m.archives[archPath].scanner.Send(files.Delete{File: archFile.FileMeta})
-				pending = true
 			}
 		}
 	}
-
-	if pending {
-		for _, archFile := range filesForHash {
-			archFile.Status = Pending
-		}
-	}
-	m.updateFolderStatus(dir(selected.FullName))
 }
 
 func (m *model) keepOneFolderFile(selected *File) {
-	// TODO
+	folder := m.folders[selected.FullName]
+	for _, entry := range folder.entries {
+		m.keepOneFile(entry)
+	}
 }
 
 func (m *model) updateFolderStatus(path string) {
