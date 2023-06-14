@@ -157,7 +157,7 @@ func (m *model) fileHash(fileHash events.FileHash) {
 			}
 		} else if len(originFiles) == 1 {
 			original := originFiles[0]
-			m.keepOneFile(original)
+			m.keepFile(original)
 		} else {
 			for _, origin := range originFiles {
 				origin.Status = Conflict

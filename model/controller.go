@@ -77,13 +77,13 @@ func (m *model) handleEvent(event any) {
 		m.moveSelection(m.fileTreeLines)
 
 	case events.KeepOne:
-		m.keepOneEvent()
+		m.keepSelected()
 
 	case events.KeepAll:
-		m.keepAllEvent()
+		// TODO: Implement, maybe?
 
 	case events.Delete:
-		m.deleteEvent()
+		m.deleteSelected()
 
 	case events.Quit:
 		m.quit = true
@@ -197,30 +197,5 @@ func (m *model) shiftOffset(lines int) {
 		folder.lineOffset = 0
 	} else if folder.lineOffset >= nEntries {
 		folder.lineOffset = nEntries - 1
-	}
-}
-
-func (m *model) keepOneEvent() {
-	selected := m.folders[m.currentPath].selected
-	if selected != nil && selected.Status == Conflict {
-		m.keepOneFile(selected)
-	}
-}
-
-func (m *model) keepAllEvent() {
-	log.Printf("### keep all")
-	folder := m.folders[m.currentPath]
-	selected := folder.selected
-	if selected == nil {
-		return
-	}
-}
-
-func (m *model) deleteEvent() {
-	log.Printf("### delete")
-	folder := m.folders[m.currentPath]
-	selected := folder.selected
-	if selected == nil {
-		return
 	}
 }

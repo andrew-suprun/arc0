@@ -4,24 +4,28 @@ import (
 	"arch/files"
 )
 
-func (m *model) keepOneFile(selected *File) {
-	if selected.Status != Conflict {
+func (m *model) keepSelected() {
+	m.keepFile(m.folders[m.currentPath].selected)
+}
+
+func (m *model) keepFile(file *File) {
+	if file == nil || file.Status != Conflict {
 		return
 	}
-	if selected.Kind == FileRegular {
-		m.keepOneRegularFile(selected)
+	if file.Kind == FileRegular {
+		m.keepRegularFile(file)
 	} else {
-		m.keepOneFolderFile(selected)
+		m.keepFolderFile(file)
 	}
-	for _, archFile := range m.byHash[selected.Hash] {
+	for _, archFile := range m.byHash[file.Hash] {
 		archFile.Status = Pending
 	}
-	m.updateFolderStatus(dir(selected.FullName))
+	m.updateFolderStatus(dir(file.FullName))
 	m.sort()
 }
 
-func (m *model) keepOneRegularFile(selected *File) {
-	filesForHash := m.byHash[selected.Hash]
+func (m *model) keepRegularFile(file *File) {
+	filesForHash := m.byHash[file.Hash]
 	byArch := map[string][]*File{}
 	for _, fileForHash := range filesForHash {
 		byArch[fileForHash.ArchivePath] = append(byArch[fileForHash.ArchivePath], fileForHash)
@@ -30,20 +34,20 @@ func (m *model) keepOneRegularFile(selected *File) {
 	for _, archPath := range m.archivePaths {
 		archFiles := byArch[archPath]
 		if len(archFiles) == 0 {
-			m.archives[archPath].scanner.Send(files.Copy{Source: selected.FileMeta})
+			m.archives[archPath].scanner.Send(files.Copy{Source: file.FileMeta})
 			continue
 		}
 		keepIdx := 0
 		for i, archFile := range archFiles {
-			if archFile == selected || archFile.FullName == selected.FullName {
+			if archFile == file || archFile.FullName == file.FullName {
 				keepIdx = i
 				break
 			}
 		}
 		for i, archFile := range archFiles {
 			if i == keepIdx {
-				if selected.FullName != archFile.FullName {
-					m.archives[archPath].scanner.Send(files.Move{OldMeta: archFile.FileMeta, NewMeta: selected.FileMeta})
+				if file.FullName != archFile.FullName {
+					m.archives[archPath].scanner.Send(files.Move{OldMeta: archFile.FileMeta, NewMeta: file.FileMeta})
 				}
 			} else {
 				m.archives[archPath].scanner.Send(files.Delete{File: archFile.FileMeta})
@@ -52,10 +56,10 @@ func (m *model) keepOneRegularFile(selected *File) {
 	}
 }
 
-func (m *model) keepOneFolderFile(selected *File) {
-	folder := m.folders[selected.FullName]
+func (m *model) keepFolderFile(file *File) {
+	folder := m.folders[file.FullName]
 	for _, entry := range folder.entries {
-		m.keepOneFile(entry)
+		m.keepFile(entry)
 	}
 }
 
@@ -70,4 +74,45 @@ func (m *model) updateFolderStatus(path string) {
 		return
 	}
 	m.updateFolderStatus(dir(path))
+}
+
+func (m *model) deleteSelected() {
+	m.deleteFile(m.folders[m.currentPath].selected)
+}
+
+func (m *model) deleteFile(file *File) {
+	if file == nil || file.Status != Conflict {
+		return
+	}
+
+	if file.Kind == FileFolder {
+		m.deleteFolderFile(file)
+	} else {
+		m.deleteRegularFile(file)
+	}
+	m.updateFolderStatus(dir(file.FullName))
+	m.sort()
+}
+
+func (m *model) deleteRegularFile(file *File) {
+	filesForHash := m.byHash[file.Hash]
+	byArch := map[string][]*File{}
+	for _, fileForHash := range filesForHash {
+		byArch[fileForHash.ArchivePath] = append(byArch[fileForHash.ArchivePath], fileForHash)
+	}
+	if len(byArch[m.archivePaths[0]]) > 0 {
+		return
+	}
+
+	for _, file := range filesForHash {
+		m.archives[file.ArchivePath].scanner.Send(files.Delete{File: file.FileMeta})
+		file.Status = Pending
+	}
+}
+
+func (m *model) deleteFolderFile(file *File) {
+	folder := m.folders[file.FullName]
+	for _, entry := range folder.entries {
+		m.deleteFile(entry)
+	}
 }
