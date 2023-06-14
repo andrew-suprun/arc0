@@ -9,7 +9,7 @@ func (m *model) keepSelected() {
 }
 
 func (m *model) keepFile(file *File) {
-	if file == nil || file.Status != Conflict {
+	if file == nil {
 		return
 	}
 	if file.Kind == FileRegular {

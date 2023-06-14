@@ -113,7 +113,7 @@ func (s *scanner) scanArchive() bool {
 
 		return nil
 	})
-	return s.lc.ShoudStop()
+	return true
 }
 
 func (s *scanner) hashArchive() bool {

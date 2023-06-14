@@ -205,6 +205,7 @@ var metaMap = map[string][]string{
 		"x.txt:hhhh",
 		"q/w/e/r/t/y.txt:qwerty",
 		"yyy.txt:yyyy",
+		"0000:0000",
 	},
 	"copy 1": {
 		"a/b/c/d.txt:llll",
@@ -216,6 +217,7 @@ var metaMap = map[string][]string{
 		"zzzz.txt:hhhh",
 		"x/y/z.txt:zzzz",
 		"yyy.txt:yyyy",
+		"1111:0000",
 	},
 	"copy 2": {
 		"a/b/c/f.txt:hhhh",
@@ -224,5 +226,6 @@ var metaMap = map[string][]string{
 		"x:asdfg",
 		"q/w/e/r/t/y.txt:12345",
 		"yyy.txt:yyyy",
+		"2222:0000",
 	},
 }
