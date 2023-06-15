@@ -17,9 +17,6 @@ func (m *model) keepFile(file *File) {
 	} else {
 		m.keepFolderFile(file)
 	}
-	for _, archFile := range m.byHash[file.Hash] {
-		archFile.Status = Pending
-	}
 	m.updateFolderStatus(dir(file.FullName))
 	m.sort()
 }
@@ -35,6 +32,7 @@ func (m *model) keepRegularFile(file *File) {
 		archFiles := byArch[archPath]
 		if len(archFiles) == 0 {
 			m.archives[archPath].scanner.Send(files.Copy{Source: file.FileMeta})
+			file.Status = Pending
 			continue
 		}
 		keepIdx := 0
@@ -48,9 +46,11 @@ func (m *model) keepRegularFile(file *File) {
 			if i == keepIdx {
 				if file.FullName != archFile.FullName {
 					m.archives[archPath].scanner.Send(files.Move{OldMeta: archFile.FileMeta, NewMeta: file.FileMeta})
+					archFile.Status = Pending
 				}
 			} else {
 				m.archives[archPath].scanner.Send(files.Delete{File: archFile.FileMeta})
+				archFile.Status = Pending
 			}
 		}
 	}

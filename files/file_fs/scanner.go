@@ -277,12 +277,12 @@ func (s *scanner) storeMeta() error {
 }
 
 func (s *scanner) copy(from events.FileMeta) bool {
-	log.Printf("### copy from %#v", from.AbsName())
+	log.Printf("### copy from %s to %s", from.AbsName(), s.archivePath)
 	return true
 }
 
 func (s *scanner) move(oldMeta, newMeta events.FileMeta) bool {
-	log.Printf("### move from %#v to %#v", oldMeta.AbsName(), newMeta.AbsName())
+	log.Printf("### rename from %#v as %#v", oldMeta.AbsName(), newMeta.AbsName())
 	return true
 }
 

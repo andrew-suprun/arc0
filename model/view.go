@@ -157,7 +157,7 @@ func (m *model) scanProgress() w.Widget {
 			stats = append(stats,
 				w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}},
 					w.Text(" Scanning: "+path).Width(pathLen+11),
-					w.Text(fmt.Sprintf(" %5.1f%%", state.ScanProgress*100)), w.Text(" "),
+					w.Text(fmt.Sprintf(" %6.2f%%", state.ScanProgress*100)), w.Text(" "),
 					w.Styled(styleProgressBar,
 						w.ProgressBar(state.ScanProgress),
 					),

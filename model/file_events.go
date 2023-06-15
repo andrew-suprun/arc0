@@ -3,7 +3,6 @@ package model
 import (
 	"arch/events"
 	"arch/files"
-	"log"
 	"path/filepath"
 	"time"
 )
@@ -123,7 +122,6 @@ func (m *model) fileHash(fileHash events.FileHash) {
 		return
 	}
 	for hash := range hashes {
-		log.Printf("### hash %q", hash)
 		filesForHash := map[string][]*File{}
 		for _, file := range filesBySize {
 			if file.Hash != hash {
@@ -141,12 +139,6 @@ func (m *model) fileHash(fileHash events.FileHash) {
 			}
 		}
 
-		for path := range m.archives {
-			log.Printf("### archive %q", path)
-			for _, f := range filesForHash[path] {
-				log.Printf("###      %q %q %d %q", f.ArchivePath, f.FullName, f.Size, f.Hash)
-			}
-		}
 		originFiles := filesForHash[m.archivePaths[0]]
 		if len(originFiles) == 0 {
 			for _, files := range filesForHash {

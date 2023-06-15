@@ -47,7 +47,12 @@ func (s sliceByName) Less(i, j int) bool {
 	} else if iName > jName {
 		return false
 	}
-	return s.sliceBy[i].Status < s.sliceBy[j].Status
+	if s.sliceBy[i].Size < s.sliceBy[j].Size {
+		return true
+	} else if s.sliceBy[i].Size > s.sliceBy[j].Size {
+		return false
+	}
+	return s.sliceBy[i].ModTime.Before(s.sliceBy[j].ModTime)
 }
 
 type sliceByStatus struct {
