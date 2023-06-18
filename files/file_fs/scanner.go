@@ -290,11 +290,3 @@ func (s *scanner) remove(file events.FileMeta) bool {
 	log.Printf("### remove file %#v", file.AbsName())
 	return true
 }
-
-func dir(path string) string {
-	path = filepath.Dir(path)
-	if path == "." {
-		return ""
-	}
-	return path
-}

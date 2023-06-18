@@ -9,19 +9,9 @@ func (m *model) keepSelected() {
 }
 
 func (m *model) keepFile(file *File) {
-	if file == nil {
+	if file == nil || file.Kind != FileRegular {
 		return
 	}
-	if file.Kind == FileRegular {
-		m.keepRegularFile(file)
-	} else {
-		m.keepFolderFile(file)
-	}
-	m.updateFolderStatus(dir(file.FullName))
-	m.sort()
-}
-
-func (m *model) keepRegularFile(file *File) {
 	filesForHash := m.byHash[file.Hash]
 	byArch := map[string][]*File{}
 	for _, fileForHash := range filesForHash {
@@ -54,13 +44,8 @@ func (m *model) keepRegularFile(file *File) {
 			}
 		}
 	}
-}
-
-func (m *model) keepFolderFile(file *File) {
-	folder := m.folders[file.FullName]
-	for _, entry := range folder.entries {
-		m.keepFile(entry)
-	}
+	m.updateFolderStatus(dir(file.FullName))
+	m.sort()
 }
 
 func (m *model) updateFolderStatus(path string) {
@@ -68,6 +53,9 @@ func (m *model) updateFolderStatus(path string) {
 	status := Identical
 	for _, entry := range currentFolder.entries {
 		status = status.Merge(entry.Status)
+	}
+	if currentFolder.info.Status == status {
+		return
 	}
 	currentFolder.info.Status = status
 	if path == "" {

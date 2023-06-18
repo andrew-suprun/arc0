@@ -10,19 +10,19 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-type file_fs struct {
+type fileFs struct {
 	events events.EventChan
 	lc     *lifecycle.Lifecycle
 }
 
 func NewFs(events events.EventChan, lc *lifecycle.Lifecycle) files.FS {
-	return &file_fs{
+	return &fileFs{
 		events: events,
 		lc:     lc,
 	}
 }
 
-func (fs *file_fs) NewScanner(archivePath string) files.Scanner {
+func (fs *fileFs) NewScanner(archivePath string) files.Scanner {
 	return &scanner{
 		events:      fs.events,
 		lc:          fs.lc,
