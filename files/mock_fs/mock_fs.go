@@ -27,6 +27,7 @@ type scanner struct {
 	archivePath string
 	totalSize   uint64
 	totalHashed uint64
+	totalCopied uint64
 }
 
 func (fsys *mockFs) NewScanner(archivePath string) files.Scanner {
@@ -55,95 +56,115 @@ func (s *scanner) Handler(msg files.Msg) bool {
 }
 
 func (s *scanner) scanArchive() bool {
+	log.Printf("### scanner %q: >>> scan", s.archivePath)
 	archFiles := metas[s.archivePath]
-	go func() {
-		for _, meta := range archFiles {
-			s.events <- events.FileMeta{
-				INode:       meta.INode,
-				ArchivePath: s.archivePath,
-				FullName:    meta.FullName,
-				Size:        meta.Size,
-				ModTime:     meta.ModTime,
-			}
-			s.totalSize += meta.Size
-		}
-		s.events <- events.ScanProgress{
+	for _, meta := range archFiles {
+		s.events <- events.FileMeta{
+			INode:       meta.INode,
 			ArchivePath: s.archivePath,
-			ScanState:   events.WalkFileTreeComplete,
+			FullName:    meta.FullName,
+			Size:        meta.Size,
+			ModTime:     meta.ModTime,
 		}
-	}()
+		s.totalSize += meta.Size
+	}
+	s.events <- events.Progress{
+		ArchivePath:   s.archivePath,
+		ProgressState: events.WalkFileTreeComplete,
+	}
+	log.Printf("### scanner %q: <<< scan", s.archivePath)
 	return true
 }
 
 func (s *scanner) hashArchive() bool {
+	log.Printf("### scanner %q: >>> hash", s.archivePath)
 	archFiles := metas[s.archivePath]
 	scans := make([]bool, len(archFiles))
 
 	for i := range archFiles {
 		scans[i] = s.scan && rand.Intn(2) == 0
 	}
-	go func() {
-		for i := range archFiles {
-			if !scans[i] {
-				meta := archFiles[i]
-				s.events <- events.FileHash{
-					INode:       meta.INode,
-					ArchivePath: meta.ArchivePath,
-					Hash:        meta.Hash,
-				}
-				s.totalHashed += meta.Size
-				s.events <- events.ScanProgress{
-					ArchivePath:  s.archivePath,
-					ScanState:    events.HashFileTree,
-					ScanProgress: float64(s.totalHashed) / float64(s.totalSize),
-				}
+	for i := range archFiles {
+		if !scans[i] {
+			meta := archFiles[i]
+			s.events <- events.FileHash{
+				INode:       meta.INode,
+				ArchivePath: meta.ArchivePath,
+				Hash:        meta.Hash,
+			}
+			s.totalHashed += meta.Size
+			s.events <- events.Progress{
+				ArchivePath:   s.archivePath,
+				ProgressState: events.HashFileTree,
+				Processed:     s.totalHashed,
 			}
 		}
-		for i := range archFiles {
-			if scans[i] {
-				meta := archFiles[i]
-				for hashed := uint64(0); ; hashed += 20000 {
-					if hashed > meta.Size {
-						hashed = meta.Size
-					}
-					s.events <- events.ScanProgress{
-						ArchivePath:  meta.ArchivePath,
-						ScanState:    events.HashFileTree,
-						ScanProgress: float64(s.totalHashed+hashed) / float64(s.totalSize),
-					}
-					if hashed == meta.Size {
-						break
-					}
-					time.Sleep(time.Millisecond)
+	}
+	for i := range archFiles {
+		if scans[i] {
+			meta := archFiles[i]
+			for hashed := uint64(0); ; hashed += 20000 {
+				if hashed > meta.Size {
+					hashed = meta.Size
 				}
-				s.totalHashed += meta.Size
-				s.events <- events.FileHash{
-					INode:       meta.INode,
-					ArchivePath: meta.ArchivePath,
-					Hash:        meta.Hash,
+				s.events <- events.Progress{
+					ArchivePath:   meta.ArchivePath,
+					ProgressState: events.HashFileTree,
+					Processed:     s.totalHashed + hashed,
 				}
+				if hashed == meta.Size {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+			s.totalHashed += meta.Size
+			s.events <- events.FileHash{
+				INode:       meta.INode,
+				ArchivePath: meta.ArchivePath,
+				Hash:        meta.Hash,
 			}
 		}
-		s.events <- events.ScanProgress{
-			ArchivePath: s.archivePath,
-			ScanState:   events.HashFileTreeComplete,
-		}
-	}()
+	}
+	s.events <- events.Progress{
+		ArchivePath:   s.archivePath,
+		ProgressState: events.HashFileTreeComplete,
+	}
+	log.Printf("### scanner %q: <<< hash", s.archivePath)
 	return true
 }
 
-func (s *scanner) copy(from events.FileMeta) bool {
-	log.Printf("### scanner: copy from %#v", from.AbsName())
+func (s *scanner) copy(meta events.FileMeta) bool {
+	log.Printf("### scanner %q: >>> copy from %#v", s.archivePath, meta.AbsName())
+	for copied := uint64(0); ; copied += 20000 {
+		if copied > meta.Size {
+			copied = meta.Size
+		}
+		s.events <- events.Progress{
+			ArchivePath:   s.archivePath,
+			ProgressState: events.CopyFile,
+			Processed:     s.totalCopied + copied,
+		}
+		if copied == meta.Size {
+			s.totalCopied += copied
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	s.events <- events.Progress{
+		ArchivePath:   s.archivePath,
+		ProgressState: events.CopyingComplete,
+	}
+	log.Printf("### scanner %q: <<< copy from %#v", s.archivePath, meta.AbsName())
 	return true
 }
 
 func (s *scanner) move(from, to events.FileMeta) bool {
-	log.Printf("### scanner: move from %#v to %#v", from.AbsName(), to.AbsName())
+	log.Printf("### scanner %q: move from %#v to %#v", s.archivePath, from.AbsName(), to.AbsName())
 	return true
 }
 
 func (s *scanner) remove(file events.FileMeta) bool {
-	log.Printf("### scanner: remove file %#v", file.AbsName())
+	log.Printf("### scanner %q: remove file %#v", s.archivePath, file.AbsName())
 	return true
 }
 

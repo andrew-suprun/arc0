@@ -3,6 +3,7 @@ package model
 import (
 	"arch/events"
 	"arch/files"
+	"log"
 	"path/filepath"
 	"time"
 )
@@ -20,6 +21,7 @@ func (m *model) fileMeta(meta events.FileMeta) {
 	m.bySize[meta.Size] = append(m.bySize[meta.Size], file)
 
 	archive := m.archives[meta.ArchivePath]
+	archive.totalSize += meta.Size
 	archive.byINode[meta.INode] = file
 
 	if m.isOrigin(file.ArchivePath) {
@@ -158,13 +160,14 @@ func (m *model) fileHash(fileHash events.FileHash) {
 	}
 }
 
-func (m *model) scanProgressEvent(event events.ScanProgress) {
-	m.archives[event.ArchivePath].scanState = event
+func (m *model) progressEvent(event events.Progress) {
+	log.Printf("### progress: event=%#v", event)
+	m.archives[event.ArchivePath].progress = event
 
-	if event.ScanState == events.WalkFileTreeComplete {
+	if event.ProgressState == events.WalkFileTreeComplete {
 		allWalksComplete := true
 		for _, archive := range m.archives {
-			if archive.scanState.ScanState != events.WalkFileTreeComplete {
+			if archive.progress.ProgressState != events.WalkFileTreeComplete {
 				allWalksComplete = false
 				break
 			}

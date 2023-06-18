@@ -28,7 +28,6 @@ type scanner struct {
 	lc          *lifecycle.Lifecycle
 	archivePath string
 	infos       map[uint64]*fileInfo
-	totalSize   uint64
 	totalHashed uint64
 }
 
@@ -61,9 +60,9 @@ func (s *scanner) scanArchive() bool {
 	defer s.lc.Done()
 
 	defer func() {
-		s.events <- events.ScanProgress{
-			ArchivePath: s.archivePath,
-			ScanState:   events.WalkFileTreeComplete,
+		s.events <- events.Progress{
+			ArchivePath:   s.archivePath,
+			ProgressState: events.WalkFileTreeComplete,
 		}
 	}()
 
@@ -109,7 +108,6 @@ func (s *scanner) scanArchive() bool {
 			meta: fileMeta,
 		}
 		s.events <- fileMeta
-		s.totalSize += fileMeta.Size
 
 		return nil
 	})
@@ -126,9 +124,9 @@ func (s *scanner) hashArchive() bool {
 	}()
 
 	defer func() {
-		s.events <- events.ScanProgress{
-			ArchivePath: s.archivePath,
-			ScanState:   events.HashFileTreeComplete,
+		s.events <- events.Progress{
+			ArchivePath:   s.archivePath,
+			ProgressState: events.HashFileTreeComplete,
 		}
 	}()
 
@@ -199,10 +197,10 @@ func (s *scanner) hashFile(info *fileInfo) {
 		}
 
 		s.totalHashed += uint64(nr)
-		s.events <- events.ScanProgress{
-			ArchivePath:  s.archivePath,
-			ScanState:    events.HashFileTree,
-			ScanProgress: float64(s.totalHashed) / float64(s.totalSize),
+		s.events <- events.Progress{
+			ArchivePath:   s.archivePath,
+			ProgressState: events.HashFileTree,
+			Processed:     s.totalHashed,
 		}
 	}
 	info.hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
@@ -241,10 +239,10 @@ func (s *scanner) readMeta() {
 					Hash:        hash,
 				}
 				s.totalHashed += info.meta.Size
-				s.events <- events.ScanProgress{
-					ArchivePath:  s.archivePath,
-					ScanState:    events.HashFileTree,
-					ScanProgress: float64(s.totalHashed) / float64(s.totalSize),
+				s.events <- events.Progress{
+					ArchivePath:   s.archivePath,
+					ProgressState: events.HashFileTree,
+					Processed:     s.totalHashed,
 				}
 			}
 		}

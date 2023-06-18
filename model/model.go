@@ -31,7 +31,9 @@ type model struct {
 
 type archive struct {
 	scanner   actor.Actor[files.Msg]
-	scanState events.ScanProgress
+	progress  events.Progress
+	totalSize uint64
+	copySize  uint64
 	byINode   map[uint64]*File
 }
 

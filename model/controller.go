@@ -22,8 +22,8 @@ func (m *model) handleEvent(event any) {
 	case events.FileHash:
 		m.fileHash(event)
 
-	case events.ScanProgress:
-		m.scanProgressEvent(event)
+	case events.Progress:
+		m.progressEvent(event)
 
 	case events.ScanError:
 		m.Errors = append(m.Errors, event)
@@ -218,7 +218,9 @@ func (m *model) keepFile(file *File) {
 	for _, archPath := range m.archivePaths {
 		archFiles := byArch[archPath]
 		if len(archFiles) == 0 {
-			m.archives[archPath].scanner.Send(files.Copy{Source: file.FileMeta})
+			archive := m.archives[archPath]
+			archive.scanner.Send(files.Copy{Source: file.FileMeta})
+			archive.copySize += file.Size
 			file.Status = Pending
 			continue
 		}

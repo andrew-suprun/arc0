@@ -25,7 +25,7 @@ func (m *model) view() w.Widget {
 	return w.Column(col,
 		m.title(),
 		m.folderView(),
-		m.scanProgress(),
+		m.progress(),
 	)
 }
 
@@ -142,7 +142,7 @@ func (m *model) breadcrumbs() w.Widget {
 	return w.Row(row, widgets...)
 }
 
-func (m *model) scanProgress() w.Widget {
+func (m *model) progress() w.Widget {
 	pathLen := 0
 	for path := range m.archives {
 		if pathLen < len(path) {
@@ -152,14 +152,15 @@ func (m *model) scanProgress() w.Widget {
 	stats := []w.Widget{}
 	for _, path := range m.archivePaths {
 		archive := *m.archives[path]
-		state := archive.scanState
-		if state.ScanState == events.HashFileTree {
+		state := archive.progress.ProgressState
+		if state == events.HashFileTree || state == events.CopyFile {
+			progress := archive.progressValue()
 			stats = append(stats,
 				w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}},
-					w.Text(" Scanning: "+path).Width(pathLen+11),
-					w.Text(fmt.Sprintf(" %6.2f%%", state.ScanProgress*100)), w.Text(" "),
+					w.Text(archive.progressLabel()+path).Width(pathLen+11),
+					w.Text(fmt.Sprintf(" %6.2f%%", progress*100)), w.Text(" "),
 					w.Styled(styleProgressBar,
-						w.ProgressBar(state.ScanProgress),
+						w.ProgressBar(progress),
 					),
 					w.Text(" "),
 				),
@@ -169,6 +170,32 @@ func (m *model) scanProgress() w.Widget {
 	return w.Styled(styleStatusLine,
 		w.Column(w.Constraint{Size: w.Size{Width: 0, Height: len(stats)}, Flex: w.Flex{X: 1, Y: 0}}, stats...),
 	)
+}
+
+func (a *archive) progressLabel() string {
+	switch a.progress.ProgressState {
+	case events.HashFileTree:
+		return " Scanning: "
+
+	case events.CopyFile:
+		return " Copying:  "
+
+	default:
+		return ""
+	}
+}
+
+func (a *archive) progressValue() float64 {
+	switch a.progress.ProgressState {
+	case events.HashFileTree:
+		return float64(a.progress.Processed) / float64(a.totalSize)
+
+	case events.CopyFile:
+		return float64(a.progress.Processed) / float64(a.copySize)
+
+	default:
+		return 0
+	}
 }
 
 func formatSize(size uint64) string {

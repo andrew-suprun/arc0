@@ -39,21 +39,23 @@ type FileHash struct {
 
 func (FileHash) event() {}
 
-type ScanProgress struct {
-	ArchivePath  string
-	ScanState    ScanState
-	ScanProgress float64
+type Progress struct {
+	ArchivePath   string
+	ProgressState ProgressState
+	Processed     uint64
 }
 
-func (ScanProgress) event() {}
+func (Progress) event() {}
 
-type ScanState int
+type ProgressState int
 
 const (
-	WalkFileTree ScanState = iota
+	WalkFileTree ProgressState = iota
 	WalkFileTreeComplete
 	HashFileTree
 	HashFileTreeComplete
+	CopyFile
+	CopyingComplete
 )
 
 type ScanError struct {
