@@ -1,9 +1,7 @@
-package events
+package model
 
 import (
 	"fmt"
-	"path/filepath"
-	"time"
 )
 
 type EventChan chan Event
@@ -12,32 +10,29 @@ type Event interface {
 	event()
 }
 
-type FileMeta struct {
-	ArchivePath string
-	INode       uint64
-	FullName    string
-	Size        uint64
-	ModTime     time.Time
-}
+type FileScanned FileMeta
 
-func (FileMeta) event() {}
+func (FileScanned) event() {}
 
-func (m *FileMeta) String() string {
-	return fmt.Sprintf("Meta{ArchivePath: %q, Name: %q, Size: %d, ModTime: %s}",
-		m.ArchivePath, m.FullName, m.Size, m.ModTime.Format(time.DateTime))
-}
-
-func (f FileMeta) AbsName() string {
-	return filepath.Join(f.ArchivePath, f.FullName)
-}
-
-type FileHash struct {
+type FileHashed struct {
 	ArchivePath string
 	INode       uint64
 	Hash        string
 }
 
-func (FileHash) event() {}
+func (FileHashed) event() {}
+
+type FileCopied FileMeta
+
+func (FileCopied) event() {}
+
+type FileRenamed FileMeta
+
+func (FileRenamed) event() {}
+
+type FileDeleted FileMeta
+
+func (FileDeleted) event() {}
 
 type Progress struct {
 	ArchivePath   string
@@ -50,20 +45,20 @@ func (Progress) event() {}
 type ProgressState int
 
 const (
-	WalkFileTree ProgressState = iota
-	WalkFileTreeComplete
-	HashFileTree
-	HashFileTreeComplete
-	CopyFile
+	WalkingFileTree ProgressState = iota
+	WalkingFileTreeComplete
+	HashingFileTree
+	HashingFileTreeComplete
+	CopyingFile
 	CopyingComplete
 )
 
-type ScanError struct {
+type Error struct {
 	Meta  FileMeta
 	Error error
 }
 
-func (ScanError) event() {}
+func (Error) event() {}
 
 type ScreenSize struct {
 	Width, Height int
@@ -91,9 +86,9 @@ type SelectLast struct{}
 
 func (SelectLast) event() {}
 
-type MoveSelection struct{ Lines int }
+type RenameSelection struct{ Lines int }
 
-func (MoveSelection) event() {}
+func (RenameSelection) event() {}
 
 type KeepOne struct{}
 

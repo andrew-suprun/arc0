@@ -1,11 +1,12 @@
-package model
+package controller
 
 import (
+	"arch/model"
 	"sort"
 	"strings"
 )
 
-func (m *model) sort() {
+func (m *controller) sort() {
 	folder := m.folders[m.currentPath]
 	files := sliceBy(folder.entries)
 	var slice sort.Interface
@@ -25,7 +26,7 @@ func (m *model) sort() {
 	sort.Sort(slice)
 }
 
-type sliceBy Files
+type sliceBy model.Files
 
 func (s sliceBy) Len() int {
 	return len(s)

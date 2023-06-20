@@ -1,9 +1,8 @@
 package file_fs
 
 import (
-	"arch/events"
-	"arch/files"
 	"arch/lifecycle"
+	"arch/model"
 	"os"
 	"path/filepath"
 
@@ -11,18 +10,18 @@ import (
 )
 
 type fileFs struct {
-	events events.EventChan
+	events model.EventChan
 	lc     *lifecycle.Lifecycle
 }
 
-func NewFs(events events.EventChan, lc *lifecycle.Lifecycle) files.FS {
+func NewFs(events model.EventChan, lc *lifecycle.Lifecycle) model.FS {
 	return &fileFs{
 		events: events,
 		lc:     lc,
 	}
 }
 
-func (fs *fileFs) NewScanner(archivePath string) files.Scanner {
+func (fs *fileFs) NewScanner(archivePath string) model.Scanner {
 	return &scanner{
 		events:      fs.events,
 		lc:          fs.lc,

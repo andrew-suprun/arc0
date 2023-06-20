@@ -1,21 +1,20 @@
-package model
+package controller
 
 import (
-	"arch/events"
-	"arch/files"
+	"arch/model"
 	"log"
 	"path/filepath"
 	"time"
 )
 
-func (m *model) fileMeta(meta events.FileMeta) {
+func (m *controller) fileMeta(meta model.FileScanned) {
 	defer func() {
 		m.sort()
 	}()
 
-	file := &File{
-		FileMeta: meta,
-		Kind:     FileRegular,
+	file := &model.File{
+		FileMeta: model.FileMeta(meta),
+		Kind:     model.FileRegular,
 	}
 
 	m.bySize[meta.Size] = append(m.bySize[meta.Size], file)
@@ -29,32 +28,32 @@ func (m *model) fileMeta(meta events.FileMeta) {
 	}
 }
 
-func (m *model) addToFolder(file *File, size uint64, modTime time.Time) {
+func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
 	parentFolder := m.folders[dir(file.FullName)]
 	if parentFolder == nil {
 		parentFolder = &folder{
-			info: &File{
-				FileMeta: events.FileMeta{
+			info: &model.File{
+				FileMeta: model.FileMeta{
 					FullName: dir(file.FullName),
 					Size:     file.Size,
 					ModTime:  file.ModTime,
 				},
-				Kind:   FileFolder,
+				Kind:   model.FileFolder,
 				Status: file.Status,
 			},
 			sortAscending: []bool{true, false, false, false},
-			entries:       []*File{file},
+			entries:       []*model.File{file},
 		}
 		m.folders[dir(file.FullName)] = parentFolder
 	} else {
-		if file.Kind == FileRegular {
+		if file.Kind == model.FileRegular {
 			parentFolder.entries = append(parentFolder.entries, file)
 			parentFolder.info.Status = parentFolder.info.Status.Merge(file.Status)
 		}
 		sameFolder := false
-		if file.Kind == FileFolder {
+		if file.Kind == model.FileFolder {
 			for _, entry := range parentFolder.entries {
-				if entry.Kind == FileFolder && name(file.FullName) == name(entry.FullName) {
+				if entry.Kind == model.FileFolder && name(file.FullName) == name(entry.FullName) {
 					sameFolder = true
 					break
 				}
@@ -86,7 +85,7 @@ func name(path string) string {
 	return filepath.Base(path)
 }
 
-func (m *model) makeSelectedVisible() {
+func (m *controller) makeSelectedVisible() {
 	folder := m.folders[m.currentPath]
 	if folder.selected == nil {
 		return
@@ -109,7 +108,7 @@ func (m *model) makeSelectedVisible() {
 	}
 }
 
-func (m *model) fileHash(fileHash events.FileHash) {
+func (m *controller) fileHashed(fileHash model.FileHashed) {
 	archive := m.archives[fileHash.ArchivePath]
 	file := archive.byINode[fileHash.INode]
 	file.Hash = fileHash.Hash
@@ -124,7 +123,7 @@ func (m *model) fileHash(fileHash events.FileHash) {
 		return
 	}
 	for hash := range hashes {
-		filesForHash := map[string][]*File{}
+		filesForHash := map[string][]*model.File{}
 		for _, file := range filesBySize {
 			if file.Hash != hash {
 				continue
@@ -145,7 +144,7 @@ func (m *model) fileHash(fileHash events.FileHash) {
 		if len(originFiles) == 0 {
 			for _, files := range filesForHash {
 				for _, file := range files {
-					file.Status = Conflict
+					file.Status = model.Conflict
 					m.addToFolder(file, file.Size, file.ModTime)
 				}
 			}
@@ -154,28 +153,39 @@ func (m *model) fileHash(fileHash events.FileHash) {
 			m.keepFile(original)
 		} else {
 			for _, origin := range originFiles {
-				origin.Status = Conflict
+				origin.Status = model.Conflict
 			}
 		}
 	}
 }
 
-func (m *model) progressEvent(event events.Progress) {
-	log.Printf("### progress: event=%#v", event)
+func (m *controller) progressEvent(event model.Progress) {
 	m.archives[event.ArchivePath].progress = event
 
-	if event.ProgressState == events.WalkFileTreeComplete {
+	if event.ProgressState == model.WalkingFileTreeComplete {
 		allWalksComplete := true
 		for _, archive := range m.archives {
-			if archive.progress.ProgressState != events.WalkFileTreeComplete {
+			if archive.progress.ProgressState != model.WalkingFileTreeComplete {
 				allWalksComplete = false
 				break
 			}
 		}
 		if allWalksComplete {
 			for _, archive := range m.archives {
-				archive.scanner.Send(files.HashArchive{})
+				archive.scanner.Send(model.HashArchive{})
 			}
 		}
 	}
+}
+
+func (m *controller) fileCopied(meta model.FileCopied) {
+	log.Printf("### fileCopied: %#v", meta)
+}
+
+func (m *controller) fileRenamed(meta model.FileRenamed) {
+	log.Printf("### fileRenamed: %#v", meta)
+}
+
+func (m *controller) fileDeleted(meta model.FileDeleted) {
+	log.Printf("### fileDeleted: %#v", meta)
 }

@@ -1,100 +1,13 @@
-package model
+package controller
 
 import (
-	"arch/events"
-	"arch/files"
+	"arch/model"
 	"log"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
-func (m *model) handleEvent(event any) {
-	if event == nil {
-		return
-	}
-
-	switch event := event.(type) {
-	case events.FileMeta:
-		m.fileMeta(event)
-
-	case events.FileHash:
-		m.fileHash(event)
-
-	case events.Progress:
-		m.progressEvent(event)
-
-	case events.ScanError:
-		m.Errors = append(m.Errors, event)
-
-	case events.ScreenSize:
-		m.screenSize = events.ScreenSize{Width: event.Width, Height: event.Height}
-
-	case events.Enter:
-		m.enter()
-
-	case events.Esc:
-		if m.currentPath == "" {
-			return
-		}
-		parts := strings.Split(m.currentPath, "/")
-		if len(parts) == 1 {
-			m.currentPath = ""
-		}
-		m.currentPath = filepath.Join(parts[:len(parts)-1]...)
-		m.sort()
-
-	case events.RevealInFinder:
-		folder := m.folders[m.currentPath]
-		if folder.selected != nil {
-			exec.Command("open", "-R", folder.selected.AbsName()).Start()
-		}
-
-	case events.MoveSelection:
-		m.moveSelection(event.Lines)
-		m.makeSelectedVisible()
-
-	case events.SelectFirst:
-		m.selectFirst()
-		m.makeSelectedVisible()
-
-	case events.SelectLast:
-		m.selectLast()
-		m.makeSelectedVisible()
-
-	case events.Scroll:
-		m.shiftOffset(event.Lines)
-
-	case events.MouseTarget:
-		m.mouseTarget(event.Command)
-
-	case events.PgUp:
-		m.shiftOffset(-m.fileTreeLines)
-		m.moveSelection(-m.fileTreeLines)
-
-	case events.PgDn:
-		m.shiftOffset(m.fileTreeLines)
-		m.moveSelection(m.fileTreeLines)
-
-	case events.KeepOne:
-		m.keepSelected()
-
-	case events.KeepAll:
-		// TODO: Implement, maybe?
-
-	case events.Delete:
-		m.deleteSelected()
-
-	case events.Quit:
-		m.quit = true
-
-	default:
-		log.Panicf("### unhandled event: %#v", event)
-	}
-}
-
-func (m *model) mouseTarget(cmd any) {
+func (m *controller) mouseTarget(cmd any) {
 	folder := m.folders[m.currentPath]
 	switch cmd := cmd.(type) {
 	case selectFile:
@@ -120,18 +33,18 @@ func (m *model) mouseTarget(cmd any) {
 
 }
 
-func (m *model) selectFirst() {
+func (m *controller) selectFirst() {
 	folder := m.folders[m.currentPath]
 	folder.selected = folder.entries[0]
 }
 
-func (m *model) selectLast() {
+func (m *controller) selectLast() {
 	folder := m.folders[m.currentPath]
 	entries := folder.entries
 	folder.selected = entries[len(entries)-1]
 }
 
-func (m *model) moveSelection(lines int) {
+func (m *controller) moveSelection(lines int) {
 	folder := m.folders[m.currentPath]
 	selected := folder.selected
 	if selected == nil {
@@ -163,11 +76,11 @@ func (m *model) moveSelection(lines int) {
 	}
 }
 
-func (m *model) enter() {
+func (m *controller) enter() {
 	folder := m.folders[m.currentPath]
 	selected := folder.selected
 	if selected != nil {
-		if selected.Kind == FileFolder {
+		if selected.Kind == model.FileFolder {
 			m.currentPath = selected.FullName
 			m.sort()
 		} else {
@@ -176,11 +89,11 @@ func (m *model) enter() {
 	}
 }
 
-func (m *model) isOrigin(archPath string) bool {
+func (m *controller) isOrigin(archPath string) bool {
 	return archPath == m.archivePaths[0]
 }
 
-func (m *model) archiveIdx(archivePath string) int {
+func (m *controller) archiveIdx(archivePath string) int {
 	for i := 0; i < len(m.archivePaths); i++ {
 		if archivePath == m.archivePaths[i] {
 			return i
@@ -190,7 +103,7 @@ func (m *model) archiveIdx(archivePath string) int {
 	return -1
 }
 
-func (m *model) shiftOffset(lines int) {
+func (m *controller) shiftOffset(lines int) {
 	folder := m.folders[m.currentPath]
 	nEntries := len(folder.entries)
 	folder.lineOffset += lines
@@ -201,16 +114,16 @@ func (m *model) shiftOffset(lines int) {
 	}
 }
 
-func (m *model) keepSelected() {
+func (m *controller) keepSelected() {
 	m.keepFile(m.folders[m.currentPath].selected)
 }
 
-func (m *model) keepFile(file *File) {
-	if file == nil || file.Kind != FileRegular {
+func (m *controller) keepFile(file *model.File) {
+	if file == nil || file.Kind != model.FileRegular {
 		return
 	}
 	filesForHash := m.byHash[file.Hash]
-	byArch := map[string][]*File{}
+	byArch := map[string][]*model.File{}
 	for _, fileForHash := range filesForHash {
 		byArch[fileForHash.ArchivePath] = append(byArch[fileForHash.ArchivePath], fileForHash)
 	}
@@ -219,9 +132,9 @@ func (m *model) keepFile(file *File) {
 		archFiles := byArch[archPath]
 		if len(archFiles) == 0 {
 			archive := m.archives[archPath]
-			archive.scanner.Send(files.Copy{Source: file.FileMeta})
+			archive.scanner.Send(model.CopyFile(file.FileMeta))
 			archive.copySize += file.Size
-			file.Status = Pending
+			file.Status = model.Pending
 			continue
 		}
 		keepIdx := 0
@@ -234,12 +147,12 @@ func (m *model) keepFile(file *File) {
 		for i, archFile := range archFiles {
 			if i == keepIdx {
 				if file.FullName != archFile.FullName {
-					m.archives[archPath].scanner.Send(files.Move{OldMeta: archFile.FileMeta, NewMeta: file.FileMeta})
-					archFile.Status = Pending
+					m.archives[archPath].scanner.Send(model.RenameFile{OldMeta: archFile.FileMeta, NewMeta: file.FileMeta})
+					archFile.Status = model.Pending
 				}
 			} else {
-				m.archives[archPath].scanner.Send(files.Delete{File: archFile.FileMeta})
-				archFile.Status = Pending
+				m.archives[archPath].scanner.Send(model.DeleteFile(archFile.FileMeta))
+				archFile.Status = model.Pending
 			}
 		}
 	}
@@ -247,9 +160,9 @@ func (m *model) keepFile(file *File) {
 	m.sort()
 }
 
-func (m *model) updateFolderStatus(path string) {
+func (m *controller) updateFolderStatus(path string) {
 	currentFolder := m.folders[path]
-	status := Identical
+	status := model.Identical
 	for _, entry := range currentFolder.entries {
 		status = status.Merge(entry.Status)
 	}
@@ -263,16 +176,16 @@ func (m *model) updateFolderStatus(path string) {
 	m.updateFolderStatus(dir(path))
 }
 
-func (m *model) deleteSelected() {
+func (m *controller) deleteSelected() {
 	m.deleteFile(m.folders[m.currentPath].selected)
 }
 
-func (m *model) deleteFile(file *File) {
-	if file == nil || file.Status != Conflict {
+func (m *controller) deleteFile(file *model.File) {
+	if file == nil || file.Status != model.Conflict {
 		return
 	}
 
-	if file.Kind == FileFolder {
+	if file.Kind == model.FileFolder {
 		m.deleteFolderFile(file)
 	} else {
 		m.deleteRegularFile(file)
@@ -281,9 +194,9 @@ func (m *model) deleteFile(file *File) {
 	m.sort()
 }
 
-func (m *model) deleteRegularFile(file *File) {
+func (m *controller) deleteRegularFile(file *model.File) {
 	filesForHash := m.byHash[file.Hash]
-	byArch := map[string][]*File{}
+	byArch := map[string][]*model.File{}
 	for _, fileForHash := range filesForHash {
 		byArch[fileForHash.ArchivePath] = append(byArch[fileForHash.ArchivePath], fileForHash)
 	}
@@ -292,12 +205,12 @@ func (m *model) deleteRegularFile(file *File) {
 	}
 
 	for _, file := range filesForHash {
-		m.archives[file.ArchivePath].scanner.Send(files.Delete{File: file.FileMeta})
-		file.Status = Pending
+		m.archives[file.ArchivePath].scanner.Send(model.DeleteFile(file.FileMeta))
+		file.Status = model.Pending
 	}
 }
 
-func (m *model) deleteFolderFile(file *File) {
+func (m *controller) deleteFolderFile(file *model.File) {
 	folder := m.folders[file.FullName]
 	for _, entry := range folder.entries {
 		m.deleteFile(entry)

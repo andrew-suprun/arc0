@@ -1,7 +1,7 @@
 package widgets
 
 import (
-	"arch/events"
+	"arch/model"
 	"fmt"
 	"strings"
 )
@@ -14,8 +14,8 @@ type Widget interface {
 }
 
 type Renderer interface {
-	AddMouseTarget(events.MouseTarget, Position, Size)
-	AddScrollArea(events.Scroll, Position, Size)
+	AddMouseTarget(model.MouseTarget, Position, Size)
+	AddScrollArea(model.Scroll, Position, Size)
 	SetStyle(style Style)
 	CurrentStyle() Style
 	Text([]rune, Position)
@@ -36,7 +36,7 @@ type Position struct {
 	X, Y int
 }
 
-//lint:ignore U1000 Casted into events.ScreenSize
+//lint:ignore U1000 Casted into model.ScreenSize
 type Size struct {
 	Width, Height int
 }

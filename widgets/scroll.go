@@ -1,19 +1,19 @@
 package widgets
 
 import (
-	"arch/events"
+	"arch/model"
 	"fmt"
 	"strings"
 )
 
 type scroll struct {
-	event      events.Scroll
+	event      model.Scroll
 	constraint Constraint
 	widget     func(size Size) Widget
 }
 
 // TODO: Separate Scroll into Scroll and Sized
-func Scroll(event events.Scroll, constraint Constraint, widget func(size Size) Widget) Widget {
+func Scroll(event model.Scroll, constraint Constraint, widget func(size Size) Widget) Widget {
 	return scroll{event: event, constraint: constraint, widget: widget}
 }
 

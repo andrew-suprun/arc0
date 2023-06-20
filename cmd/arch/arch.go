@@ -1,8 +1,7 @@
 package main
 
 import (
-	"arch/events"
-	"arch/files"
+	"arch/controller"
 	"arch/files/file_fs"
 	"arch/files/mock_fs"
 	"arch/lifecycle"
@@ -30,14 +29,14 @@ func main() {
 	}
 
 	lc := lifecycle.New()
-	events := make(events.EventChan, 10)
+	events := make(model.EventChan, 10)
 	renderer, err := tcell.NewRenderer(events)
 	if err != nil {
 		log.Printf("Failed to open terminal: %#v", err)
 		return
 	}
 
-	var fs files.FS
+	var fs model.FS
 
 	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
 		fs = mock_fs.NewFs(events, true)
@@ -47,7 +46,7 @@ func main() {
 		fs = file_fs.NewFs(events, lc)
 	}
 
-	model.Run(fs, renderer, events, paths)
+	controller.Run(fs, renderer, events, paths)
 
 	lc.Stop()
 	renderer.Stop()

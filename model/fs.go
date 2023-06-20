@@ -1,6 +1,4 @@
-package files
-
-import "arch/events"
+package model
 
 type FS interface {
 	NewScanner(archivePath string) Scanner
@@ -22,21 +20,17 @@ type HashArchive struct{}
 
 func (HashArchive) msg() {}
 
-type Copy struct {
-	Source events.FileMeta
+type CopyFile FileMeta
+
+func (CopyFile) msg() {}
+
+type RenameFile struct {
+	OldMeta FileMeta
+	NewMeta FileMeta
 }
 
-func (Copy) msg() {}
+func (RenameFile) msg() {}
 
-type Move struct {
-	OldMeta events.FileMeta
-	NewMeta events.FileMeta
-}
+type DeleteFile FileMeta
 
-func (Move) msg() {}
-
-type Delete struct {
-	File events.FileMeta
-}
-
-func (Delete) msg() {}
+func (DeleteFile) msg() {}

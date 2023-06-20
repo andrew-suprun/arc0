@@ -1,7 +1,7 @@
 package tcell
 
 import (
-	"arch/events"
+	"arch/model"
 	"arch/widgets"
 	"log"
 
@@ -9,7 +9,7 @@ import (
 )
 
 type tcellRenderer struct {
-	events           events.EventChan
+	events           model.EventChan
 	screen           tcell.Screen
 	lastMouseEvent   *tcell.EventMouse
 	mouseTargetAreas []mouseTargetArea
@@ -18,20 +18,20 @@ type tcellRenderer struct {
 }
 
 type mouseTargetArea struct {
-	events.MouseTarget
+	model.MouseTarget
 	widgets.Position
 	widgets.Size
 }
 
 type scrollArea struct {
-	events.Scroll
+	model.Scroll
 	widgets.Position
 	widgets.Size
 }
 
 var defaultStyle = widgets.Style{FG: 231, BG: 17}
 
-func NewRenderer(events events.EventChan) (*tcellRenderer, error) {
+func NewRenderer(events model.EventChan) (*tcellRenderer, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (device *tcellRenderer) handleEvent() {
 	case *tcell.EventResize:
 		device.screen.Sync()
 		w, h := tcellEvent.Size()
-		device.events <- events.ScreenSize{Width: w, Height: h}
+		device.events <- model.ScreenSize{Width: w, Height: h}
 
 	case *tcell.EventKey:
 		device.handleKeyEvent(tcellEvent)
@@ -86,10 +86,10 @@ func (device *tcellRenderer) handleEvent() {
 	}
 }
 
-func (d *tcellRenderer) AddMouseTarget(event events.MouseTarget, pos widgets.Position, size widgets.Size) {
+func (d *tcellRenderer) AddMouseTarget(event model.MouseTarget, pos widgets.Position, size widgets.Size) {
 	d.mouseTargetAreas = append(d.mouseTargetAreas, mouseTargetArea{MouseTarget: event, Position: pos, Size: size})
 }
-func (d *tcellRenderer) AddScrollArea(event events.Scroll, pos widgets.Position, size widgets.Size) {
+func (d *tcellRenderer) AddScrollArea(event model.Scroll, pos widgets.Position, size widgets.Size) {
 	d.scrollAreas = append(d.scrollAreas, scrollArea{Scroll: event, Position: pos, Size: size})
 }
 func (d *tcellRenderer) SetStyle(style widgets.Style) {
@@ -104,43 +104,43 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 	log.Printf("### key: %q  %v  %c", key.Name(), key.Modifiers(), key.Rune())
 	switch key.Name() {
 	case "Ctrl+C":
-		device.events <- events.Quit{}
+		device.events <- model.Quit{}
 
 	case "Enter":
-		device.events <- events.Enter{}
+		device.events <- model.Enter{}
 
 	case "Esc":
-		device.events <- events.Esc{}
+		device.events <- model.Esc{}
 
 	case "Ctrl+R":
-		device.events <- events.RevealInFinder{}
+		device.events <- model.RevealInFinder{}
 
 	case "Home":
-		device.events <- events.SelectFirst{}
+		device.events <- model.SelectFirst{}
 
 	case "End":
-		device.events <- events.SelectLast{}
+		device.events <- model.SelectLast{}
 
 	case "PgUp":
-		device.events <- events.PgUp{}
+		device.events <- model.PgUp{}
 
 	case "PgDn":
-		device.events <- events.PgDn{}
+		device.events <- model.PgDn{}
 
 	case "Up":
-		device.events <- events.MoveSelection{Lines: -1}
+		device.events <- model.RenameSelection{Lines: -1}
 
 	case "Down":
-		device.events <- events.MoveSelection{Lines: 1}
+		device.events <- model.RenameSelection{Lines: 1}
 
 	case "Ctrl+O":
-		device.events <- events.KeepOne{}
+		device.events <- model.KeepOne{}
 
 	case "Ctrl+A":
-		device.events <- events.KeepAll{}
+		device.events <- model.KeepAll{}
 
 	case "Backspace2": // Ctrl+Delete
-		device.events <- events.Delete{}
+		device.events <- model.Delete{}
 	}
 }
 

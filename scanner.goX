@@ -1,4 +1,4 @@
-package scanner
+// package scanner
 
 import (
 	"crypto/md5"
@@ -153,7 +153,7 @@ func dedup() {
 		}
 	}
 
-	totalRemoved := 0
+	totalDeleted := 0
 	for _, names := range hashMap {
 		if len(names) == 1 {
 			continue
@@ -177,12 +177,12 @@ func dedup() {
 					log.Printf("    to %q\n", to)
 					os.MkdirAll(filepath.Dir(to), 0755)
 					os.Rename(from, to)
-					totalRemoved++
+					totalDeleted++
 				}
 			}
 		}
 	}
-	if totalRemoved > 0 {
+	if totalDeleted > 0 {
 		hashPath(basePath)
 	}
 }

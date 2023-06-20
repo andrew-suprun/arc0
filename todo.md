@@ -1,11 +1,11 @@
-* handle 'keep one' event on folders
-* handle 'keep all' event
+* file copied/deleted/moved events
 * handle 'delete' event
 * reflect stats in status line
 * add descriptors to ScanErrors
 * file operations
 * store hashes as hex encoded strings
 * remove directories that only contain .DS_Store and ._* files
+* ??? handle 'keep all' event 
 
 * scanner:
 

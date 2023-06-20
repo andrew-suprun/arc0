@@ -1,7 +1,7 @@
-package model
+package controller
 
 import (
-	"arch/events"
+	"arch/model"
 	w "arch/widgets"
 	"fmt"
 	"path/filepath"
@@ -21,7 +21,7 @@ var (
 	col = w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}}
 )
 
-func (m *model) view() w.Widget {
+func (m *controller) view() w.Widget {
 	return w.Column(col,
 		m.title(),
 		m.folderView(),
@@ -29,13 +29,13 @@ func (m *model) view() w.Widget {
 	)
 }
 
-func (m *model) title() w.Widget {
+func (m *controller) title() w.Widget {
 	return w.Row(row,
 		w.Styled(styleAppTitle, w.Text(" Archiver").Flex(1)),
 	)
 }
 
-func (m *model) folderView() w.Widget {
+func (m *controller) folderView() w.Widget {
 	folder := m.folders[m.currentPath]
 	return w.Column(col,
 		m.breadcrumbs(),
@@ -47,7 +47,7 @@ func (m *model) folderView() w.Widget {
 				w.MouseTarget(sortBySize, w.Text(fmt.Sprintf("%22s", "Size"+sortIndicator(m, sortBySize)+" "))),
 			),
 		),
-		w.Scroll(events.Scroll{}, w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}},
+		w.Scroll(model.Scroll{}, w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}},
 			func(size w.Size) w.Widget {
 				m.fileTreeLines = size.Height
 				if folder.lineOffset > len(folder.entries)+1-size.Height {
@@ -58,7 +58,7 @@ func (m *model) folderView() w.Widget {
 				}
 				rows := []w.Widget{}
 				i := 0
-				var file *File
+				var file *model.File
 				for i, file = range folder.entries[folder.lineOffset:] {
 					if i >= size.Height {
 						break
@@ -76,7 +76,7 @@ func (m *model) folderView() w.Widget {
 	)
 }
 
-func (m *model) fileStatus(file *File) []w.Widget {
+func (m *controller) fileStatus(file *model.File) []w.Widget {
 	result := []w.Widget{}
 
 	allOnes := true
@@ -87,18 +87,22 @@ func (m *model) fileStatus(file *File) []w.Widget {
 			break
 		}
 	}
-	if file.Kind == FileRegular {
+	if file.Kind == model.FileRegular {
 		result = append(result, w.Text(" "))
-		for _, count := range file.Counts {
-			if allOnes {
-				result = append(result, w.Text(" "))
-			} else if count == 0 {
-				result = append(result, w.Text("-"))
-			} else if count > 9 {
-				result = append(result, w.Text("*"))
-			} else {
-				result = append(result, w.Text(fmt.Sprint(count)))
+		if len(file.Counts) == len(m.archives) {
+			for _, count := range file.Counts {
+				if allOnes {
+					result = append(result, w.Text(" "))
+				} else if count == 0 {
+					result = append(result, w.Text("-"))
+				} else if count > 9 {
+					result = append(result, w.Text("*"))
+				} else {
+					result = append(result, w.Text(fmt.Sprint(count)))
+				}
 			}
+		} else {
+			result = append(result, w.Text("").Width(len(m.archives)))
 		}
 		result = append(result, w.Text("   "))
 	} else {
@@ -113,7 +117,7 @@ func (m *model) fileStatus(file *File) []w.Widget {
 	return result
 }
 
-func sortIndicator(m *model, column sortColumn) string {
+func sortIndicator(m *controller, column sortColumn) string {
 	folder := m.folders[m.currentPath]
 	if column == folder.sortColumn {
 		if folder.sortAscending[column] {
@@ -124,7 +128,7 @@ func sortIndicator(m *model, column sortColumn) string {
 	return ""
 }
 
-func (m *model) breadcrumbs() w.Widget {
+func (m *controller) breadcrumbs() w.Widget {
 	names := strings.Split(m.currentPath, "/")
 	widgets := make([]w.Widget, 0, len(names)*2+2)
 	widgets = append(widgets, w.MouseTarget(selectFolder(m.folders[""].info),
@@ -142,7 +146,7 @@ func (m *model) breadcrumbs() w.Widget {
 	return w.Row(row, widgets...)
 }
 
-func (m *model) progress() w.Widget {
+func (m *controller) progress() w.Widget {
 	pathLen := 0
 	for path := range m.archives {
 		if pathLen < len(path) {
@@ -153,11 +157,11 @@ func (m *model) progress() w.Widget {
 	for _, path := range m.archivePaths {
 		archive := *m.archives[path]
 		state := archive.progress.ProgressState
-		if state == events.HashFileTree || state == events.CopyFile {
+		if state == model.HashingFileTree || state == model.CopyingFile {
 			progress := archive.progressValue()
 			stats = append(stats,
 				w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}},
-					w.Text(archive.progressLabel()+path).Width(pathLen+11),
+					w.Text(archive.progressLabel()+path).Width(pathLen+10),
 					w.Text(fmt.Sprintf(" %6.2f%%", progress*100)), w.Text(" "),
 					w.Styled(styleProgressBar,
 						w.ProgressBar(progress),
@@ -174,11 +178,11 @@ func (m *model) progress() w.Widget {
 
 func (a *archive) progressLabel() string {
 	switch a.progress.ProgressState {
-	case events.HashFileTree:
-		return " Scanning: "
+	case model.HashingFileTree:
+		return " Hashing: "
 
-	case events.CopyFile:
-		return " Copying:  "
+	case model.CopyingFile:
+		return " Copying: "
 
 	default:
 		return ""
@@ -187,11 +191,11 @@ func (a *archive) progressLabel() string {
 
 func (a *archive) progressValue() float64 {
 	switch a.progress.ProgressState {
-	case events.HashFileTree:
+	case model.HashingFileTree:
 		return float64(a.progress.Processed) / float64(a.totalSize)
 
-	case events.CopyFile:
-		return float64(a.progress.Processed) / float64(a.copySize)
+	case model.CopyingFile:
+		return float64(a.totalCopied+a.progress.Processed) / float64(a.copySize)
 
 	default:
 		return 0
@@ -214,9 +218,9 @@ func formatSize(size uint64) string {
 	return b.String()
 }
 
-func styleFile(file *File, selected bool) w.Style {
+func styleFile(file *model.File, selected bool) w.Style {
 	bg, flags := byte(17), w.Flags(0)
-	if file.Kind == FileFolder {
+	if file.Kind == model.FileFolder {
 		bg = byte(18)
 	}
 	result := w.Style{FG: statusColor(file.Status), BG: bg, Flags: flags}
@@ -228,15 +232,15 @@ func styleFile(file *File, selected bool) w.Style {
 
 var styleBreadcrumbs = w.Style{FG: 250, BG: 17, Flags: w.Bold + w.Italic}
 
-func statusColor(status FileStatus) byte {
+func statusColor(status model.FileStatus) byte {
 	switch status {
-	case Identical:
+	case model.Identical:
 		return 250
-	case Pending:
+	case model.Pending:
 		return 214
-	case Resolved:
+	case model.Resolved:
 		return 82
-	case Conflict:
+	case model.Conflict:
 		return 196
 	}
 	return 231
