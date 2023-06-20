@@ -23,16 +23,16 @@ func NewFs(events model.EventChan, scan bool) model.FS {
 type scanner struct {
 	scan        bool
 	events      model.EventChan
-	archivePath string
+	root        string
 	totalSize   uint64
 	totalHashed uint64
 }
 
-func (fsys *mockFs) NewScanner(archivePath string) model.Scanner {
+func (fsys *mockFs) NewScanner(root string) model.Scanner {
 	return &scanner{
-		scan:        fsys.scan,
-		events:      fsys.events,
-		archivePath: archivePath,
+		scan:   fsys.scan,
+		events: fsys.events,
+		root:   root,
 	}
 }
 
@@ -43,37 +43,37 @@ func (s *scanner) Handler(msg model.Msg) bool {
 	case model.HashArchive:
 		return s.hashArchive()
 	case model.CopyFile:
-		return s.copy(model.FileMeta(msg))
+		return s.copy(msg)
 	case model.RenameFile:
-		return s.move(msg.OldMeta, msg.NewMeta)
+		return s.rename(msg)
 	case model.DeleteFile:
-		return s.delete(model.FileMeta(msg))
+		return s.delete(msg)
 	}
 	log.Panicf("### ERROR: Unhandled scanner message: %#v", msg)
 	return false
 }
 
 func (s *scanner) scanArchive() bool {
-	archFiles := metas[s.archivePath]
+	archFiles := metas[s.root]
 	for _, meta := range archFiles {
 		s.events <- model.FileScanned{
-			INode:       meta.INode,
-			ArchivePath: s.archivePath,
-			FullName:    meta.FullName,
-			Size:        meta.Size,
-			ModTime:     meta.ModTime,
+			INode:   meta.INode,
+			Root:    s.root,
+			Name:    meta.Name,
+			Size:    meta.Size,
+			ModTime: meta.ModTime,
 		}
 		s.totalSize += meta.Size
 	}
 	s.events <- model.Progress{
-		ArchivePath:   s.archivePath,
+		Root:          s.root,
 		ProgressState: model.WalkingFileTreeComplete,
 	}
 	return true
 }
 
 func (s *scanner) hashArchive() bool {
-	archFiles := metas[s.archivePath]
+	archFiles := metas[s.root]
 	scans := make([]bool, len(archFiles))
 
 	for i := range archFiles {
@@ -83,13 +83,13 @@ func (s *scanner) hashArchive() bool {
 		if !scans[i] {
 			meta := archFiles[i]
 			s.events <- model.FileHashed{
-				INode:       meta.INode,
-				ArchivePath: meta.ArchivePath,
-				Hash:        meta.Hash,
+				INode: meta.INode,
+				Root:  meta.Root,
+				Hash:  meta.Hash,
 			}
 			s.totalHashed += meta.Size
 			s.events <- model.Progress{
-				ArchivePath:   s.archivePath,
+				Root:          s.root,
 				ProgressState: model.HashingFileTree,
 				Processed:     s.totalHashed,
 			}
@@ -98,12 +98,12 @@ func (s *scanner) hashArchive() bool {
 	for i := range archFiles {
 		if scans[i] {
 			meta := archFiles[i]
-			for hashed := uint64(0); ; hashed += 20000 {
+			for hashed := uint64(0); ; hashed += 50000 {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
 				s.events <- model.Progress{
-					ArchivePath:   meta.ArchivePath,
+					Root:          meta.Root,
 					ProgressState: model.HashingFileTree,
 					Processed:     s.totalHashed + hashed,
 				}
@@ -114,49 +114,68 @@ func (s *scanner) hashArchive() bool {
 			}
 			s.totalHashed += meta.Size
 			s.events <- model.FileHashed{
-				INode:       meta.INode,
-				ArchivePath: meta.ArchivePath,
-				Hash:        meta.Hash,
+				INode: meta.INode,
+				Root:  meta.Root,
+				Hash:  meta.Hash,
 			}
 		}
 	}
 	s.events <- model.Progress{
-		ArchivePath:   s.archivePath,
+		Root:          s.root,
 		ProgressState: model.HashingFileTreeComplete,
 	}
 	return true
 }
 
-func (s *scanner) copy(meta model.FileMeta) bool {
-	log.Printf("### scanner %q: copy from %#v", s.archivePath, meta.AbsName())
+func (s *scanner) copy(msg model.CopyFile) bool {
+	log.Printf("### scanner copy: arch=%q: from %q/%q", s.root, msg.Root, msg.Name)
+	var size uint64
+	for _, meta := range metas[msg.Root] {
+		if meta.Name == msg.Name {
+			size = meta.Size
+			break
+		}
+	}
+
 	for copied := uint64(0); ; copied += 10000 {
-		if copied > meta.Size {
-			copied = meta.Size
+		if copied > size {
+			copied = size
 		}
 		s.events <- model.Progress{
-			ArchivePath:   s.archivePath,
+			Root:          s.root,
 			ProgressState: model.CopyingFile,
 			Processed:     copied,
 		}
-		if copied == meta.Size {
+		if copied == size {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
-	s.events <- model.FileCopied(meta)
+	log.Printf("### mockFs.Copied: root=%q, from=%q, name=%q, size=%d", s.root, msg.Root, msg.Name, size)
+	s.events <- model.FileCopied{
+		FromRoot: msg.Root,
+		ToRoot:   s.root,
+		Name:     msg.Name,
+	}
 	return true
 }
 
-func (s *scanner) move(from, to model.FileMeta) bool {
-	log.Printf("### scanner %q: move from %#v to %#v", s.archivePath, from.AbsName(), to.AbsName())
-	from.FullName = to.FullName
-	s.events <- model.FileRenamed(from)
+func (s *scanner) rename(msg model.RenameFile) bool {
+	// log.Printf("### scanner move: arch=%q from %#v to %#v", s.root, from.AbsName(), to.AbsName())
+	s.events <- model.FileRenamed{
+		Root:    s.root,
+		OldName: msg.OldName,
+		NewName: msg.NewName,
+	}
 	return true
 }
 
-func (s *scanner) delete(meta model.FileMeta) bool {
-	log.Printf("### scanner %q: delete file %#v", s.archivePath, meta.AbsName())
-	s.events <- model.FileDeleted(meta)
+func (s *scanner) delete(msg model.DeleteFile) bool {
+	// log.Printf("### scanner delete: arch=%q file %#v", s.root, meta.AbsName())
+	s.events <- model.FileDeleted{
+		Root: s.root,
+		Name: msg.Name,
+	}
 	return true
 }
 
@@ -165,12 +184,12 @@ var end = time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 var duration = end.Sub(beginning)
 
 type fileMeta struct {
-	INode       uint64
-	ArchivePath string
-	FullName    string
-	Hash        string
-	Size        uint64
-	ModTime     time.Time
+	INode   uint64
+	Root    string
+	Name    string
+	Hash    string
+	Size    uint64
+	ModTime time.Time
 }
 
 var sizes = map[string]uint64{}
@@ -180,7 +199,7 @@ var inode = uint64(0)
 func init() {
 	sizes["yyyy"] = 50000000
 	sizes["hhhh"] = 50000000
-	for archPath, metaStrings := range metaMap {
+	for root, metaStrings := range metaMap {
 		for _, meta := range metaStrings {
 			parts := strings.Split(meta, ":")
 			name := parts[0]
@@ -197,14 +216,14 @@ func init() {
 			}
 			inode++
 			file := &fileMeta{
-				INode:       inode,
-				ArchivePath: archPath,
-				FullName:    name,
-				Hash:        hash,
-				Size:        size,
-				ModTime:     modTime,
+				INode:   inode,
+				Root:    root,
+				Name:    name,
+				Hash:    hash,
+				Size:    size,
+				ModTime: modTime,
 			}
-			metas[archPath] = append(metas[archPath], file)
+			metas[root] = append(metas[root], file)
 		}
 	}
 }
@@ -231,6 +250,7 @@ var metaMap = map[string][]string{
 		"x/y/z.txt:zzzz",
 		"yyy.txt:yyyy",
 		"1111:0000",
+		"3333:3333",
 	},
 	"copy 2": {
 		"a/b/c/f.txt:hhhh",
@@ -239,5 +259,6 @@ var metaMap = map[string][]string{
 		"x:asdfg",
 		"q/w/e/r/t/y.txt:12345",
 		"2222:0000",
+		"3333:3333",
 	},
 }

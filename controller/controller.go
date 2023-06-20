@@ -12,7 +12,7 @@ type controller struct {
 	events   model.EventChan
 	renderer widgets.Renderer
 
-	archivePaths       []string
+	roots              []string
 	archives           map[string]*archive
 	bySize             map[uint64][]*model.File
 	byHash             map[string][]*model.File
@@ -34,6 +34,7 @@ type archive struct {
 	copySize    uint64
 	totalCopied uint64
 	byINode     map[uint64]*model.File
+	byName      map[string]*model.File
 }
 
 type folder struct {
@@ -51,20 +52,21 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, paths []str
 		sortAscending: []bool{true, false, false, false},
 	}
 	m := &controller{
-		fs:           fs,
-		renderer:     renderer,
-		events:       ev,
-		archivePaths: paths,
-		archives:     map[string]*archive{},
-		bySize:       map[uint64][]*model.File{},
-		byHash:       map[string][]*model.File{},
-		folders:      map[string]*folder{"": rootFolder},
+		fs:       fs,
+		renderer: renderer,
+		events:   ev,
+		roots:    paths,
+		archives: map[string]*archive{},
+		bySize:   map[uint64][]*model.File{},
+		byHash:   map[string][]*model.File{},
+		folders:  map[string]*folder{"": rootFolder},
 	}
 	for _, path := range paths {
 		s := fs.NewScanner(path)
 		m.archives[path] = &archive{
 			scanner: actor.NewActor(s.Handler),
 			byINode: map[uint64]*model.File{},
+			byName:  map[string]*model.File{},
 		}
 	}
 

@@ -25,7 +25,7 @@ import (
 type scanner struct {
 	events      model.EventChan
 	lc          *lifecycle.Lifecycle
-	archivePath string
+	root        string
 	infos       map[uint64]*fileInfo
 	totalHashed uint64
 }
@@ -42,11 +42,11 @@ func (s *scanner) Handler(msg model.Msg) bool {
 	case model.HashArchive:
 		return s.hashArchive()
 	case model.CopyFile:
-		return s.copy(model.FileMeta(msg))
+		return s.copy(msg)
 	case model.RenameFile:
-		return s.move(msg.OldMeta, msg.NewMeta)
+		return s.rename(msg)
 	case model.DeleteFile:
-		return s.remove(model.FileMeta(msg))
+		return s.delete(msg)
 	}
 	log.Panicf("### ERROR: Unhandled scanner message: %#v", msg)
 	return false
@@ -60,12 +60,12 @@ func (s *scanner) scanArchive() bool {
 
 	defer func() {
 		s.events <- model.Progress{
-			ArchivePath:   s.archivePath,
+			Root:          s.root,
 			ProgressState: model.WalkingFileTreeComplete,
 		}
 	}()
 
-	fsys := os.DirFS(s.archivePath)
+	fsys := os.DirFS(s.root)
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if s.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
@@ -74,8 +74,8 @@ func (s *scanner) scanArchive() bool {
 		if err != nil {
 			s.events <- model.Error{
 				Meta: model.FileMeta{
-					ArchivePath: s.archivePath,
-					FullName:    path,
+					Root: s.root,
+					Name: path,
 				},
 				Error: err}
 			return nil
@@ -85,8 +85,8 @@ func (s *scanner) scanArchive() bool {
 		if err != nil {
 			s.events <- model.Error{
 				Meta: model.FileMeta{
-					ArchivePath: s.archivePath,
-					FullName:    path,
+					Root: s.root,
+					Name: path,
 				},
 				Error: err}
 			return nil
@@ -96,11 +96,11 @@ func (s *scanner) scanArchive() bool {
 		modTime = modTime.UTC().Round(time.Second)
 
 		fileMeta := model.FileMeta{
-			INode:       sys.Ino,
-			ArchivePath: s.archivePath,
-			FullName:    path,
-			ModTime:     modTime,
-			Size:        uint64(meta.Size()),
+			INode:   sys.Ino,
+			Root:    s.root,
+			Name:    path,
+			ModTime: modTime,
+			Size:    uint64(meta.Size()),
 		}
 
 		s.infos[sys.Ino] = &fileInfo{
@@ -124,7 +124,7 @@ func (s *scanner) hashArchive() bool {
 
 	defer func() {
 		s.events <- model.Progress{
-			ArchivePath:   s.archivePath,
+			Root:          s.root,
 			ProgressState: model.HashingFileTreeComplete,
 		}
 	}()
@@ -146,9 +146,9 @@ func (s *scanner) hashArchive() bool {
 			s.hashFile(fileInfos[i])
 
 			s.events <- model.FileHashed{
-				INode:       info.meta.INode,
-				ArchivePath: info.meta.ArchivePath,
-				Hash:        info.hash,
+				INode: info.meta.INode,
+				Root:  info.meta.Root,
+				Hash:  info.hash,
 			}
 		}
 	}
@@ -159,8 +159,8 @@ func (s *scanner) hashFile(info *fileInfo) {
 	hash := sha256.New()
 	buf := make([]byte, 1024*1024)
 
-	fsys := os.DirFS(s.archivePath)
-	file, err := fsys.Open(info.meta.FullName)
+	fsys := os.DirFS(s.root)
+	file, err := fsys.Open(info.meta.Name)
 	if err != nil {
 		s.events <- model.Error{Meta: info.meta, Error: err}
 		return
@@ -197,7 +197,7 @@ func (s *scanner) hashFile(info *fileInfo) {
 
 		s.totalHashed += uint64(nr)
 		s.events <- model.Progress{
-			ArchivePath:   s.archivePath,
+			Root:          s.root,
 			ProgressState: model.HashingFileTree,
 			Processed:     s.totalHashed,
 		}
@@ -206,7 +206,7 @@ func (s *scanner) hashFile(info *fileInfo) {
 }
 
 func (s *scanner) readMeta() {
-	absHashFileName := filepath.Join(s.archivePath, hashFileName)
+	absHashFileName := filepath.Join(s.root, hashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
 	if err != nil {
 		return
@@ -233,13 +233,13 @@ func (s *scanner) readMeta() {
 			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
 				info.hash = hash
 				s.events <- model.FileHashed{
-					INode:       iNode,
-					ArchivePath: s.archivePath,
-					Hash:        hash,
+					INode: iNode,
+					Root:  s.root,
+					Hash:  hash,
 				}
 				s.totalHashed += info.meta.Size
 				s.events <- model.Progress{
-					ArchivePath:   s.archivePath,
+					Root:          s.root,
 					ProgressState: model.HashingFileTree,
 					Processed:     s.totalHashed,
 				}
@@ -255,14 +255,14 @@ func (s *scanner) storeMeta() error {
 	for iNode, info := range s.infos {
 		result = append(result, []string{
 			fmt.Sprint(iNode),
-			norm.NFC.String(info.meta.FullName),
+			norm.NFC.String(info.meta.Name),
 			fmt.Sprint(info.meta.Size),
 			info.meta.ModTime.UTC().Format(time.RFC3339Nano),
 			info.hash,
 		})
 	}
 
-	absHashFileName := filepath.Join(s.archivePath, hashFileName)
+	absHashFileName := filepath.Join(s.root, hashFileName)
 	hashInfoFile, err := os.Create(absHashFileName)
 
 	if err != nil {
@@ -273,17 +273,17 @@ func (s *scanner) storeMeta() error {
 	return err
 }
 
-func (s *scanner) copy(from model.FileMeta) bool {
-	log.Printf("### copy from %s to %s", from.AbsName(), s.archivePath)
+func (s *scanner) copy(from model.CopyFile) bool {
+	log.Printf("### scanner copy: arch=%q from %q/%q", s.root, from.Root, from.Name)
 	return true
 }
 
-func (s *scanner) move(oldMeta, newMeta model.FileMeta) bool {
-	log.Printf("### rename from %#v as %#v", oldMeta.AbsName(), newMeta.AbsName())
+func (s *scanner) rename(msg model.RenameFile) bool {
+	log.Printf("### scanner move: arch=%q from %q to %q", s.root, msg.OldName, msg.NewName)
 	return true
 }
 
-func (s *scanner) remove(file model.FileMeta) bool {
-	log.Printf("### remove file %#v", file.AbsName())
+func (s *scanner) delete(msg model.DeleteFile) bool {
+	log.Printf("### scanner delete: arch=%q name=%q", s.root, msg.Name)
 	return true
 }

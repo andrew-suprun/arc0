@@ -19,24 +19,25 @@ func (m *controller) fileMeta(meta model.FileScanned) {
 
 	m.bySize[meta.Size] = append(m.bySize[meta.Size], file)
 
-	archive := m.archives[meta.ArchivePath]
+	archive := m.archives[meta.Root]
 	archive.totalSize += meta.Size
 	archive.byINode[meta.INode] = file
+	archive.byName[meta.Name] = file
 
-	if m.isOrigin(file.ArchivePath) {
+	if m.isOrigin(file.Root) {
 		m.addToFolder(file, meta.Size, meta.ModTime)
 	}
 }
 
 func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
-	parentFolder := m.folders[dir(file.FullName)]
+	parentFolder := m.folders[dir(file.Name)]
 	if parentFolder == nil {
 		parentFolder = &folder{
 			info: &model.File{
 				FileMeta: model.FileMeta{
-					FullName: dir(file.FullName),
-					Size:     file.Size,
-					ModTime:  file.ModTime,
+					Name:    dir(file.Name),
+					Size:    file.Size,
+					ModTime: file.ModTime,
 				},
 				Kind:   model.FileFolder,
 				Status: file.Status,
@@ -44,7 +45,7 @@ func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 			sortAscending: []bool{true, false, false, false},
 			entries:       []*model.File{file},
 		}
-		m.folders[dir(file.FullName)] = parentFolder
+		m.folders[dir(file.Name)] = parentFolder
 	} else {
 		if file.Kind == model.FileRegular {
 			parentFolder.entries = append(parentFolder.entries, file)
@@ -53,7 +54,7 @@ func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 		sameFolder := false
 		if file.Kind == model.FileFolder {
 			for _, entry := range parentFolder.entries {
-				if entry.Kind == model.FileFolder && name(file.FullName) == name(entry.FullName) {
+				if entry.Kind == model.FileFolder && name(file.Name) == name(entry.Name) {
 					sameFolder = true
 					break
 				}
@@ -68,7 +69,7 @@ func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 			parentFolder.info.ModTime = modTime
 		}
 	}
-	if dir(file.FullName) != "" {
+	if dir(file.Name) != "" {
 		m.addToFolder(parentFolder.info, size, modTime)
 	}
 }
@@ -109,7 +110,7 @@ func (m *controller) makeSelectedVisible() {
 }
 
 func (m *controller) fileHashed(fileHash model.FileHashed) {
-	archive := m.archives[fileHash.ArchivePath]
+	archive := m.archives[fileHash.Root]
 	file := archive.byINode[fileHash.INode]
 	file.Hash = fileHash.Hash
 	filesBySize := m.bySize[file.Size]
@@ -128,19 +129,19 @@ func (m *controller) fileHashed(fileHash model.FileHashed) {
 			if file.Hash != hash {
 				continue
 			}
-			filesForHash[file.ArchivePath] = append(filesForHash[file.ArchivePath], file)
+			filesForHash[file.Root] = append(filesForHash[file.Root], file)
 		}
 		counts := make([]int, len(m.archives))
 		for path, files := range filesForHash {
 			counts[m.archiveIdx(path)] = len(files)
 		}
-		for archPath := range filesForHash {
-			for i := range filesForHash[archPath] {
-				filesForHash[archPath][i].Counts = counts
+		for root := range filesForHash {
+			for i := range filesForHash[root] {
+				filesForHash[root][i].Counts = counts
 			}
 		}
 
-		originFiles := filesForHash[m.archivePaths[0]]
+		originFiles := filesForHash[m.roots[0]]
 		if len(originFiles) == 0 {
 			for _, files := range filesForHash {
 				for _, file := range files {
@@ -160,7 +161,7 @@ func (m *controller) fileHashed(fileHash model.FileHashed) {
 }
 
 func (m *controller) progressEvent(event model.Progress) {
-	m.archives[event.ArchivePath].progress = event
+	m.archives[event.Root].progress = event
 
 	if event.ProgressState == model.WalkingFileTreeComplete {
 		allWalksComplete := true
@@ -178,8 +179,19 @@ func (m *controller) progressEvent(event model.Progress) {
 	}
 }
 
-func (m *controller) fileCopied(meta model.FileCopied) {
-	log.Printf("### fileCopied: %#v", meta)
+func (m *controller) fileCopied(event model.FileCopied) {
+	fromArchive := m.archives[event.FromRoot]
+	toArchive := m.archives[event.ToRoot]
+	meta := fromArchive.byName[event.Name]
+	toArchive.totalCopied += meta.Size
+	toArchive.progress.Processed = 0
+	log.Printf("### fileCopied %q: %q/%q  copySize=%d  totalCopied=%d",
+		event.ToRoot, event.FromRoot, event.Name, toArchive.copySize, toArchive.totalCopied)
+	if toArchive.totalCopied == toArchive.copySize {
+		toArchive.totalCopied = 0
+		toArchive.copySize = 0
+		toArchive.progress.ProgressState = model.HashingFileTreeComplete
+	}
 }
 
 func (m *controller) fileRenamed(meta model.FileRenamed) {

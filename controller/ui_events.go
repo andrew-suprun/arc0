@@ -19,7 +19,7 @@ func (m *controller) mouseTarget(cmd any) {
 		m.lastMouseEventTime = time.Now()
 
 	case selectFolder:
-		m.currentPath = cmd.FullName
+		m.currentPath = cmd.Name
 
 	case sortColumn:
 		if cmd == folder.sortColumn {
@@ -81,7 +81,7 @@ func (m *controller) enter() {
 	selected := folder.selected
 	if selected != nil {
 		if selected.Kind == model.FileFolder {
-			m.currentPath = selected.FullName
+			m.currentPath = selected.Name
 			m.sort()
 		} else {
 			exec.Command("open", selected.AbsName()).Start()
@@ -89,17 +89,17 @@ func (m *controller) enter() {
 	}
 }
 
-func (m *controller) isOrigin(archPath string) bool {
-	return archPath == m.archivePaths[0]
+func (m *controller) isOrigin(root string) bool {
+	return root == m.roots[0]
 }
 
-func (m *controller) archiveIdx(archivePath string) int {
-	for i := 0; i < len(m.archivePaths); i++ {
-		if archivePath == m.archivePaths[i] {
+func (m *controller) archiveIdx(root string) int {
+	for i := 0; i < len(m.roots); i++ {
+		if root == m.roots[i] {
 			return i
 		}
 	}
-	log.Panicf("### Invalid archive path: %q", archivePath)
+	log.Panicf("### Invalid archive path: %q", root)
 	return -1
 }
 
@@ -125,38 +125,42 @@ func (m *controller) keepFile(file *model.File) {
 	filesForHash := m.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
 	for _, fileForHash := range filesForHash {
-		byArch[fileForHash.ArchivePath] = append(byArch[fileForHash.ArchivePath], fileForHash)
+		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
 	}
 
-	for _, archPath := range m.archivePaths {
-		archFiles := byArch[archPath]
+	for _, root := range m.roots {
+		archFiles := byArch[root]
 		if len(archFiles) == 0 {
-			archive := m.archives[archPath]
-			archive.scanner.Send(model.CopyFile(file.FileMeta))
+			archive := m.archives[root]
+			archive.scanner.Send(model.CopyFile{
+				Root: file.Root,
+				Name: file.Name,
+			})
 			archive.copySize += file.Size
 			file.Status = model.Pending
+			log.Printf("### keepFile %q: root=%q  name=%q  copySize=%d", root, file.Root, file.Name, archive.copySize)
 			continue
 		}
 		keepIdx := 0
 		for i, archFile := range archFiles {
-			if archFile == file || archFile.FullName == file.FullName {
+			if archFile == file || archFile.Name == file.Name {
 				keepIdx = i
 				break
 			}
 		}
 		for i, archFile := range archFiles {
 			if i == keepIdx {
-				if file.FullName != archFile.FullName {
-					m.archives[archPath].scanner.Send(model.RenameFile{OldMeta: archFile.FileMeta, NewMeta: file.FileMeta})
+				if file.Name != archFile.Name {
+					m.archives[root].scanner.Send(model.RenameFile{OldName: archFile.FileMeta.Name, NewName: file.FileMeta.Name})
 					archFile.Status = model.Pending
 				}
 			} else {
-				m.archives[archPath].scanner.Send(model.DeleteFile(archFile.FileMeta))
+				m.archives[root].scanner.Send(model.DeleteFile{Name: archFile.FileMeta.Name})
 				archFile.Status = model.Pending
 			}
 		}
 	}
-	m.updateFolderStatus(dir(file.FullName))
+	m.updateFolderStatus(dir(file.Name))
 	m.sort()
 }
 
@@ -190,7 +194,7 @@ func (m *controller) deleteFile(file *model.File) {
 	} else {
 		m.deleteRegularFile(file)
 	}
-	m.updateFolderStatus(dir(file.FullName))
+	m.updateFolderStatus(dir(file.Name))
 	m.sort()
 }
 
@@ -198,20 +202,20 @@ func (m *controller) deleteRegularFile(file *model.File) {
 	filesForHash := m.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
 	for _, fileForHash := range filesForHash {
-		byArch[fileForHash.ArchivePath] = append(byArch[fileForHash.ArchivePath], fileForHash)
+		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
 	}
-	if len(byArch[m.archivePaths[0]]) > 0 {
+	if len(byArch[m.roots[0]]) > 0 {
 		return
 	}
 
 	for _, file := range filesForHash {
-		m.archives[file.ArchivePath].scanner.Send(model.DeleteFile(file.FileMeta))
+		m.archives[file.Root].scanner.Send(model.DeleteFile{Name: file.FileMeta.Name})
 		file.Status = model.Pending
 	}
 }
 
 func (m *controller) deleteFolderFile(file *model.File) {
-	folder := m.folders[file.FullName]
+	folder := m.folders[file.Name]
 	for _, entry := range folder.entries {
 		m.deleteFile(entry)
 	}

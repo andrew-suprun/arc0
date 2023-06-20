@@ -15,27 +15,33 @@ type FileScanned FileMeta
 func (FileScanned) event() {}
 
 type FileHashed struct {
-	ArchivePath string
-	INode       uint64
-	Hash        string
+	Root  string
+	INode uint64
+	Hash  string
 }
 
 func (FileHashed) event() {}
 
-type FileCopied FileMeta
+type FileCopied struct {
+	FromRoot, ToRoot, Name string
+}
 
 func (FileCopied) event() {}
 
-type FileRenamed FileMeta
+type FileRenamed struct {
+	Root, OldName, NewName string
+}
 
 func (FileRenamed) event() {}
 
-type FileDeleted FileMeta
+type FileDeleted struct {
+	Root, Name string
+}
 
 func (FileDeleted) event() {}
 
 type Progress struct {
-	ArchivePath   string
+	Root          string
 	ProgressState ProgressState
 	Processed     uint64
 }
@@ -117,7 +123,7 @@ type MouseTarget struct{ Command any }
 func (MouseTarget) event() {}
 
 func (t MouseTarget) String() string {
-	return fmt.Sprintf("MouseTarget(%s)", t.Command)
+	return fmt.Sprintf("MouseTarget(%q)", t.Command)
 }
 
 type PgUp struct{}

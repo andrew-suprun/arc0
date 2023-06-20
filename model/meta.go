@@ -7,20 +7,20 @@ import (
 )
 
 type FileMeta struct {
-	ArchivePath string
-	INode       uint64
-	FullName    string
-	Size        uint64
-	ModTime     time.Time
+	Root    string
+	INode   uint64
+	Name    string
+	Size    uint64
+	ModTime time.Time
 }
 
 func (m *FileMeta) String() string {
-	return fmt.Sprintf("Meta{ArchivePath: %q, Name: %q, Size: %d, ModTime: %s}",
-		m.ArchivePath, m.FullName, m.Size, m.ModTime.Format(time.DateTime))
+	return fmt.Sprintf("Meta{Root: %q, Name: %q, Size: %d, ModTime: %s}",
+		m.Root, m.Name, m.Size, m.ModTime.Format(time.DateTime))
 }
 
 func (f FileMeta) AbsName() string {
-	return filepath.Join(f.ArchivePath, f.FullName)
+	return filepath.Join(f.Root, f.Name)
 }
 
 type File struct {

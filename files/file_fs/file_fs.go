@@ -21,12 +21,12 @@ func NewFs(events model.EventChan, lc *lifecycle.Lifecycle) model.FS {
 	}
 }
 
-func (fs *fileFs) NewScanner(archivePath string) model.Scanner {
+func (fs *fileFs) NewScanner(root string) model.Scanner {
 	return &scanner{
-		events:      fs.events,
-		lc:          fs.lc,
-		archivePath: archivePath,
-		infos:       map[uint64]*fileInfo{},
+		events: fs.events,
+		lc:     fs.lc,
+		root:   root,
+		infos:  map[uint64]*fileInfo{},
 	}
 }
 

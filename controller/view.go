@@ -109,7 +109,7 @@ func (m *controller) fileStatus(file *model.File) []w.Widget {
 		result = append(result, w.Text(" ").Width(len(m.archives)+1))
 		result = append(result, w.Text(" ▶ ").Width(len(m.archives)))
 	}
-	result = append(result, w.Text(name(file.FullName)).Width(20).Flex(1))
+	result = append(result, w.Text(name(file.Name)).Width(20).Flex(1))
 	result = append(result, w.Text("  "))
 	result = append(result, w.Text(file.ModTime.Format(time.DateTime)))
 	result = append(result, w.Text("  "))
@@ -154,7 +154,7 @@ func (m *controller) progress() w.Widget {
 		}
 	}
 	stats := []w.Widget{}
-	for _, path := range m.archivePaths {
+	for _, path := range m.roots {
 		archive := *m.archives[path]
 		state := archive.progress.ProgressState
 		if state == model.HashingFileTree || state == model.CopyingFile {

@@ -1,7 +1,7 @@
 package model
 
 type FS interface {
-	NewScanner(archivePath string) Scanner
+	NewScanner(root string) Scanner
 }
 
 type Scanner interface {
@@ -20,17 +20,22 @@ type HashArchive struct{}
 
 func (HashArchive) msg() {}
 
-type CopyFile FileMeta
+type CopyFile struct {
+	Root string
+	Name string
+}
 
 func (CopyFile) msg() {}
 
 type RenameFile struct {
-	OldMeta FileMeta
-	NewMeta FileMeta
+	OldName string
+	NewName string
 }
 
 func (RenameFile) msg() {}
 
-type DeleteFile FileMeta
+type DeleteFile struct {
+	Name string
+}
 
 func (DeleteFile) msg() {}
