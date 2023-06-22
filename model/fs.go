@@ -21,21 +21,21 @@ type HashArchive struct{}
 func (HashArchive) msg() {}
 
 type CopyFile struct {
-	Root string
-	Name string
+	Root  string
+	INode uint64
 }
 
 func (CopyFile) msg() {}
 
 type RenameFile struct {
-	OldName string
+	INode   uint64
 	NewName string
 }
 
 func (RenameFile) msg() {}
 
 type DeleteFile struct {
-	Name string
+	INode uint64
 }
 
 func (DeleteFile) msg() {}

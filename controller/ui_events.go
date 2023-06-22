@@ -125,8 +125,8 @@ func (m *controller) keepFile(file *model.File) {
 		if len(archFiles) == 0 {
 			archive := m.archives[root]
 			archive.scanner.Send(model.CopyFile{
-				Root: file.Root,
-				Name: file.Name,
+				Root:  file.Root,
+				INode: file.INode,
 			})
 			archive.copySize += file.Size
 			file.Status = model.Pending
@@ -143,11 +143,11 @@ func (m *controller) keepFile(file *model.File) {
 		for i, archFile := range archFiles {
 			if i == keepIdx {
 				if file.Name != archFile.Name {
-					m.archives[root].scanner.Send(model.RenameFile{OldName: archFile.FileMeta.Name, NewName: file.FileMeta.Name})
+					m.archives[root].scanner.Send(model.RenameFile{INode: archFile.FileMeta.INode, NewName: file.FileMeta.Name})
 					archFile.Status = model.Pending
 				}
 			} else {
-				m.archives[root].scanner.Send(model.DeleteFile{Name: archFile.FileMeta.Name})
+				m.archives[root].scanner.Send(model.DeleteFile{INode: archFile.FileMeta.INode})
 				archFile.Status = model.Pending
 			}
 		}
@@ -199,7 +199,7 @@ func (m *controller) deleteRegularFile(file *model.File) {
 	}
 
 	for _, file := range filesForHash {
-		m.archives[file.Root].scanner.Send(model.DeleteFile{Name: file.FileMeta.Name})
+		m.archives[file.Root].scanner.Send(model.DeleteFile{INode: file.FileMeta.INode})
 		file.Status = model.Pending
 	}
 }

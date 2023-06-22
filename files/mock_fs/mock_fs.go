@@ -128,10 +128,11 @@ func (s *scanner) hashArchive() bool {
 }
 
 func (s *scanner) copy(msg model.CopyFile) bool {
-	log.Printf("### scanner copy: arch=%q: from %q/%q", s.root, msg.Root, msg.Name)
+	log.Printf("### scanner copy: arch=%q: from %q/%x", s.root, msg.Root, msg.INode)
 	var size uint64
-	for _, meta := range metas[msg.Root] {
-		if meta.Name == msg.Name {
+	var meta *fileMeta
+	for _, meta = range metas[msg.Root] {
+		if meta.INode == msg.INode {
 			size = meta.Size
 			break
 		}
@@ -151,11 +152,11 @@ func (s *scanner) copy(msg model.CopyFile) bool {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	log.Printf("### mockFs.Copied: root=%q, from=%q, name=%q, size=%d", s.root, msg.Root, msg.Name, size)
+	log.Printf("### mockFs.Copied: root=%q, from=%q, ino=%x, size=%d", s.root, msg.Root, msg.INode, size)
 	s.events <- model.FileCopied{
 		FromRoot: msg.Root,
 		ToRoot:   s.root,
-		Name:     msg.Name,
+		Name:     meta.Name,
 	}
 	return true
 }
@@ -164,7 +165,7 @@ func (s *scanner) rename(msg model.RenameFile) bool {
 	// log.Printf("### scanner move: arch=%q from %#v to %#v", s.root, from.AbsName(), to.AbsName())
 	s.events <- model.FileRenamed{
 		Root:    s.root,
-		OldName: msg.OldName,
+		INode:   msg.INode,
 		NewName: msg.NewName,
 	}
 	return true
@@ -173,8 +174,8 @@ func (s *scanner) rename(msg model.RenameFile) bool {
 func (s *scanner) delete(msg model.DeleteFile) bool {
 	// log.Printf("### scanner delete: arch=%q file %#v", s.root, meta.AbsName())
 	s.events <- model.FileDeleted{
-		Root: s.root,
-		Name: msg.Name,
+		Root:  s.root,
+		INode: msg.INode,
 	}
 	return true
 }

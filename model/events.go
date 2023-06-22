@@ -29,13 +29,16 @@ type FileCopied struct {
 func (FileCopied) event() {}
 
 type FileRenamed struct {
-	Root, OldName, NewName string
+	Root    string
+	INode   uint64
+	NewName string
 }
 
 func (FileRenamed) event() {}
 
 type FileDeleted struct {
-	Root, Name string
+	Root  string
+	INode uint64
 }
 
 func (FileDeleted) event() {}

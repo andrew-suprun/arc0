@@ -274,16 +274,16 @@ func (s *scanner) storeMeta() error {
 }
 
 func (s *scanner) copy(from model.CopyFile) bool {
-	log.Printf("### scanner copy: arch=%q from %q/%q", s.root, from.Root, from.Name)
+	log.Printf("### scanner copy: arch=%q from %q/%x", s.root, from.Root, from.INode)
 	return true
 }
 
 func (s *scanner) rename(msg model.RenameFile) bool {
-	log.Printf("### scanner move: arch=%q from %q to %q", s.root, msg.OldName, msg.NewName)
+	log.Printf("### scanner move: arch=%q from %x to %q", s.root, msg.INode, msg.NewName)
 	return true
 }
 
 func (s *scanner) delete(msg model.DeleteFile) bool {
-	log.Printf("### scanner delete: arch=%q name=%q", s.root, msg.Name)
+	log.Printf("### scanner delete: arch=%q name=%x", s.root, msg.INode)
 	return true
 }
