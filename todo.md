@@ -1,3 +1,4 @@
+* populate view folders on fileHashed event
 * update statuses and counters on all files on file events
 * file copied/deleted/moved events
 * reflect stats in status line

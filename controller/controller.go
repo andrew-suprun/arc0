@@ -34,7 +34,6 @@ type archive struct {
 	copySize    uint64
 	totalCopied uint64
 	byINode     map[uint64]*model.File
-	byName      map[string]*model.File
 }
 
 type folder struct {
@@ -66,7 +65,6 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, paths []str
 		m.archives[path] = &archive{
 			scanner: actor.NewActor(s.Handler),
 			byINode: map[uint64]*model.File{},
-			byName:  map[string]*model.File{},
 		}
 	}
 

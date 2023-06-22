@@ -18,9 +18,7 @@ func (m *controller) fileScanned(meta model.FileScanned) {
 	archive := m.archives[meta.Root]
 	archive.totalSize += meta.Size
 	archive.byINode[meta.INode] = file
-	archive.byName[meta.Name] = file
 
-	log.Printf("### fileScanned: file=%q", file.Name)
 	folder := m.folders[dir(file.Name)]
 	if folder != nil {
 		for _, entry := range folder.entries {
@@ -30,7 +28,6 @@ func (m *controller) fileScanned(meta model.FileScanned) {
 		}
 	}
 
-	log.Printf("### fileScanned: file=%q", file.Name)
 	m.addToFolder(file, meta.Size, meta.ModTime)
 }
 
@@ -184,17 +181,29 @@ func (m *controller) progressEvent(event model.Progress) {
 }
 
 func (m *controller) fileCopied(event model.FileCopied) {
+	archive := m.archives[event.Root]
 	fromArchive := m.archives[event.FromRoot]
-	toArchive := m.archives[event.ToRoot]
-	meta := fromArchive.byName[event.Name]
-	toArchive.totalCopied += meta.Size
-	toArchive.progress.Processed = 0
+	meta := fromArchive.byINode[event.FromINode]
+	idx := m.archiveIdx(event.Root)
+
+	fileDir := dir(meta.Name)
+	folder := m.folders[fileDir]
+	for _, entry := range folder.entries {
+		if entry.Hash == meta.Hash && entry.Name == meta.Name {
+			entry.Status = model.Resolved
+			m.updateFolderStatus(fileDir)
+			entry.Counts[idx]++
+		}
+	}
+
+	archive.totalCopied += meta.Size
+	archive.progress.Processed = 0
 	log.Printf("### fileCopied %q: %q/%q  copySize=%d  totalCopied=%d",
-		event.ToRoot, event.FromRoot, event.Name, toArchive.copySize, toArchive.totalCopied)
-	if toArchive.totalCopied == toArchive.copySize {
-		toArchive.totalCopied = 0
-		toArchive.copySize = 0
-		toArchive.progress.ProgressState = model.HashingFileTreeComplete
+		event.Root, event.FromRoot, meta.Name, archive.copySize, archive.totalCopied)
+	if archive.totalCopied == archive.copySize {
+		archive.totalCopied = 0
+		archive.copySize = 0
+		archive.progress.ProgressState = model.HashingFileTreeComplete
 	}
 }
 

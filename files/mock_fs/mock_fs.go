@@ -154,9 +154,9 @@ func (s *scanner) copy(msg model.CopyFile) bool {
 	}
 	log.Printf("### mockFs.Copied: root=%q, from=%q, ino=%x, size=%d", s.root, msg.Root, msg.INode, size)
 	s.events <- model.FileCopied{
-		FromRoot: msg.Root,
-		ToRoot:   s.root,
-		Name:     meta.Name,
+		Root:      s.root,
+		FromRoot:  msg.Root,
+		FromINode: meta.INode,
 	}
 	return true
 }

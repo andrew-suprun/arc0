@@ -23,7 +23,9 @@ type FileHashed struct {
 func (FileHashed) event() {}
 
 type FileCopied struct {
-	FromRoot, ToRoot, Name string
+	Root      string
+	FromRoot  string
+	FromINode uint64
 }
 
 func (FileCopied) event() {}
