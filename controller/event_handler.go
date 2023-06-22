@@ -15,7 +15,7 @@ func (m *controller) handleEvent(event any) {
 
 	switch event := event.(type) {
 	case model.FileScanned:
-		m.fileMeta(event)
+		m.fileScanned(event)
 
 	case model.FileHashed:
 		m.fileHashed(event)
@@ -47,7 +47,6 @@ func (m *controller) handleEvent(event any) {
 			m.currentPath = ""
 		}
 		m.currentPath = filepath.Join(parts[:len(parts)-1]...)
-		m.sort()
 
 	case model.RevealInFinder:
 		folder := m.folders[m.currentPath]

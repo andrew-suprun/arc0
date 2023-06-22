@@ -27,10 +27,7 @@ func (m *controller) mouseTarget(cmd any) {
 		} else {
 			folder.sortColumn = cmd
 		}
-
-		m.sort()
 	}
-
 }
 
 func (m *controller) selectFirst() {
@@ -82,15 +79,10 @@ func (m *controller) enter() {
 	if selected != nil {
 		if selected.Kind == model.FileFolder {
 			m.currentPath = selected.Name
-			m.sort()
 		} else {
 			exec.Command("open", selected.AbsName()).Start()
 		}
 	}
-}
-
-func (m *controller) isOrigin(root string) bool {
-	return root == m.roots[0]
 }
 
 func (m *controller) archiveIdx(root string) int {
@@ -161,7 +153,6 @@ func (m *controller) keepFile(file *model.File) {
 		}
 	}
 	m.updateFolderStatus(dir(file.Name))
-	m.sort()
 }
 
 func (m *controller) updateFolderStatus(path string) {
@@ -195,7 +186,6 @@ func (m *controller) deleteFile(file *model.File) {
 		m.deleteRegularFile(file)
 	}
 	m.updateFolderStatus(dir(file.Name))
-	m.sort()
 }
 
 func (m *controller) deleteRegularFile(file *model.File) {

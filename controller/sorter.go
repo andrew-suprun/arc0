@@ -6,11 +6,10 @@ import (
 	"strings"
 )
 
-func (m *controller) sort() {
-	folder := m.folders[m.currentPath]
-	files := sliceBy(folder.entries)
+func (f *folder) sort() {
+	files := sliceBy(f.entries)
 	var slice sort.Interface
-	switch folder.sortColumn {
+	switch f.sortColumn {
 	case sortByName:
 		slice = sliceByName{sliceBy: files}
 	case sortByStatus:
@@ -20,7 +19,7 @@ func (m *controller) sort() {
 	case sortBySize:
 		slice = sliceBySize{sliceBy: files}
 	}
-	if !folder.sortAscending[folder.sortColumn] {
+	if !f.sortAscending[f.sortColumn] {
 		slice = sort.Reverse(slice)
 	}
 	sort.Sort(slice)

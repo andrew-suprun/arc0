@@ -1,5 +1,6 @@
+* update counters on file events
+* update all files with the same hash
 * file copied/deleted/moved events
-* handle 'delete' event
 * reflect stats in status line
 * add descriptors to ScanErrors
 * file operations

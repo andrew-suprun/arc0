@@ -7,11 +7,7 @@ import (
 	"time"
 )
 
-func (m *controller) fileMeta(meta model.FileScanned) {
-	defer func() {
-		m.sort()
-	}()
-
+func (m *controller) fileScanned(meta model.FileScanned) {
 	file := &model.File{
 		FileMeta: model.FileMeta(meta),
 		Kind:     model.FileRegular,
@@ -24,9 +20,18 @@ func (m *controller) fileMeta(meta model.FileScanned) {
 	archive.byINode[meta.INode] = file
 	archive.byName[meta.Name] = file
 
-	if m.isOrigin(file.Root) {
-		m.addToFolder(file, meta.Size, meta.ModTime)
+	log.Printf("### fileScanned: file=%q", file.Name)
+	folder := m.folders[dir(file.Name)]
+	if folder != nil {
+		for _, entry := range folder.entries {
+			if entry.Hash == file.Hash && entry.Name == file.Name {
+				return
+			}
+		}
 	}
+
+	log.Printf("### fileScanned: file=%q", file.Name)
+	m.addToFolder(file, meta.Size, meta.ModTime)
 }
 
 func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
@@ -146,7 +151,6 @@ func (m *controller) fileHashed(fileHash model.FileHashed) {
 			for _, files := range filesForHash {
 				for _, file := range files {
 					file.Status = model.Conflict
-					m.addToFolder(file, file.Size, file.ModTime)
 				}
 			}
 		} else if len(originFiles) == 1 {

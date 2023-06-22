@@ -85,6 +85,7 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, paths []str
 		default:
 		}
 
+		m.folders[m.currentPath].sort()
 		m.renderer.Reset()
 		m.view().Render(m.renderer, widgets.Position{X: 0, Y: 0}, widgets.Size(m.ScreenSize()))
 		m.renderer.Show()
