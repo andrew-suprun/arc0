@@ -39,9 +39,10 @@ func main() {
 	var fs model.FS
 
 	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
-		fs = mock_fs.NewFs(events, true)
+		fs = mock_fs.NewFs(events)
+		mock_fs.Scan = true
 	} else if len(os.Args) >= 1 && os.Args[1] == "-sim2" {
-		fs = mock_fs.NewFs(events, false)
+		fs = mock_fs.NewFs(events)
 	} else {
 		fs = file_fs.NewFs(events, lc)
 	}

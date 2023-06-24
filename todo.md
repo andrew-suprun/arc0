@@ -1,5 +1,12 @@
-* populate view folders on fileHashed event
+* sort by name within controller.byHash slices (for tab jumping)
 * update statuses and counters on all files on file events
+* populate view folders on fileHashed event
+* refactor status per hash
+* change meta.counts to status ('Duplicated', 'Missing')
+* remove INode from FileMeta
+* eliminate ScanArchive/FileScanned
+* rename 'renderers' package to 'renderer'
+* move 'Renderer' interface to 'renderer' package
 * file copied/deleted/moved events
 * reflect stats in status line
 * add descriptors to ScanErrors

@@ -1,97 +1,64 @@
 package mock_fs
 
 import (
+	"arch/actor"
 	"arch/model"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
 )
 
+var Scan bool
+
 type mockFs struct {
-	scan   bool
 	events model.EventChan
 }
 
-func NewFs(events model.EventChan, scan bool) model.FS {
-	return &mockFs{
-		scan:   scan,
-		events: events,
-	}
+func NewFs(events model.EventChan) model.FS {
+	return &mockFs{events: events}
 }
 
-type scanner struct {
-	scan        bool
-	events      model.EventChan
-	root        string
-	totalSize   uint64
-	totalHashed uint64
+func (fs *mockFs) NewFileHandler() actor.Actor[model.HandleFiles] {
+	return actor.NewActor[model.HandleFiles](fs.handleFiles)
 }
 
-func (fsys *mockFs) NewScanner(root string) model.Scanner {
-	return &scanner{
-		scan:   fsys.scan,
-		events: fsys.events,
-		root:   root,
-	}
+func (m *mockFs) ScanArchive(root string) {
+	go m.scanArchive(root)
 }
 
-func (s *scanner) Handler(msg model.Msg) bool {
-	switch msg := msg.(type) {
-	case model.ScanArchive:
-		return s.scanArchive()
-	case model.HashArchive:
-		return s.hashArchive()
-	case model.CopyFile:
-		return s.copy(msg)
-	case model.RenameFile:
-		return s.rename(msg)
-	case model.DeleteFile:
-		return s.delete(msg)
-	}
-	log.Panicf("### ERROR: Unhandled scanner message: %#v", msg)
-	return false
-}
-
-func (s *scanner) scanArchive() bool {
-	archFiles := metas[s.root]
+func (fs *mockFs) scanArchive(root string) {
+	archFiles := metas[root]
+	var archiveMetas []model.FileMeta
 	for _, meta := range archFiles {
-		s.events <- model.FileScanned{
+		archiveMetas = append(archiveMetas, model.FileMeta{
 			INode:   meta.INode,
-			Root:    s.root,
+			Root:    root,
 			Name:    meta.Name,
 			Size:    meta.Size,
 			ModTime: meta.ModTime,
-		}
-		s.totalSize += meta.Size
+		})
 	}
-	s.events <- model.Progress{
-		Root:          s.root,
-		ProgressState: model.WalkingFileTreeComplete,
-	}
-	return true
-}
+	fs.events <- model.ArchiveScanned(archiveMetas)
 
-func (s *scanner) hashArchive() bool {
-	archFiles := metas[s.root]
 	scans := make([]bool, len(archFiles))
 
 	for i := range archFiles {
-		scans[i] = s.scan && rand.Intn(2) == 0
+		scans[i] = Scan && rand.Intn(2) == 0
 	}
+	var totalHashed uint64
 	for i := range archFiles {
 		if !scans[i] {
 			meta := archFiles[i]
-			s.events <- model.FileHashed{
-				INode: meta.INode,
-				Root:  meta.Root,
-				Hash:  meta.Hash,
+			fs.events <- model.FileHashed{
+				Root: meta.Root,
+				Name: meta.Name,
+				Hash: meta.Hash,
 			}
-			s.totalHashed += meta.Size
-			s.events <- model.Progress{
-				Root:          s.root,
+			totalHashed += meta.Size
+			fs.events <- model.Progress{
+				Root:          root,
 				ProgressState: model.HashingFileTree,
-				Processed:     s.totalHashed,
+				Processed:     totalHashed,
 			}
 		}
 	}
@@ -102,81 +69,31 @@ func (s *scanner) hashArchive() bool {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
-				s.events <- model.Progress{
+				fs.events <- model.Progress{
 					Root:          meta.Root,
 					ProgressState: model.HashingFileTree,
-					Processed:     s.totalHashed + hashed,
+					Processed:     totalHashed + hashed,
 				}
 				if hashed == meta.Size {
 					break
 				}
 				time.Sleep(time.Millisecond)
 			}
-			s.totalHashed += meta.Size
-			s.events <- model.FileHashed{
-				INode: meta.INode,
-				Root:  meta.Root,
-				Hash:  meta.Hash,
+			totalHashed += meta.Size
+			fs.events <- model.FileHashed{
+				Root: meta.Root,
+				Name: meta.Name,
+				Hash: meta.Hash,
 			}
 		}
 	}
-	s.events <- model.Progress{
-		Root:          s.root,
+	fs.events <- model.Progress{
+		Root:          root,
 		ProgressState: model.HashingFileTreeComplete,
 	}
-	return true
 }
 
-func (s *scanner) copy(msg model.CopyFile) bool {
-	log.Printf("### scanner copy: arch=%q: from %q/%x", s.root, msg.Root, msg.INode)
-	var size uint64
-	var meta *fileMeta
-	for _, meta = range metas[msg.Root] {
-		if meta.INode == msg.INode {
-			size = meta.Size
-			break
-		}
-	}
-
-	for copied := uint64(0); ; copied += 10000 {
-		if copied > size {
-			copied = size
-		}
-		s.events <- model.Progress{
-			Root:          s.root,
-			ProgressState: model.CopyingFile,
-			Processed:     copied,
-		}
-		if copied == size {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	log.Printf("### mockFs.Copied: root=%q, from=%q, ino=%x, size=%d", s.root, msg.Root, msg.INode, size)
-	s.events <- model.FileCopied{
-		Root:      s.root,
-		FromRoot:  msg.Root,
-		FromINode: meta.INode,
-	}
-	return true
-}
-
-func (s *scanner) rename(msg model.RenameFile) bool {
-	// log.Printf("### scanner move: arch=%q from %#v to %#v", s.root, from.AbsName(), to.AbsName())
-	s.events <- model.FileRenamed{
-		Root:    s.root,
-		INode:   msg.INode,
-		NewName: msg.NewName,
-	}
-	return true
-}
-
-func (s *scanner) delete(msg model.DeleteFile) bool {
-	// log.Printf("### scanner delete: arch=%q file %#v", s.root, meta.AbsName())
-	s.events <- model.FileDeleted{
-		Root:  s.root,
-		INode: msg.INode,
-	}
+func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
 	return true
 }
 
@@ -232,6 +149,7 @@ func init() {
 var metas = map[string][]*fileMeta{}
 var metaMap = map[string][]string{
 	"origin": {
+		"xxx.txt:xxxx",
 		"a/b/c/x.txt:hhhh",
 		"a/b/e/f.txt:gggg",
 		"a/b/e/g.txt:tttt",
@@ -241,6 +159,7 @@ var metaMap = map[string][]string{
 		"0000:0000",
 	},
 	"copy 1": {
+		"xxx.txt:xxxx",
 		"a/b/c/d.txt:llll",
 		"a/b/e/f.txt:hhhh",
 		"a/b/e/g.txt:tttt",
@@ -254,6 +173,7 @@ var metaMap = map[string][]string{
 		"3333:3333",
 	},
 	"copy 2": {
+		"xxx.txt:xxxx",
 		"a/b/c/f.txt:hhhh",
 		"a/b/e/x.txt:gggg",
 		"a/b/e/g.txt:tttt",

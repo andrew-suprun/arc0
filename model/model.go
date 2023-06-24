@@ -26,13 +26,12 @@ func (f FileMeta) AbsName() string {
 type File struct {
 	FileMeta
 	Kind   FileKind
-	Status FileStatus
 	Hash   string
-	Counts []int
+	Status Status
 }
 
 func (f File) String() string {
-	return fmt.Sprintf("File{Meta: %s, Kind: %s, Status: %s}", f.FileMeta.String(), f.Kind, f.Status)
+	return fmt.Sprintf("File{Meta: %s, Kind: %s}", f.FileMeta.String(), f.Kind)
 }
 
 type Files []*File
@@ -54,30 +53,33 @@ func (k FileKind) String() string {
 	return "UNKNOWN FILE KIND"
 }
 
-type FileStatus int
+type Status int
 
 const (
-	Identical FileStatus = iota
+	Identical Status = iota
 	Pending
 	Resolved
-	Conflict
+	Duplicate
+	Absent
 )
 
-func (s FileStatus) String() string {
+func (s Status) String() string {
 	switch s {
 	case Identical:
-		return "Identical"
+		return ""
 	case Pending:
 		return "Pending"
 	case Resolved:
 		return "Resolved"
-	case Conflict:
-		return "Conflict"
+	case Duplicate:
+		return "Duplicate"
+	case Absent:
+		return "Absent"
 	}
 	return "UNKNOWN FILE STATUS"
 }
 
-func (s FileStatus) Merge(other FileStatus) FileStatus {
+func (s Status) Merge(other Status) Status {
 	if s > other {
 		return s
 	}

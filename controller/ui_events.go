@@ -2,24 +2,23 @@ package controller
 
 import (
 	"arch/model"
-	"log"
 	"os/exec"
 	"time"
 )
 
-func (m *controller) mouseTarget(cmd any) {
-	folder := m.folders[m.currentPath]
+func (c *controller) mouseTarget(cmd any) {
+	folder := c.folders[c.currentPath]
 	switch cmd := cmd.(type) {
 	case selectFile:
-		if folder.selected == cmd && time.Since(m.lastMouseEventTime).Seconds() < 0.5 {
-			m.enter()
+		if folder.selected == cmd && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
+			c.enter()
 		} else {
 			folder.selected = cmd
 		}
-		m.lastMouseEventTime = time.Now()
+		c.lastMouseEventTime = time.Now()
 
 	case selectFolder:
-		m.currentPath = cmd.Name
+		c.currentPath = cmd.Name
 
 	case sortColumn:
 		if cmd == folder.sortColumn {
@@ -30,25 +29,25 @@ func (m *controller) mouseTarget(cmd any) {
 	}
 }
 
-func (m *controller) selectFirst() {
-	folder := m.folders[m.currentPath]
+func (c *controller) selectFirst() {
+	folder := c.folders[c.currentPath]
 	folder.selected = folder.entries[0]
 }
 
-func (m *controller) selectLast() {
-	folder := m.folders[m.currentPath]
+func (c *controller) selectLast() {
+	folder := c.folders[c.currentPath]
 	entries := folder.entries
 	folder.selected = entries[len(entries)-1]
 }
 
-func (m *controller) moveSelection(lines int) {
-	folder := m.folders[m.currentPath]
+func (c *controller) moveSelection(lines int) {
+	folder := c.folders[c.currentPath]
 	selected := folder.selected
 	if selected == nil {
 		if lines > 0 {
-			m.selectFirst()
+			c.selectFirst()
 		} else if lines < 0 {
-			m.selectLast()
+			c.selectLast()
 		}
 	}
 	entries := folder.entries
@@ -73,30 +72,20 @@ func (m *controller) moveSelection(lines int) {
 	}
 }
 
-func (m *controller) enter() {
-	folder := m.folders[m.currentPath]
+func (c *controller) enter() {
+	folder := c.folders[c.currentPath]
 	selected := folder.selected
 	if selected != nil {
 		if selected.Kind == model.FileFolder {
-			m.currentPath = selected.Name
+			c.currentPath = selected.Name
 		} else {
 			exec.Command("open", selected.AbsName()).Start()
 		}
 	}
 }
 
-func (m *controller) archiveIdx(root string) int {
-	for i := 0; i < len(m.roots); i++ {
-		if root == m.roots[i] {
-			return i
-		}
-	}
-	log.Panicf("### Invalid archive path: %q", root)
-	return -1
-}
-
-func (m *controller) shiftOffset(lines int) {
-	folder := m.folders[m.currentPath]
+func (c *controller) shiftOffset(lines int) {
+	folder := c.folders[c.currentPath]
 	nEntries := len(folder.entries)
 	folder.lineOffset += lines
 	if folder.lineOffset < 0 {
@@ -106,33 +95,41 @@ func (m *controller) shiftOffset(lines int) {
 	}
 }
 
-func (m *controller) keepSelected() {
-	m.keepFile(m.folders[m.currentPath].selected)
+func (c *controller) keepSelected() {
+	c.keepFile(c.folders[c.currentPath].selected)
 }
 
-func (m *controller) keepFile(file *model.File) {
+func (c *controller) keepFile(file *model.File) {
 	if file == nil || file.Kind != model.FileRegular {
 		return
 	}
-	filesForHash := m.byHash[file.Hash]
+	c.hashStatus(file.Hash, model.Pending)
+
+	filesForHash := c.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
 	for _, fileForHash := range filesForHash {
 		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
 	}
 
-	for _, root := range m.roots {
-		archFiles := byArch[root]
-		if len(archFiles) == 0 {
-			archive := m.archives[root]
-			archive.scanner.Send(model.CopyFile{
-				Root:  file.Root,
-				INode: file.INode,
-			})
-			archive.copySize += file.Size
-			file.Status = model.Pending
-			log.Printf("### keepFile %q: root=%q  name=%q  copySize=%d", root, file.Root, file.Name, archive.copySize)
-			continue
+	msg := model.HandleFiles{Hash: file.Hash}
+	copyFiles := &model.CopyFile{
+		SourceRoot: file.Root,
+		Name:       file.Name,
+	}
+
+	for _, root := range c.roots {
+		if len(byArch[root]) == 0 {
+			copyFiles.TargetRoots = append(copyFiles.TargetRoots, root)
 		}
+	}
+	if len(copyFiles.TargetRoots) > 0 {
+		msg.Copy = copyFiles
+		c.copySize += file.Size
+	}
+
+	for _, root := range c.roots {
+		archFiles := byArch[root]
+
 		keepIdx := 0
 		for i, archFile := range archFiles {
 			if archFile == file || archFile.Name == file.Name {
@@ -143,20 +140,29 @@ func (m *controller) keepFile(file *model.File) {
 		for i, archFile := range archFiles {
 			if i == keepIdx {
 				if file.Name != archFile.Name {
-					m.archives[root].scanner.Send(model.RenameFile{INode: archFile.FileMeta.INode, NewName: file.FileMeta.Name})
-					archFile.Status = model.Pending
+					msg.Rename = &model.RenameFile{
+						Root:    root,
+						OldName: archFile.Name,
+						NewName: file.Name,
+					}
 				}
 			} else {
-				m.archives[root].scanner.Send(model.DeleteFile{INode: archFile.FileMeta.INode})
-				archFile.Status = model.Pending
+				msg.Delete = append(msg.Delete, model.DeleteFile{
+					Root: archFile.Root,
+					Name: archFile.Name,
+				})
 			}
 		}
 	}
-	m.updateFolderStatus(dir(file.Name))
+	if msg.Copy != nil || msg.Rename != nil || len(msg.Delete) > 0 {
+		for _, file := range filesForHash {
+			c.updateFolderStatus(dir(file.Name))
+		}
+	}
 }
 
-func (m *controller) updateFolderStatus(path string) {
-	currentFolder := m.folders[path]
+func (c *controller) updateFolderStatus(path string) {
+	currentFolder := c.folders[path]
 	status := model.Identical
 	for _, entry := range currentFolder.entries {
 		status = status.Merge(entry.Status)
@@ -168,45 +174,53 @@ func (m *controller) updateFolderStatus(path string) {
 	if path == "" {
 		return
 	}
-	m.updateFolderStatus(dir(path))
+	c.updateFolderStatus(dir(path))
 }
 
-func (m *controller) deleteSelected() {
-	m.deleteFile(m.folders[m.currentPath].selected)
+func (c *controller) deleteSelected() {
+	c.deleteFile(c.folders[c.currentPath].selected)
 }
 
-func (m *controller) deleteFile(file *model.File) {
-	if file == nil || file.Status != model.Conflict {
+func (c *controller) deleteFile(file *model.File) {
+	if file == nil {
+		return
+	}
+	status := file.Status
+	if status != model.Absent {
 		return
 	}
 
 	if file.Kind == model.FileFolder {
-		m.deleteFolderFile(file)
+		c.deleteFolderFile(file)
 	} else {
-		m.deleteRegularFile(file)
+		c.deleteRegularFile(file)
 	}
-	m.updateFolderStatus(dir(file.Name))
+	c.updateFolderStatus(dir(file.Name))
 }
 
-func (m *controller) deleteRegularFile(file *model.File) {
-	filesForHash := m.byHash[file.Hash]
+func (c *controller) deleteRegularFile(file *model.File) {
+	filesForHash := c.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
 	for _, fileForHash := range filesForHash {
 		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
 	}
-	if len(byArch[m.roots[0]]) > 0 {
+	if len(byArch[c.roots[0]]) > 0 {
 		return
 	}
 
+	msg := model.HandleFiles{Hash: file.Hash}
 	for _, file := range filesForHash {
-		m.archives[file.Root].scanner.Send(model.DeleteFile{INode: file.FileMeta.INode})
-		file.Status = model.Pending
+		msg.Delete = append(msg.Delete, model.DeleteFile{
+			Root: file.Root,
+			Name: file.Name,
+		})
 	}
+	c.hashStatus(file.Hash, model.Pending)
 }
 
-func (m *controller) deleteFolderFile(file *model.File) {
-	folder := m.folders[file.Name]
+func (c *controller) deleteFolderFile(file *model.File) {
+	folder := c.folders[file.Name]
 	for _, entry := range folder.entries {
-		m.deleteFile(entry)
+		c.deleteFile(entry)
 	}
 }

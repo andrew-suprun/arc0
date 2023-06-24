@@ -7,19 +7,28 @@ import (
 	"time"
 )
 
-func (m *controller) fileScanned(meta model.FileScanned) {
+func (c *controller) archiveScanned(metas model.ArchiveScanned) {
+	if len(metas) == 0 {
+		return
+	}
+	for _, meta := range metas {
+		c.fileScanned(meta)
+	}
+}
+
+func (c *controller) fileScanned(meta model.FileMeta) {
 	file := &model.File{
 		FileMeta: model.FileMeta(meta),
 		Kind:     model.FileRegular,
 	}
 
-	m.bySize[meta.Size] = append(m.bySize[meta.Size], file)
+	c.bySize[meta.Size] = append(c.bySize[meta.Size], file)
 
-	archive := m.archives[meta.Root]
+	archive := c.archives[meta.Root]
 	archive.totalSize += meta.Size
-	archive.byINode[meta.INode] = file
+	archive.byName[meta.Name] = file
 
-	folder := m.folders[dir(file.Name)]
+	folder := c.folders[dir(file.Name)]
 	if folder != nil {
 		for _, entry := range folder.entries {
 			if entry.Hash == file.Hash && entry.Name == file.Name {
@@ -28,11 +37,11 @@ func (m *controller) fileScanned(meta model.FileScanned) {
 		}
 	}
 
-	m.addToFolder(file, meta.Size, meta.ModTime)
+	c.addToFolder(file, meta.Size, meta.ModTime)
 }
 
-func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
-	parentFolder := m.folders[dir(file.Name)]
+func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
+	parentFolder := c.folders[dir(file.Name)]
 	if parentFolder == nil {
 		parentFolder = &folder{
 			info: &model.File{
@@ -41,17 +50,15 @@ func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 					Size:    file.Size,
 					ModTime: file.ModTime,
 				},
-				Kind:   model.FileFolder,
-				Status: file.Status,
+				Kind: model.FileFolder,
 			},
 			sortAscending: []bool{true, false, false, false},
 			entries:       []*model.File{file},
 		}
-		m.folders[dir(file.Name)] = parentFolder
+		c.folders[dir(file.Name)] = parentFolder
 	} else {
 		if file.Kind == model.FileRegular {
 			parentFolder.entries = append(parentFolder.entries, file)
-			parentFolder.info.Status = parentFolder.info.Status.Merge(file.Status)
 		}
 		sameFolder := false
 		if file.Kind == model.FileFolder {
@@ -65,14 +72,13 @@ func (m *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 				parentFolder.entries = append(parentFolder.entries, file)
 			}
 		}
-		parentFolder.info.Status = parentFolder.info.Status.Merge(file.Status)
 		parentFolder.info.Size += size
 		if parentFolder.info.ModTime.Before(modTime) {
 			parentFolder.info.ModTime = modTime
 		}
 	}
 	if dir(file.Name) != "" {
-		m.addToFolder(parentFolder.info, size, modTime)
+		c.addToFolder(parentFolder.info, size, modTime)
 	}
 }
 
@@ -88,8 +94,8 @@ func name(path string) string {
 	return filepath.Base(path)
 }
 
-func (m *controller) makeSelectedVisible() {
-	folder := m.folders[m.currentPath]
+func (c *controller) makeSelectedVisible() {
+	folder := c.folders[c.currentPath]
 	if folder.selected == nil {
 		return
 	}
@@ -105,18 +111,18 @@ func (m *controller) makeSelectedVisible() {
 		if folder.lineOffset > idx {
 			folder.lineOffset = idx
 		}
-		if folder.lineOffset < idx+1-m.fileTreeLines {
-			folder.lineOffset = idx + 1 - m.fileTreeLines
+		if folder.lineOffset < idx+1-c.fileTreeLines {
+			folder.lineOffset = idx + 1 - c.fileTreeLines
 		}
 	}
 }
 
-func (m *controller) fileHashed(fileHash model.FileHashed) {
-	archive := m.archives[fileHash.Root]
-	file := archive.byINode[fileHash.INode]
+func (c *controller) fileHashed(fileHash model.FileHashed) {
+	archive := c.archives[fileHash.Root]
+	file := archive.byName[fileHash.Name]
 	file.Hash = fileHash.Hash
-	filesBySize := m.bySize[file.Size]
-	m.byHash[fileHash.Hash] = append(m.byHash[fileHash.Hash], file)
+	filesBySize := c.bySize[file.Size]
+	c.byHash[fileHash.Hash] = append(c.byHash[fileHash.Hash], file)
 
 	hashes := map[string]struct{}{}
 	for _, file := range filesBySize {
@@ -133,84 +139,37 @@ func (m *controller) fileHashed(fileHash model.FileHashed) {
 			}
 			filesForHash[file.Root] = append(filesForHash[file.Root], file)
 		}
-		counts := make([]int, len(m.archives))
-		for path, files := range filesForHash {
-			counts[m.archiveIdx(path)] = len(files)
-		}
-		for root := range filesForHash {
-			for i := range filesForHash[root] {
-				filesForHash[root][i].Counts = counts
-			}
-		}
 
-		originFiles := filesForHash[m.roots[0]]
+		originFiles := filesForHash[c.roots[0]]
 		if len(originFiles) == 0 {
-			for _, files := range filesForHash {
-				for _, file := range files {
-					file.Status = model.Conflict
-				}
-			}
+			c.hashStatus(hash, model.Absent)
 		} else if len(originFiles) == 1 {
-			original := originFiles[0]
-			m.keepFile(original)
+			c.keepFile(originFiles[0])
 		} else {
-			for _, origin := range originFiles {
-				origin.Status = model.Conflict
-			}
+			c.hashStatus(hash, model.Duplicate)
 		}
 	}
 }
 
-func (m *controller) progressEvent(event model.Progress) {
-	m.archives[event.Root].progress = event
+func (c *controller) filesHandled(handled model.FilesHandled) {
+	log.Printf("### files handled for %s", handled.String())
 
-	if event.ProgressState == model.WalkingFileTreeComplete {
-		allWalksComplete := true
-		for _, archive := range m.archives {
-			if archive.progress.ProgressState != model.WalkingFileTreeComplete {
-				allWalksComplete = false
-				break
-			}
-		}
-		if allWalksComplete {
-			for _, archive := range m.archives {
-				archive.scanner.Send(model.HashArchive{})
-			}
+	c.hashStatus(handled.Hash, model.Resolved)
+
+	if handled.Copy != nil {
+		source := handled.Copy
+		archive := c.archives[source.SourceRoot]
+		meta := archive.byName[source.Name]
+		c.totalCopied += meta.Size
+		archive.progress.Processed = 0
+		if c.totalCopied == c.copySize {
+			c.totalCopied = 0
+			c.copySize = 0
+			archive.progress.ProgressState = model.HashingFileTreeComplete
 		}
 	}
 }
 
-func (m *controller) fileCopied(event model.FileCopied) {
-	archive := m.archives[event.Root]
-	fromArchive := m.archives[event.FromRoot]
-	meta := fromArchive.byINode[event.FromINode]
-	idx := m.archiveIdx(event.Root)
-
-	fileDir := dir(meta.Name)
-	folder := m.folders[fileDir]
-	for _, entry := range folder.entries {
-		if entry.Hash == meta.Hash && entry.Name == meta.Name {
-			entry.Status = model.Resolved
-			m.updateFolderStatus(fileDir)
-			entry.Counts[idx]++
-		}
-	}
-
-	archive.totalCopied += meta.Size
-	archive.progress.Processed = 0
-	log.Printf("### fileCopied %q: %q/%q  copySize=%d  totalCopied=%d",
-		event.Root, event.FromRoot, meta.Name, archive.copySize, archive.totalCopied)
-	if archive.totalCopied == archive.copySize {
-		archive.totalCopied = 0
-		archive.copySize = 0
-		archive.progress.ProgressState = model.HashingFileTreeComplete
-	}
-}
-
-func (m *controller) fileRenamed(meta model.FileRenamed) {
-	log.Printf("### fileRenamed: %#v", meta)
-}
-
-func (m *controller) fileDeleted(meta model.FileDeleted) {
-	log.Printf("### fileDeleted: %#v", meta)
+func (c *controller) progressEvent(event model.Progress) {
+	c.archives[event.Root].progress = event
 }

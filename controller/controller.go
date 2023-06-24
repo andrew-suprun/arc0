@@ -8,9 +8,10 @@ import (
 )
 
 type controller struct {
-	fs       model.FS
-	events   model.EventChan
-	renderer widgets.Renderer
+	fs          model.FS
+	events      model.EventChan
+	renderer    widgets.Renderer
+	fileHandler actor.Actor[model.HandleFiles]
 
 	roots              []string
 	archives           map[string]*archive
@@ -18,6 +19,8 @@ type controller struct {
 	byHash             map[string][]*model.File
 	folders            map[string]*folder
 	currentPath        string
+	copySize           uint64
+	totalCopied        uint64
 	screenSize         model.ScreenSize
 	fileTreeLines      int
 	lastMouseEventTime time.Time
@@ -28,12 +31,9 @@ type controller struct {
 }
 
 type archive struct {
-	scanner     actor.Actor[model.Msg]
-	progress    model.Progress
-	totalSize   uint64
-	copySize    uint64
-	totalCopied uint64
-	byINode     map[uint64]*model.File
+	progress  model.Progress
+	totalSize uint64
+	byName    map[string]*model.File
 }
 
 type folder struct {
@@ -50,7 +50,7 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, paths []str
 		info:          &model.File{Kind: model.FileFolder},
 		sortAscending: []bool{true, false, false, false},
 	}
-	m := &controller{
+	c := &controller{
 		fs:       fs,
 		renderer: renderer,
 		events:   ev,
@@ -61,37 +61,37 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, paths []str
 		folders:  map[string]*folder{"": rootFolder},
 	}
 	for _, path := range paths {
-		s := fs.NewScanner(path)
-		m.archives[path] = &archive{
-			scanner: actor.NewActor(s.Handler),
-			byINode: map[uint64]*model.File{},
+		fs.ScanArchive(path)
+		c.archives[path] = &archive{
+			byName: map[string]*model.File{},
 		}
 	}
 
-	for _, archive := range m.archives {
-		archive.scanner.Send(model.ScanArchive{})
-	}
-
-	for !m.quit {
-		event := <-m.events
-		m.handleEvent(event)
-		events := 0
+	for !c.quit {
+		event := <-c.events
+		c.handleEvent(event)
 		select {
-		case event = <-m.events:
-			m.handleEvent(event)
-			events++
+		case event = <-c.events:
+			c.handleEvent(event)
 		default:
 		}
 
-		m.folders[m.currentPath].sort()
-		m.renderer.Reset()
-		m.view().Render(m.renderer, widgets.Position{X: 0, Y: 0}, widgets.Size(m.ScreenSize()))
-		m.renderer.Show()
+		c.folders[c.currentPath].sort()
+		c.renderer.Reset()
+		c.view().Render(c.renderer, widgets.Position{X: 0, Y: 0}, widgets.Size(c.ScreenSize()))
+		c.renderer.Show()
 	}
 }
 
-func (m *controller) ScreenSize() model.ScreenSize {
-	return m.screenSize
+func (c *controller) hashStatus(hash string, status model.Status) {
+	for _, file := range c.byHash[hash] {
+		file.Status = status
+		c.updateFolderStatus(dir(file.Name))
+	}
+}
+
+func (c *controller) ScreenSize() model.ScreenSize {
+	return c.screenSize
 }
 
 type selectFile *model.File

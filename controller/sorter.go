@@ -47,11 +47,14 @@ func (s sliceByName) Less(i, j int) bool {
 	} else if iName > jName {
 		return false
 	}
-	if s.sliceBy[i].Size < s.sliceBy[j].Size {
+	iStatus := s.sliceBy[i].Status
+	jStatus := s.sliceBy[j].Status
+	if iStatus < jStatus {
 		return true
-	} else if s.sliceBy[i].Size > s.sliceBy[j].Size {
+	} else if iStatus > jStatus {
 		return false
 	}
+
 	return s.sliceBy[i].ModTime.Before(s.sliceBy[j].ModTime)
 }
 
@@ -60,9 +63,11 @@ type sliceByStatus struct {
 }
 
 func (s sliceByStatus) Less(i, j int) bool {
-	if s.sliceBy[i].Status < s.sliceBy[j].Status {
+	iStatus := s.sliceBy[i].Status
+	jStatus := s.sliceBy[j].Status
+	if iStatus < jStatus {
 		return true
-	} else if s.sliceBy[i].Status > s.sliceBy[j].Status {
+	} else if iStatus > jStatus {
 		return false
 	}
 
@@ -74,9 +79,11 @@ type sliceByTime struct {
 }
 
 func (s sliceByTime) Less(i, j int) bool {
-	if s.sliceBy[i].ModTime.Before(s.sliceBy[j].ModTime) {
+	iModTime := s.sliceBy[i].ModTime
+	jModTime := s.sliceBy[j].ModTime
+	if iModTime.Before(jModTime) {
 		return true
-	} else if s.sliceBy[i].ModTime.After(s.sliceBy[j].ModTime) {
+	} else if iModTime.After(jModTime) {
 		return false
 	}
 
@@ -88,9 +95,11 @@ type sliceBySize struct {
 }
 
 func (s sliceBySize) Less(i, j int) bool {
-	if s.sliceBy[i].Size < s.sliceBy[j].Size {
+	iSize := s.sliceBy[i].Size
+	jSize := s.sliceBy[j].Size
+	if iSize < jSize {
 		return true
-	} else if s.sliceBy[i].Size > s.sliceBy[j].Size {
+	} else if iSize > jSize {
 		return false
 	}
 

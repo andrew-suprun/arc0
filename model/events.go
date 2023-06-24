@@ -10,40 +10,23 @@ type Event interface {
 	event()
 }
 
-type FileScanned FileMeta
+type ArchiveScanned []FileMeta
 
-func (FileScanned) event() {}
+func (ArchiveScanned) event() {}
 
 type FileHashed struct {
-	Root  string
-	INode uint64
-	Hash  string
+	Root, Name, Hash string
 }
 
 func (FileHashed) event() {}
 
-type FileCopied struct {
-	Root      string
-	FromRoot  string
-	FromINode uint64
+type FilesHandled HandleFiles
+
+func (h FilesHandled) String() string {
+	return HandleFiles(h).String()
 }
 
-func (FileCopied) event() {}
-
-type FileRenamed struct {
-	Root    string
-	INode   uint64
-	NewName string
-}
-
-func (FileRenamed) event() {}
-
-type FileDeleted struct {
-	Root  string
-	INode uint64
-}
-
-func (FileDeleted) event() {}
+func (FilesHandled) event() {}
 
 type Progress struct {
 	Root          string
@@ -56,12 +39,8 @@ func (Progress) event() {}
 type ProgressState int
 
 const (
-	WalkingFileTree ProgressState = iota
-	WalkingFileTreeComplete
-	HashingFileTree
+	HashingFileTree ProgressState = iota
 	HashingFileTreeComplete
-	CopyingFile
-	CopyingComplete
 )
 
 type Error struct {

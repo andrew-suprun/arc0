@@ -1,6 +1,7 @@
 package file_fs
 
 import (
+	"arch/actor"
 	"arch/lifecycle"
 	"arch/model"
 	"os"
@@ -21,13 +22,17 @@ func NewFs(events model.EventChan, lc *lifecycle.Lifecycle) model.FS {
 	}
 }
 
-func (fs *fileFs) NewScanner(root string) model.Scanner {
-	return &scanner{
+func (fs *fileFs) ScanArchive(root string) {
+	s := &scanner{
 		events: fs.events,
 		lc:     fs.lc,
-		root:   root,
 		infos:  map[uint64]*fileInfo{},
 	}
+	go s.scanArchive(root)
+}
+
+func (fs *fileFs) NewFileHandler() actor.Actor[model.HandleFiles] {
+	return actor.NewActor[model.HandleFiles](fs.handleFiles)
 }
 
 func AbsPath(path string) (string, error) {

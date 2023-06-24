@@ -8,92 +8,86 @@ import (
 	"strings"
 )
 
-func (m *controller) handleEvent(event any) {
+func (c *controller) handleEvent(event any) {
 	if event == nil {
 		return
 	}
 
 	switch event := event.(type) {
-	case model.FileScanned:
-		m.fileScanned(event)
+	case model.ArchiveScanned:
+		c.archiveScanned(event)
 
 	case model.FileHashed:
-		m.fileHashed(event)
+		c.fileHashed(event)
 
-	case model.FileCopied:
-		m.fileCopied(event)
-
-	case model.FileRenamed:
-		m.fileRenamed(event)
-
-	case model.FileDeleted:
-		m.fileDeleted(event)
+	case model.FilesHandled:
+		c.filesHandled(event)
 
 	case model.Progress:
-		m.progressEvent(event)
+		c.progressEvent(event)
 
 	case model.ScreenSize:
-		m.screenSize = model.ScreenSize{Width: event.Width, Height: event.Height}
+		c.screenSize = model.ScreenSize{Width: event.Width, Height: event.Height}
 
 	case model.Enter:
-		m.enter()
+		c.enter()
 
 	case model.Esc:
-		if m.currentPath == "" {
+		if c.currentPath == "" {
 			return
 		}
-		parts := strings.Split(m.currentPath, "/")
+		parts := strings.Split(c.currentPath, "/")
 		if len(parts) == 1 {
-			m.currentPath = ""
+			c.currentPath = ""
 		}
-		m.currentPath = filepath.Join(parts[:len(parts)-1]...)
+		c.currentPath = filepath.Join(parts[:len(parts)-1]...)
 
 	case model.RevealInFinder:
-		folder := m.folders[m.currentPath]
+		folder := c.folders[c.currentPath]
 		if folder.selected != nil {
 			exec.Command("open", "-R", folder.selected.AbsName()).Start()
 		}
 
 	case model.RenameSelection:
-		m.moveSelection(event.Lines)
-		m.makeSelectedVisible()
+		c.moveSelection(event.Lines)
+		c.makeSelectedVisible()
 
 	case model.SelectFirst:
-		m.selectFirst()
-		m.makeSelectedVisible()
+		c.selectFirst()
+		c.makeSelectedVisible()
 
 	case model.SelectLast:
-		m.selectLast()
-		m.makeSelectedVisible()
+		c.selectLast()
+		c.makeSelectedVisible()
 
 	case model.Scroll:
-		m.shiftOffset(event.Lines)
+		c.shiftOffset(event.Lines)
 
 	case model.MouseTarget:
-		m.mouseTarget(event.Command)
+		c.mouseTarget(event.Command)
 
 	case model.PgUp:
-		m.shiftOffset(-m.fileTreeLines)
-		m.moveSelection(-m.fileTreeLines)
+		c.shiftOffset(-c.fileTreeLines)
+		c.moveSelection(-c.fileTreeLines)
 
 	case model.PgDn:
-		m.shiftOffset(m.fileTreeLines)
-		m.moveSelection(m.fileTreeLines)
+		c.shiftOffset(c.fileTreeLines)
+		c.moveSelection(c.fileTreeLines)
 
 	case model.KeepOne:
-		m.keepSelected()
+		c.keepSelected()
 
 	case model.KeepAll:
 		// TODO: Implement, maybe?
 
 	case model.Delete:
-		m.deleteSelected()
+		c.deleteSelected()
 
 	case model.Error:
-		m.Errors = append(m.Errors, event)
+		c.Errors = append(c.Errors, event)
 
 	case model.Quit:
-		m.quit = true
+		c.quit = true
 
 	default:
 		log.Panicf("### unhandled event: %#v", event)

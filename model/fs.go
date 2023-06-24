@@ -1,41 +1,55 @@
 package model
 
+import (
+	"arch/actor"
+	"fmt"
+	"strings"
+)
+
 type FS interface {
-	NewScanner(root string) Scanner
+	ScanArchive(root string)
+	NewFileHandler() actor.Actor[HandleFiles]
 }
 
-type Scanner interface {
-	Handler(msg Msg) bool
+type HandleFiles struct {
+	Hash   string
+	Delete []DeleteFile
+	Rename *RenameFile
+	Copy   *CopyFile
 }
 
-type Msg interface {
-	msg()
+func (h HandleFiles) String() string {
+	buf := &strings.Builder{}
+	fmt.Fprintf(buf, "hash: %q\n", h.Hash)
+	for _, d := range h.Delete {
+		fmt.Fprintf(buf, "    delete: %q/%q\n", d.Root, d.Name)
+	}
+
+	if h.Rename != nil {
+		fmt.Fprintf(buf, "    rename: root %q: %q -> %q\n", h.Rename.Root, h.Rename.OldName, h.Rename.NewName)
+	}
+	if h.Copy != nil {
+		fmt.Fprintf(buf, "    copy: %q/%q\n", h.Copy.SourceRoot, h.Copy.Name)
+		for _, t := range h.Copy.TargetRoots {
+			fmt.Fprintf(buf, "          -> %q\n", t)
+		}
+	}
+	return buf.String()
 }
 
-type ScanArchive struct{}
-
-func (ScanArchive) msg() {}
-
-type HashArchive struct{}
-
-func (HashArchive) msg() {}
-
-type CopyFile struct {
-	Root  string
-	INode uint64
+type DeleteFile struct {
+	Root string
+	Name string
 }
-
-func (CopyFile) msg() {}
 
 type RenameFile struct {
-	INode   uint64
+	Root    string
+	OldName string
 	NewName string
 }
 
-func (RenameFile) msg() {}
-
-type DeleteFile struct {
-	INode uint64
+type CopyFile struct {
+	SourceRoot  string
+	TargetRoots []string
+	Name        string
 }
-
-func (DeleteFile) msg() {}

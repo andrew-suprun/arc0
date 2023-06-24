@@ -21,35 +21,35 @@ var (
 	col = w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}}
 )
 
-func (m *controller) view() w.Widget {
+func (c *controller) view() w.Widget {
 	return w.Column(col,
-		m.title(),
-		m.folderView(),
-		m.progress(),
+		c.title(),
+		c.folderView(),
+		c.progress(),
 	)
 }
 
-func (m *controller) title() w.Widget {
+func (c *controller) title() w.Widget {
 	return w.Row(row,
 		w.Styled(styleAppTitle, w.Text(" Archiver").Flex(1)),
 	)
 }
 
-func (m *controller) folderView() w.Widget {
-	folder := m.folders[m.currentPath]
+func (c *controller) folderView() w.Widget {
+	folder := c.folders[c.currentPath]
 	return w.Column(col,
-		m.breadcrumbs(),
+		c.breadcrumbs(),
 		w.Styled(styleArchiveHeader,
 			w.Row(row,
-				w.MouseTarget(sortByStatus, w.Text(" St"+sortIndicator(m, sortByStatus)).Width(3+len(m.archives))),
-				w.MouseTarget(sortByName, w.Text(" Document"+sortIndicator(m, sortByName)).Width(20).Flex(1)),
-				w.MouseTarget(sortByTime, w.Text("  Date Modified"+sortIndicator(m, sortByTime)).Width(19)),
-				w.MouseTarget(sortBySize, w.Text(fmt.Sprintf("%22s", "Size"+sortIndicator(m, sortBySize)+" "))),
+				w.MouseTarget(sortByStatus, w.Text(" St"+c.sortIndicator(sortByStatus)).Width(3+len(c.archives))),
+				w.MouseTarget(sortByName, w.Text(" Document"+c.sortIndicator(sortByName)).Width(20).Flex(1)),
+				w.MouseTarget(sortByTime, w.Text("  Date Modified"+c.sortIndicator(sortByTime)).Width(19)),
+				w.MouseTarget(sortBySize, w.Text(fmt.Sprintf("%22s", "Size"+c.sortIndicator(sortBySize)+" "))),
 			),
 		),
 		w.Scroll(model.Scroll{}, w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}},
 			func(size w.Size) w.Widget {
-				m.fileTreeLines = size.Height
+				c.fileTreeLines = size.Height
 				if folder.lineOffset > len(folder.entries)+1-size.Height {
 					folder.lineOffset = len(folder.entries) + 1 - size.Height
 				}
@@ -63,9 +63,9 @@ func (m *controller) folderView() w.Widget {
 					if i >= size.Height {
 						break
 					}
-					rows = append(rows, w.Styled(styleFile(file, m.folders[m.currentPath].selected == file),
+					rows = append(rows, w.Styled(styleFile(file, c.folders[c.currentPath].selected == file),
 						w.MouseTarget(selectFile(file), w.Row(row,
-							m.fileStatus(file)...,
+							c.fileStatus(file)...,
 						)),
 					))
 				}
@@ -76,38 +76,13 @@ func (m *controller) folderView() w.Widget {
 	)
 }
 
-func (m *controller) fileStatus(file *model.File) []w.Widget {
-	result := []w.Widget{}
+func (c *controller) fileStatus(file *model.File) []w.Widget {
+	result := []w.Widget{w.Text(" " + file.Status.String()).Width(11)}
 
-	allOnes := true
-
-	for _, count := range file.Counts {
-		if count != 1 {
-			allOnes = false
-			break
-		}
-	}
 	if file.Kind == model.FileRegular {
-		result = append(result, w.Text(" "))
-		if len(file.Counts) == len(m.archives) {
-			for _, count := range file.Counts {
-				if allOnes {
-					result = append(result, w.Text(" "))
-				} else if count == 0 {
-					result = append(result, w.Text("-"))
-				} else if count > 9 {
-					result = append(result, w.Text("*"))
-				} else {
-					result = append(result, w.Text(fmt.Sprint(count)))
-				}
-			}
-		} else {
-			result = append(result, w.Text("").Width(len(m.archives)))
-		}
 		result = append(result, w.Text("   "))
 	} else {
-		result = append(result, w.Text(" ").Width(len(m.archives)+1))
-		result = append(result, w.Text(" ▶ ").Width(len(m.archives)))
+		result = append(result, w.Text(" ▶ "))
 	}
 	result = append(result, w.Text(name(file.Name)).Width(20).Flex(1))
 	result = append(result, w.Text("  "))
@@ -117,8 +92,8 @@ func (m *controller) fileStatus(file *model.File) []w.Widget {
 	return result
 }
 
-func sortIndicator(m *controller, column sortColumn) string {
-	folder := m.folders[m.currentPath]
+func (c *controller) sortIndicator(column sortColumn) string {
+	folder := c.folders[c.currentPath]
 	if column == folder.sortColumn {
 		if folder.sortAscending[column] {
 			return " ▲"
@@ -128,16 +103,16 @@ func sortIndicator(m *controller, column sortColumn) string {
 	return ""
 }
 
-func (m *controller) breadcrumbs() w.Widget {
-	names := strings.Split(m.currentPath, "/")
+func (c *controller) breadcrumbs() w.Widget {
+	names := strings.Split(c.currentPath, "/")
 	widgets := make([]w.Widget, 0, len(names)*2+2)
-	widgets = append(widgets, w.MouseTarget(selectFolder(m.folders[""].info),
+	widgets = append(widgets, w.MouseTarget(selectFolder(c.folders[""].info),
 		w.Styled(styleBreadcrumbs, w.Text(" Root")),
 	))
 	for i := range names {
 		widgets = append(widgets, w.Text(" / "))
 		widgets = append(widgets,
-			w.MouseTarget(selectFolder(m.folders[filepath.Join(names[:i+1]...)].info),
+			w.MouseTarget(selectFolder(c.folders[filepath.Join(names[:i+1]...)].info),
 				w.Styled(styleBreadcrumbs, w.Text(names[i])),
 			),
 		)
@@ -146,60 +121,53 @@ func (m *controller) breadcrumbs() w.Widget {
 	return w.Row(row, widgets...)
 }
 
-func (m *controller) progress() w.Widget {
-	pathLen := 0
-	for path := range m.archives {
-		if pathLen < len(path) {
-			pathLen = len(path)
+type progressInfo struct {
+	progressLabel string
+	labelWidth    int
+	value         float64
+}
+
+func (c *controller) progress() w.Widget {
+	rootLen := 0
+	for path := range c.archives {
+		if rootLen < len(path) {
+			rootLen = len(path)
 		}
 	}
-	stats := []w.Widget{}
-	for _, path := range m.roots {
-		archive := *m.archives[path]
-		state := archive.progress.ProgressState
-		if state == model.HashingFileTree || state == model.CopyingFile {
-			progress := archive.progressValue()
-			stats = append(stats,
-				w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}},
-					w.Text(archive.progressLabel()+path).Width(pathLen+10),
-					w.Text(fmt.Sprintf(" %6.2f%%", progress*100)), w.Text(" "),
-					w.Styled(styleProgressBar,
-						w.ProgressBar(progress),
-					),
-					w.Text(" "),
-				),
-			)
+	progressInfos := make([]progressInfo, 0, len(c.archives)+1)
+	for _, root := range c.roots {
+		archive := c.archives[root]
+		if archive.progress.ProgressState == model.HashingFileTree {
+			progressInfos = append(progressInfos, progressInfo{
+				progressLabel: " Hashing: " + root,
+				labelWidth:    11 + rootLen,
+				value:         float64(archive.progress.Processed) / float64(archive.totalSize),
+			})
 		}
+	}
+	if c.fileHandler != nil {
+		progressInfos = append(progressInfos, progressInfo{
+			progressLabel: " Copying: ",
+			labelWidth:    11,
+			value:         float64(c.totalCopied) / float64(c.copySize),
+		})
+	}
+	stats := []w.Widget{}
+	for _, progress := range progressInfos {
+		stats = append(stats,
+			w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}},
+				w.Text(progress.progressLabel).Width(progress.labelWidth),
+				w.Text(fmt.Sprintf(" %6.2f%%", progress.value*100)), w.Text(" "),
+				w.Styled(styleProgressBar,
+					w.ProgressBar(progress.value),
+				),
+				w.Text(" "),
+			),
+		)
 	}
 	return w.Styled(styleStatusLine,
 		w.Column(w.Constraint{Size: w.Size{Width: 0, Height: len(stats)}, Flex: w.Flex{X: 1, Y: 0}}, stats...),
 	)
-}
-
-func (a *archive) progressLabel() string {
-	switch a.progress.ProgressState {
-	case model.HashingFileTree:
-		return " Hashing: "
-
-	case model.CopyingFile:
-		return " Copying: "
-
-	default:
-		return ""
-	}
-}
-
-func (a *archive) progressValue() float64 {
-	switch a.progress.ProgressState {
-	case model.HashingFileTree:
-		return float64(a.progress.Processed) / float64(a.totalSize)
-
-	case model.CopyingFile:
-		return float64(a.totalCopied+a.progress.Processed) / float64(a.copySize)
-
-	default:
-		return 0
-	}
 }
 
 func formatSize(size uint64) string {
@@ -232,7 +200,7 @@ func styleFile(file *model.File, selected bool) w.Style {
 
 var styleBreadcrumbs = w.Style{FG: 250, BG: 17, Flags: w.Bold + w.Italic}
 
-func statusColor(status model.FileStatus) byte {
+func statusColor(status model.Status) byte {
 	switch status {
 	case model.Identical:
 		return 250
@@ -240,7 +208,9 @@ func statusColor(status model.FileStatus) byte {
 		return 214
 	case model.Resolved:
 		return 82
-	case model.Conflict:
+	case model.Duplicate:
+		return 196
+	case model.Absent:
 		return 196
 	}
 	return 231
