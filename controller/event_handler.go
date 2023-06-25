@@ -80,6 +80,9 @@ func (c *controller) handleEvent(event any) {
 	case model.KeepOne:
 		c.keepSelected()
 
+	case model.Tab:
+		c.tab()
+
 	case model.KeepAll:
 		// TODO: Implement, maybe?
 

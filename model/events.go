@@ -97,6 +97,10 @@ type KeepAll struct{}
 
 func (KeepAll) event() {}
 
+type Tab struct{}
+
+func (Tab) event() {}
+
 type Delete struct{}
 
 func (Delete) event() {}

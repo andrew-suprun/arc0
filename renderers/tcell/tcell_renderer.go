@@ -133,11 +133,14 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 	case "Down":
 		device.events <- model.RenameSelection{Lines: 1}
 
-	case "Ctrl+O":
+	case "Ctrl+K":
 		device.events <- model.KeepOne{}
 
 	case "Ctrl+A":
 		device.events <- model.KeepAll{}
+
+	case "Tab":
+		device.events <- model.Tab{}
 
 	case "Backspace2": // Ctrl+Delete
 		device.events <- model.Delete{}

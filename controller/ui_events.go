@@ -4,6 +4,7 @@ import (
 	"arch/model"
 	"log"
 	"os/exec"
+	"sort"
 	"time"
 )
 
@@ -168,6 +169,43 @@ func (c *controller) keepFile(file *model.File) {
 		log.Printf("### keepFile: new msg=%v", msg)
 		c.fileHandler.Send(msg)
 	}
+}
+
+func (c *controller) tab() {
+	log.Printf("### tab")
+	selected := c.folders[c.currentPath].selected
+	if selected == nil || selected.Kind != model.FileRegular {
+		return
+	}
+	name := selected.Name
+	hash := selected.Hash
+
+	byHash := c.byHash[hash]
+	uniqueNames := map[string]struct{}{}
+	for _, meta := range byHash {
+		uniqueNames[meta.Name] = struct{}{}
+	}
+	names := []string{}
+	for name := range uniqueNames {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	idx := 0
+	for ; idx < len(names); idx++ {
+		if name == names[idx] {
+			break
+		}
+	}
+	name = names[(idx+1)%len(names)]
+	c.currentPath = dir(name)
+	folder := c.folders[c.currentPath]
+	for _, meta := range folder.entries {
+		if name == meta.Name && hash == meta.Hash {
+			folder.selected = meta
+			break
+		}
+	}
+	c.makeSelectedVisible()
 }
 
 func (c *controller) updateFolderStatus(path string) {
