@@ -173,7 +173,8 @@ func (c *controller) filesHandled(handled model.FilesHandled) {
 		archive := c.archives[source.SourceRoot]
 		meta := archive.byName[source.Name]
 		c.totalCopied += meta.Size
-		archive.progress.Processed = 0
+		c.fileCopied = 0
+		archive.progress.TotalHashed = 0
 		if c.totalCopied == c.copySize {
 			c.totalCopied = 0
 			c.copySize = 0
@@ -182,7 +183,7 @@ func (c *controller) filesHandled(handled model.FilesHandled) {
 	}
 }
 
-func (c *controller) progressEvent(event model.Progress) {
+func (c *controller) scanProgress(event model.ScanProgress) {
 	c.archives[event.Root].progress = event
 
 	if event.ProgressState == model.FileTreeHashed {
@@ -196,4 +197,8 @@ func (c *controller) progressEvent(event model.Progress) {
 			c.fileHandler.Send(msg)
 		}
 	}
+}
+
+func (c *controller) fileCopyProgress(event model.FileCopyProgress) {
+	c.fileCopied = uint64(event)
 }

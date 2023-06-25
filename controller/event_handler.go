@@ -23,8 +23,11 @@ func (c *controller) handleEvent(event any) {
 	case model.FilesHandled:
 		c.filesHandled(event)
 
-	case model.Progress:
-		c.progressEvent(event)
+	case model.ScanProgress:
+		c.scanProgress(event)
+
+	case model.FileCopyProgress:
+		c.fileCopyProgress(event)
 
 	case model.ScreenSize:
 		c.screenSize = model.ScreenSize{Width: event.Width, Height: event.Height}

@@ -107,7 +107,7 @@ func (s *scanner) hashArchive() {
 	}()
 
 	defer func() {
-		s.events <- model.Progress{
+		s.events <- model.ScanProgress{
 			Root:          s.root,
 			ProgressState: model.FileTreeHashed,
 		}
@@ -179,10 +179,10 @@ func (s *scanner) hashFile(info *fileInfo) {
 		}
 
 		s.totalHashed += uint64(nr)
-		s.events <- model.Progress{
+		s.events <- model.ScanProgress{
 			Root:          info.meta.Root,
 			ProgressState: model.HashingFileTree,
-			Processed:     s.totalHashed,
+			TotalHashed:   s.totalHashed,
 		}
 	}
 	info.hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
@@ -221,10 +221,10 @@ func (s *scanner) readMeta() {
 					Hash: hash,
 				}
 				s.totalHashed += info.meta.Size
-				s.events <- model.Progress{
+				s.events <- model.ScanProgress{
 					Root:          s.root,
 					ProgressState: model.HashingFileTree,
-					Processed:     s.totalHashed,
+					TotalHashed:   s.totalHashed,
 				}
 			}
 		}

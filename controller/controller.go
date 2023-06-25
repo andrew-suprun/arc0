@@ -20,6 +20,7 @@ type controller struct {
 	folders            map[string]*folder
 	currentPath        string
 	copySize           uint64
+	fileCopied         uint64
 	totalCopied        uint64
 	screenSize         model.ScreenSize
 	fileTreeLines      int
@@ -33,7 +34,7 @@ type controller struct {
 
 type archive struct {
 	scanner   model.ArchiveScanner
-	progress  model.Progress
+	progress  model.ScanProgress
 	totalSize uint64
 	byName    map[string]*model.File
 }

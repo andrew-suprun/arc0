@@ -141,15 +141,15 @@ func (c *controller) progress() w.Widget {
 			progressInfos = append(progressInfos, progressInfo{
 				progressLabel: " Hashing: " + root,
 				labelWidth:    11 + rootLen,
-				value:         float64(archive.progress.Processed) / float64(archive.totalSize),
+				value:         float64(archive.progress.TotalHashed) / float64(archive.totalSize),
 			})
 		}
 	}
-	if c.fileHandler != nil {
+	if c.fileHandler != nil && c.copySize > 0 {
 		progressInfos = append(progressInfos, progressInfo{
 			progressLabel: " Copying: ",
 			labelWidth:    11,
-			value:         float64(c.totalCopied) / float64(c.copySize),
+			value:         float64(c.totalCopied+c.fileCopied) / float64(c.copySize),
 		})
 	}
 	stats := []w.Widget{}

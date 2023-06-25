@@ -75,10 +75,10 @@ func (s *scanner) hashArchive() {
 				Hash: meta.Hash,
 			}
 			totalHashed += meta.Size
-			s.events <- model.Progress{
+			s.events <- model.ScanProgress{
 				Root:          s.root,
 				ProgressState: model.HashingFileTree,
-				Processed:     totalHashed,
+				TotalHashed:   totalHashed,
 			}
 		}
 	}
@@ -89,10 +89,10 @@ func (s *scanner) hashArchive() {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
-				s.events <- model.Progress{
+				s.events <- model.ScanProgress{
 					Root:          meta.Root,
 					ProgressState: model.HashingFileTree,
-					Processed:     totalHashed + hashed,
+					TotalHashed:   totalHashed + hashed,
 				}
 				if hashed == meta.Size {
 					break
@@ -107,7 +107,7 @@ func (s *scanner) hashArchive() {
 			}
 		}
 	}
-	s.events <- model.Progress{
+	s.events <- model.ScanProgress{
 		Root:          s.root,
 		ProgressState: model.FileTreeHashed,
 	}
@@ -115,6 +115,24 @@ func (s *scanner) hashArchive() {
 
 func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
 	log.Printf("### handleFiles: msg=%v", msg)
+	if msg.Copy != nil {
+		for _, meta := range metas[msg.Copy.SourceRoot] {
+			if meta.Name == msg.Copy.Name {
+				for copyed := uint64(0); ; copyed += 10000 {
+					if copyed > meta.Size {
+						copyed = meta.Size
+					}
+					fs.events <- model.FileCopyProgress(copyed)
+					if copyed == meta.Size {
+						break
+					}
+					time.Sleep(time.Millisecond)
+				}
+				break
+			}
+		}
+	}
+	fs.events <- model.FilesHandled(msg)
 	return true
 }
 

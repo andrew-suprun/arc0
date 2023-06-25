@@ -31,13 +31,13 @@ func (h FilesHandled) String() string {
 
 func (FilesHandled) event() {}
 
-type Progress struct {
+type ScanProgress struct {
 	Root          string
 	ProgressState ProgressState
-	Processed     uint64
+	TotalHashed   uint64
 }
 
-func (Progress) event() {}
+func (ScanProgress) event() {}
 
 type ProgressState int
 
@@ -47,6 +47,10 @@ const (
 	HashingFileTree
 	FileTreeHashed
 )
+
+type FileCopyProgress uint64
+
+func (FileCopyProgress) event() {}
 
 type Error struct {
 	Meta  FileMeta
