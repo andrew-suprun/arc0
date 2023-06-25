@@ -14,7 +14,7 @@ type FS interface {
 type HandleFiles struct {
 	Hash   string
 	Delete []DeleteFile
-	Rename *RenameFile
+	Rename []RenameFile
 	Copy   *CopyFile
 }
 
@@ -25,8 +25,8 @@ func (h HandleFiles) String() string {
 		fmt.Fprintf(buf, "    delete: %q/%q\n", d.Root, d.Name)
 	}
 
-	if h.Rename != nil {
-		fmt.Fprintf(buf, "    rename: root %q: %q -> %q\n", h.Rename.Root, h.Rename.OldName, h.Rename.NewName)
+	for _, r := range h.Rename {
+		fmt.Fprintf(buf, "    rename: root %q: %q -> %q\n", r.Root, r.OldName, r.NewName)
 	}
 	if h.Copy != nil {
 		fmt.Fprintf(buf, "    copy: %q/%q\n", h.Copy.SourceRoot, h.Copy.Name)

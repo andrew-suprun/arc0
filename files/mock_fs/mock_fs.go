@@ -3,6 +3,7 @@ package mock_fs
 import (
 	"arch/actor"
 	"arch/model"
+	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -94,6 +95,7 @@ func (fs *mockFs) scanArchive(root string) {
 }
 
 func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
+	log.Printf("### handleFiles: msg=%v", msg)
 	return true
 }
 

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"arch/model"
+	"log"
 	"os/exec"
 	"time"
 )
@@ -140,11 +141,11 @@ func (c *controller) keepFile(file *model.File) {
 		for i, archFile := range archFiles {
 			if i == keepIdx {
 				if file.Name != archFile.Name {
-					msg.Rename = &model.RenameFile{
+					msg.Rename = append(msg.Rename, model.RenameFile{
 						Root:    root,
 						OldName: archFile.Name,
 						NewName: file.Name,
-					}
+					})
 				}
 			} else {
 				msg.Delete = append(msg.Delete, model.DeleteFile{
@@ -158,6 +159,14 @@ func (c *controller) keepFile(file *model.File) {
 		for _, file := range filesForHash {
 			c.updateFolderStatus(dir(file.Name))
 		}
+	}
+
+	if c.fileHandler == nil {
+		log.Printf("### keepFile: store msg=%v", msg)
+		c.messages = append(c.messages, msg)
+	} else {
+		log.Printf("### keepFile: new msg=%v", msg)
+		c.fileHandler.Send(msg)
 	}
 }
 

@@ -1,3 +1,4 @@
+* identify selected by name/hash pair
 * sort by name within controller.byHash slices (for tab jumping)
 * update statuses and counters on all files on file events
 * populate view folders on fileHashed event
