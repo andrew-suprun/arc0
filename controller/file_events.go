@@ -33,49 +33,48 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 	archive := c.archives[fileHash.Root]
 	file := archive.byName[fileHash.Name]
 	file.Hash = fileHash.Hash
-	filesBySize := c.bySize[file.Size]
 	c.byHash[fileHash.Hash] = append(c.byHash[fileHash.Hash], file)
 
 	hashes := map[string]struct{}{}
+	filesBySize := c.bySize[file.Size]
 	for _, file := range filesBySize {
 		hashes[file.Hash] = struct{}{}
 	}
 	if _, ok := hashes[""]; ok {
 		return
 	}
-	for hash := range hashes {
-		filesForHash := map[string][]*model.File{}
-		for _, file := range filesBySize {
-			if file.Hash != hash {
-				continue
-			}
-			filesForHash[file.Root] = append(filesForHash[file.Root], file)
-		}
 
-		uniqueNames := map[string]struct{}{}
-		for _, files := range filesForHash {
-			for _, file := range files {
-				if _, exist := uniqueNames[file.Name]; !exist {
-					uniqueNames[file.Name] = struct{}{}
-					c.addToFolder(file, file.Size, file.ModTime)
-				}
-			}
+	filesForHash := map[string][]*model.File{}
+	for _, file := range filesBySize {
+		if file.Hash != fileHash.Hash {
+			continue
 		}
+		filesForHash[file.Root] = append(filesForHash[file.Root], file)
+	}
 
-		originFiles := filesForHash[c.roots[0]]
-		if len(originFiles) == 0 {
-			c.hashStatus(hash, model.Absent)
-		} else if len(originFiles) == 1 {
-			for _, root := range c.roots {
-				files := filesForHash[root]
-				if len(files) != 1 || originFiles[0].Name != files[0].Name {
-					c.keepFile(originFiles[0])
-					break
-				}
+	uniqueNames := map[string]struct{}{}
+	for _, files := range filesForHash {
+		for _, file := range files {
+			if _, exist := uniqueNames[file.Name]; !exist {
+				uniqueNames[file.Name] = struct{}{}
+				c.addToFolder(file, file.Size, file.ModTime)
 			}
-		} else {
-			c.hashStatus(hash, model.Duplicate)
 		}
+	}
+
+	originFiles := filesForHash[c.roots[0]]
+	if len(originFiles) == 0 {
+		c.hashStatus(fileHash.Hash, model.Absent)
+	} else if len(originFiles) == 1 {
+		for _, root := range c.roots {
+			files := filesForHash[root]
+			if len(files) != 1 || originFiles[0].Name != files[0].Name {
+				c.keepFile(originFiles[0])
+				break
+			}
+		}
+	} else {
+		c.hashStatus(fileHash.Hash, model.Duplicate)
 	}
 }
 
@@ -96,18 +95,18 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 		}
 		c.folders[dir(file.Name)] = parentFolder
 	} else {
-		if file.Kind == model.FileRegular {
+		folderAlreadyExists := false
+		switch file.Kind {
+		case model.FileRegular:
 			parentFolder.entries = append(parentFolder.entries, file)
-		}
-		sameFolder := false
-		if file.Kind == model.FileFolder {
+		case model.FileFolder:
 			for _, entry := range parentFolder.entries {
 				if entry.Kind == model.FileFolder && name(file.Name) == name(entry.Name) {
-					sameFolder = true
+					folderAlreadyExists = true
 					break
 				}
 			}
-			if !sameFolder {
+			if !folderAlreadyExists {
 				parentFolder.entries = append(parentFolder.entries, file)
 			}
 		}
