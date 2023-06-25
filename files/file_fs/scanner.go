@@ -76,7 +76,6 @@ func (s *scanner) scanArchive() {
 		modTime = modTime.UTC().Round(time.Second)
 
 		fileMeta := model.FileMeta{
-			INode:   sys.Ino,
 			Root:    s.root,
 			Name:    path,
 			ModTime: modTime,

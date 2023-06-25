@@ -1,4 +1,3 @@
-* sort by name within controller.byHash slices (for tab jumping)
 * remove INode from FileMeta
 * rename 'renderers' package to 'renderer'
 * move 'Renderer' interface to 'renderer' package

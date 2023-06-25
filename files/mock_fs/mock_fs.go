@@ -45,7 +45,6 @@ func (s *scanner) scanArchive() {
 	var archiveMetas []model.FileMeta
 	for _, meta := range archFiles {
 		archiveMetas = append(archiveMetas, model.FileMeta{
-			INode:   meta.INode,
 			Root:    s.root,
 			Name:    meta.Name,
 			Size:    meta.Size,

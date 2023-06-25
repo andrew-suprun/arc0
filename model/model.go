@@ -8,7 +8,6 @@ import (
 
 type FileMeta struct {
 	Root    string
-	INode   uint64
 	Name    string
 	Size    uint64
 	ModTime time.Time
