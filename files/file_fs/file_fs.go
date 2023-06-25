@@ -22,13 +22,13 @@ func NewFs(events model.EventChan, lc *lifecycle.Lifecycle) model.FS {
 	}
 }
 
-func (fs *fileFs) ScanArchive(root string) {
-	s := &scanner{
+func (fs *fileFs) NewArchiveScanner(root string) model.ArchiveScanner {
+	return &scanner{
+		root:   root,
 		events: fs.events,
 		lc:     fs.lc,
 		infos:  map[uint64]*fileInfo{},
 	}
-	go s.scanArchive(root)
 }
 
 func (fs *fileFs) NewFileHandler() actor.Actor[model.HandleFiles] {

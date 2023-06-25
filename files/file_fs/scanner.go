@@ -22,6 +22,7 @@ import (
 )
 
 type scanner struct {
+	root        string
 	events      model.EventChan
 	lc          *lifecycle.Lifecycle
 	infos       map[uint64]*fileInfo
@@ -35,25 +36,80 @@ type fileInfo struct {
 
 const hashFileName = ".meta.csv"
 
-func (s *scanner) ScanArchive(root string, events model.EventChan) {
-	go s.scanArchive(root)
+func (s *scanner) ScanArchive() {
+	go s.scanArchive()
 }
 
-func (s *scanner) scanArchive(root string) {
+func (s *scanner) HashArchive() {
+	go s.hashArchive()
+}
+
+func (s *scanner) scanArchive() {
+	fsys := os.DirFS(s.root)
+	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+		if s.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
+			return nil
+		}
+
+		if err != nil {
+			s.events <- model.Error{
+				Meta: model.FileMeta{
+					Root: s.root,
+					Name: path,
+				},
+				Error: err}
+			return nil
+		}
+
+		meta, err := d.Info()
+		if err != nil {
+			s.events <- model.Error{
+				Meta: model.FileMeta{
+					Root: s.root,
+					Name: path,
+				},
+				Error: err}
+			return nil
+		}
+		sys := meta.Sys().(*syscall.Stat_t)
+		modTime := meta.ModTime()
+		modTime = modTime.UTC().Round(time.Second)
+
+		fileMeta := model.FileMeta{
+			INode:   sys.Ino,
+			Root:    s.root,
+			Name:    path,
+			ModTime: modTime,
+			Size:    uint64(meta.Size()),
+		}
+
+		s.infos[sys.Ino] = &fileInfo{
+			meta: fileMeta,
+		}
+
+		return nil
+	})
+
+	result := model.ArchiveScanned{Root: s.root}
+	for _, info := range s.infos {
+		result.Metas = append(result.Metas, info.meta)
+	}
+	s.events <- result
+}
+
+func (s *scanner) hashArchive() {
 	s.lc.Started()
 	defer s.lc.Done()
 
-	s.scanInfos(root)
-
-	s.readMeta(root)
+	s.readMeta()
 	defer func() {
-		s.storeMeta(root)
+		s.storeMeta()
 	}()
 
 	defer func() {
 		s.events <- model.Progress{
-			Root:          root,
-			ProgressState: model.HashingFileTreeComplete,
+			Root:          s.root,
+			ProgressState: model.FileTreeHashed,
 		}
 	}()
 
@@ -80,53 +136,6 @@ func (s *scanner) scanArchive(root string) {
 			}
 		}
 	}
-}
-
-func (s *scanner) scanInfos(root string) {
-	fsys := os.DirFS(root)
-	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
-		if s.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
-			return nil
-		}
-
-		if err != nil {
-			s.events <- model.Error{
-				Meta: model.FileMeta{
-					Root: root,
-					Name: path,
-				},
-				Error: err}
-			return nil
-		}
-
-		meta, err := d.Info()
-		if err != nil {
-			s.events <- model.Error{
-				Meta: model.FileMeta{
-					Root: root,
-					Name: path,
-				},
-				Error: err}
-			return nil
-		}
-		sys := meta.Sys().(*syscall.Stat_t)
-		modTime := meta.ModTime()
-		modTime = modTime.UTC().Round(time.Second)
-
-		fileMeta := model.FileMeta{
-			INode:   sys.Ino,
-			Root:    root,
-			Name:    path,
-			ModTime: modTime,
-			Size:    uint64(meta.Size()),
-		}
-
-		s.infos[sys.Ino] = &fileInfo{
-			meta: fileMeta,
-		}
-
-		return nil
-	})
 }
 
 func (s *scanner) hashFile(info *fileInfo) {
@@ -179,8 +188,8 @@ func (s *scanner) hashFile(info *fileInfo) {
 	info.hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 }
 
-func (s *scanner) readMeta(root string) {
-	absHashFileName := filepath.Join(root, hashFileName)
+func (s *scanner) readMeta() {
+	absHashFileName := filepath.Join(s.root, hashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
 	if err != nil {
 		return
@@ -207,13 +216,13 @@ func (s *scanner) readMeta(root string) {
 			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
 				info.hash = hash
 				s.events <- model.FileHashed{
-					Root: root,
+					Root: s.root,
 					Name: info.meta.Name,
 					Hash: hash,
 				}
 				s.totalHashed += info.meta.Size
 				s.events <- model.Progress{
-					Root:          root,
+					Root:          s.root,
 					ProgressState: model.HashingFileTree,
 					Processed:     s.totalHashed,
 				}
@@ -222,7 +231,7 @@ func (s *scanner) readMeta(root string) {
 	}
 }
 
-func (s *scanner) storeMeta(root string) error {
+func (s *scanner) storeMeta() error {
 	result := make([][]string, 1, len(s.infos)+1)
 	result[0] = []string{"INode", "Name", "Size", "ModTime", "Hash"}
 
@@ -236,7 +245,7 @@ func (s *scanner) storeMeta(root string) error {
 		})
 	}
 
-	absHashFileName := filepath.Join(root, hashFileName)
+	absHashFileName := filepath.Join(s.root, hashFileName)
 	hashInfoFile, err := os.Create(absHashFileName)
 
 	if err != nil {

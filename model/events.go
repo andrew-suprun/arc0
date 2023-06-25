@@ -10,7 +10,10 @@ type Event interface {
 	event()
 }
 
-type ArchiveScanned []FileMeta
+type ArchiveScanned struct {
+	Root  string
+	Metas []FileMeta
+}
 
 func (ArchiveScanned) event() {}
 
@@ -39,8 +42,10 @@ func (Progress) event() {}
 type ProgressState int
 
 const (
-	HashingFileTree ProgressState = iota
-	HashingFileTreeComplete
+	Initial ProgressState = iota
+	FileTreeScanned
+	HashingFileTree
+	FileTreeHashed
 )
 
 type Error struct {

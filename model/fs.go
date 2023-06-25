@@ -7,8 +7,13 @@ import (
 )
 
 type FS interface {
-	ScanArchive(root string)
+	NewArchiveScanner(root string) ArchiveScanner
 	NewFileHandler() actor.Actor[HandleFiles]
+}
+
+type ArchiveScanner interface {
+	ScanArchive()
+	HashArchive()
 }
 
 type HandleFiles struct {

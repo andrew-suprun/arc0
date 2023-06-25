@@ -32,6 +32,7 @@ type controller struct {
 }
 
 type archive struct {
+	scanner   model.ArchiveScanner
 	progress  model.Progress
 	totalSize uint64
 	byName    map[string]*model.File
@@ -46,7 +47,7 @@ type folder struct {
 	entries       []*model.File
 }
 
-func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, paths []string) {
+func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, roots []string) {
 	rootFolder := &folder{
 		info:          &model.File{Kind: model.FileFolder},
 		sortAscending: []bool{true, false, false, false},
@@ -55,17 +56,19 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, paths []str
 		fs:       fs,
 		renderer: renderer,
 		events:   ev,
-		roots:    paths,
+		roots:    roots,
 		archives: map[string]*archive{},
 		bySize:   map[uint64][]*model.File{},
 		byHash:   map[string][]*model.File{},
 		folders:  map[string]*folder{"": rootFolder},
 	}
-	for _, path := range paths {
-		fs.ScanArchive(path)
+	for _, path := range roots {
+		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
-			byName: map[string]*model.File{},
+			scanner: scanner,
+			byName:  map[string]*model.File{},
 		}
+		scanner.ScanArchive()
 	}
 
 	for !c.quit {

@@ -7,12 +7,18 @@ import (
 	"time"
 )
 
-func (c *controller) archiveScanned(metas model.ArchiveScanned) {
-	if len(metas) == 0 {
-		return
-	}
-	for _, meta := range metas {
+func (c *controller) archiveScanned(tree model.ArchiveScanned) {
+	for _, meta := range tree.Metas {
 		c.fileScanned(meta)
+	}
+	c.archives[tree.Root].progress.ProgressState = model.FileTreeScanned
+	for _, archive := range c.archives {
+		if archive.progress.ProgressState != model.FileTreeScanned {
+			return
+		}
+	}
+	for _, archive := range c.archives {
+		archive.scanner.HashArchive()
 	}
 }
 
@@ -44,37 +50,39 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 		return
 	}
 
-	filesForHash := map[string][]*model.File{}
-	for _, file := range filesBySize {
-		if file.Hash != fileHash.Hash {
-			continue
+	for hash := range hashes {
+		filesForHash := map[string][]*model.File{}
+		for _, file := range filesBySize {
+			if file.Hash != hash {
+				continue
+			}
+			filesForHash[file.Root] = append(filesForHash[file.Root], file)
 		}
-		filesForHash[file.Root] = append(filesForHash[file.Root], file)
-	}
 
-	uniqueNames := map[string]struct{}{}
-	for _, files := range filesForHash {
-		for _, file := range files {
-			if _, exist := uniqueNames[file.Name]; !exist {
-				uniqueNames[file.Name] = struct{}{}
-				c.addToFolder(file, file.Size, file.ModTime)
+		uniqueNames := map[string]struct{}{}
+		for _, files := range filesForHash {
+			for _, file := range files {
+				if _, exist := uniqueNames[file.Name]; !exist {
+					uniqueNames[file.Name] = struct{}{}
+					c.addToFolder(file, file.Size, file.ModTime)
+				}
 			}
 		}
-	}
 
-	originFiles := filesForHash[c.roots[0]]
-	if len(originFiles) == 0 {
-		c.hashStatus(fileHash.Hash, model.Absent)
-	} else if len(originFiles) == 1 {
-		for _, root := range c.roots {
-			files := filesForHash[root]
-			if len(files) != 1 || originFiles[0].Name != files[0].Name {
-				c.keepFile(originFiles[0])
-				break
+		originFiles := filesForHash[c.roots[0]]
+		if len(originFiles) == 0 {
+			c.hashStatus(hash, model.Absent)
+		} else if len(originFiles) == 1 {
+			for _, root := range c.roots {
+				files := filesForHash[root]
+				if len(files) != 1 || originFiles[0].Name != files[0].Name {
+					c.keepFile(originFiles[0])
+					break
+				}
 			}
+		} else {
+			c.hashStatus(hash, model.Duplicate)
 		}
-	} else {
-		c.hashStatus(fileHash.Hash, model.Duplicate)
 	}
 }
 
@@ -169,7 +177,7 @@ func (c *controller) filesHandled(handled model.FilesHandled) {
 		if c.totalCopied == c.copySize {
 			c.totalCopied = 0
 			c.copySize = 0
-			archive.progress.ProgressState = model.HashingFileTreeComplete
+			archive.progress.ProgressState = model.FileTreeHashed
 		}
 	}
 }
@@ -177,9 +185,9 @@ func (c *controller) filesHandled(handled model.FilesHandled) {
 func (c *controller) progressEvent(event model.Progress) {
 	c.archives[event.Root].progress = event
 
-	if event.ProgressState == model.HashingFileTreeComplete {
+	if event.ProgressState == model.FileTreeHashed {
 		for _, archive := range c.archives {
-			if archive.progress.ProgressState != model.HashingFileTreeComplete {
+			if archive.progress.ProgressState != model.FileTreeHashed {
 				return
 			}
 		}

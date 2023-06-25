@@ -15,32 +15,51 @@ type mockFs struct {
 	events model.EventChan
 }
 
+type scanner struct {
+	root   string
+	events model.EventChan
+}
+
 func NewFs(events model.EventChan) model.FS {
 	return &mockFs{events: events}
+}
+
+func (fs *mockFs) NewArchiveScanner(root string) model.ArchiveScanner {
+	return &scanner{root: root, events: fs.events}
 }
 
 func (fs *mockFs) NewFileHandler() actor.Actor[model.HandleFiles] {
 	return actor.NewActor[model.HandleFiles](fs.handleFiles)
 }
 
-func (m *mockFs) ScanArchive(root string) {
-	go m.scanArchive(root)
+func (s *scanner) ScanArchive() {
+	go s.scanArchive()
 }
 
-func (fs *mockFs) scanArchive(root string) {
-	archFiles := metas[root]
+func (s *scanner) HashArchive() {
+	go s.hashArchive()
+}
+
+func (s *scanner) scanArchive() {
+	archFiles := metas[s.root]
 	var archiveMetas []model.FileMeta
 	for _, meta := range archFiles {
 		archiveMetas = append(archiveMetas, model.FileMeta{
 			INode:   meta.INode,
-			Root:    root,
+			Root:    s.root,
 			Name:    meta.Name,
 			Size:    meta.Size,
 			ModTime: meta.ModTime,
 		})
 	}
-	fs.events <- model.ArchiveScanned(archiveMetas)
+	s.events <- model.ArchiveScanned{
+		Root:  s.root,
+		Metas: archiveMetas,
+	}
+}
 
+func (s *scanner) hashArchive() {
+	archFiles := metas[s.root]
 	scans := make([]bool, len(archFiles))
 
 	for i := range archFiles {
@@ -50,14 +69,14 @@ func (fs *mockFs) scanArchive(root string) {
 	for i := range archFiles {
 		if !scans[i] {
 			meta := archFiles[i]
-			fs.events <- model.FileHashed{
+			s.events <- model.FileHashed{
 				Root: meta.Root,
 				Name: meta.Name,
 				Hash: meta.Hash,
 			}
 			totalHashed += meta.Size
-			fs.events <- model.Progress{
-				Root:          root,
+			s.events <- model.Progress{
+				Root:          s.root,
 				ProgressState: model.HashingFileTree,
 				Processed:     totalHashed,
 			}
@@ -70,7 +89,7 @@ func (fs *mockFs) scanArchive(root string) {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
-				fs.events <- model.Progress{
+				s.events <- model.Progress{
 					Root:          meta.Root,
 					ProgressState: model.HashingFileTree,
 					Processed:     totalHashed + hashed,
@@ -81,16 +100,16 @@ func (fs *mockFs) scanArchive(root string) {
 				time.Sleep(time.Millisecond)
 			}
 			totalHashed += meta.Size
-			fs.events <- model.FileHashed{
+			s.events <- model.FileHashed{
 				Root: meta.Root,
 				Name: meta.Name,
 				Hash: meta.Hash,
 			}
 		}
 	}
-	fs.events <- model.Progress{
-		Root:          root,
-		ProgressState: model.HashingFileTreeComplete,
+	s.events <- model.Progress{
+		Root:          s.root,
+		ProgressState: model.FileTreeHashed,
 	}
 }
 

@@ -30,8 +30,8 @@ type File struct {
 	Status Status
 }
 
-func (f File) String() string {
-	return fmt.Sprintf("File{Meta: %s, Kind: %s}", f.FileMeta.String(), f.Kind)
+func (f *File) String() string {
+	return fmt.Sprintf("File{Meta: %v, Kind: %s, Status: %q, Hash: %q}", f.FileMeta.String(), f.Kind, f.Status, f.Hash)
 }
 
 type Files []*File
