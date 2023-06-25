@@ -1,4 +1,4 @@
-* remove INode from FileMeta
+* sort by name within controller.byHash slices (in preparation for tab jumping)
 * rename 'renderers' package to 'renderer'
 * move 'Renderer' interface to 'renderer' package
 * file copied/deleted/moved events
