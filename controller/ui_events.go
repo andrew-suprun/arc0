@@ -33,13 +33,17 @@ func (c *controller) mouseTarget(cmd any) {
 
 func (c *controller) selectFirst() {
 	folder := c.folders[c.currentPath]
-	folder.selected = folder.entries[0]
+	if len(folder.entries) > 0 {
+		folder.selected = folder.entries[0]
+	}
 }
 
 func (c *controller) selectLast() {
 	folder := c.folders[c.currentPath]
 	entries := folder.entries
-	folder.selected = entries[len(entries)-1]
+	if len(entries) > 0 {
+		folder.selected = entries[len(entries)-1]
+	}
 }
 
 func (c *controller) moveSelection(lines int) {

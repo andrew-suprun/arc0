@@ -2,6 +2,7 @@ package controller
 
 import (
 	"arch/model"
+	"log"
 	"path/filepath"
 	"time"
 )
@@ -163,7 +164,29 @@ func (c *controller) makeSelectedVisible() {
 }
 
 func (c *controller) filesHandled(handled model.FilesHandled) {
-	c.hashStatus(handled.Hash, model.Resolved)
+	log.Printf("filesHandled: ++++ %s", handled)
+	c.hashStatus(handled.Hash, model.Status(model.Initial))
+
+	for _, fileId := range handled.Delete {
+		c.removeFolderFile(fileId.Root, fileId.Name)
+	}
+
+renameBlock:
+	for _, fileId := range handled.Rename {
+
+		c.removeFolderFile(fileId.Root, fileId.OldName)
+
+		meta := c.archives[fileId.Root].byName[fileId.OldName]
+		meta.Name = fileId.NewName
+		path := dir(fileId.NewName)
+		entries := c.folders[path].entries
+		for _, entry := range entries {
+			if meta.Name == entry.Name && meta.Hash == entry.Hash {
+				continue renameBlock
+			}
+		}
+		c.folders[path].entries = append(entries, meta)
+	}
 
 	if handled.Copy != nil {
 		source := handled.Copy
@@ -176,6 +199,33 @@ func (c *controller) filesHandled(handled model.FilesHandled) {
 			c.totalCopied = 0
 			c.copySize = 0
 			archive.progress.ProgressState = model.FileTreeHashed
+		}
+	}
+	log.Printf("filesHandled: ----")
+}
+
+func (c *controller) removeFolderFile(root, name string) {
+	archive := c.archives[root]
+	meta := archive.byName[name]
+	path := dir(name)
+	entries := c.folders[path].entries
+	for i, entry := range entries {
+		if meta.Name == entry.Name && meta.Hash == entry.Hash {
+			if i < len(entries)-1 {
+				if c.folders[path].selected == entries[i] {
+					c.folders[path].selected = entries[i+1]
+				}
+				entries[i] = entries[len(entries)-1]
+				c.folders[path].entries = entries[:len(entries)-1]
+			} else {
+				if i > 0 && c.folders[path].selected == entries[i] {
+					c.folders[path].selected = entries[i-1]
+				} else {
+					c.folders[path].selected = nil
+				}
+				c.folders[path].entries = entries[:len(entries)-1]
+			}
+			break
 		}
 	}
 }

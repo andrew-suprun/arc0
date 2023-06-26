@@ -85,9 +85,9 @@ type SelectLast struct{}
 
 func (SelectLast) event() {}
 
-type RenameSelection struct{ Lines int }
+type MoveSelection struct{ Lines int }
 
-func (RenameSelection) event() {}
+func (MoveSelection) event() {}
 
 type KeepOne struct{}
 

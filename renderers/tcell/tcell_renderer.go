@@ -128,10 +128,10 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 		device.events <- model.PgDn{}
 
 	case "Up":
-		device.events <- model.RenameSelection{Lines: -1}
+		device.events <- model.MoveSelection{Lines: -1}
 
 	case "Down":
-		device.events <- model.RenameSelection{Lines: 1}
+		device.events <- model.MoveSelection{Lines: 1}
 
 	case "Ctrl+K":
 		device.events <- model.KeepOne{}

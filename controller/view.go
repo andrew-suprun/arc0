@@ -41,7 +41,7 @@ func (c *controller) folderView() w.Widget {
 		c.breadcrumbs(),
 		w.Styled(styleArchiveHeader,
 			w.Row(row,
-				w.MouseTarget(sortByStatus, w.Text(" St"+c.sortIndicator(sortByStatus)).Width(3+len(c.archives))),
+				w.MouseTarget(sortByStatus, w.Text(" Status"+c.sortIndicator(sortByStatus)).Width(13)),
 				w.MouseTarget(sortByName, w.Text(" Document"+c.sortIndicator(sortByName)).Width(20).Flex(1)),
 				w.MouseTarget(sortByTime, w.Text("  Date Modified"+c.sortIndicator(sortByTime)).Width(19)),
 				w.MouseTarget(sortBySize, w.Text(fmt.Sprintf("%22s", "Size"+c.sortIndicator(sortBySize)+" "))),

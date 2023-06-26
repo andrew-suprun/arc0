@@ -51,7 +51,7 @@ func (c *controller) handleEvent(event any) {
 			exec.Command("open", "-R", folder.selected.AbsName()).Start()
 		}
 
-	case model.RenameSelection:
+	case model.MoveSelection:
 		c.moveSelection(event.Lines)
 		c.makeSelectedVisible()
 

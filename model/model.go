@@ -56,7 +56,7 @@ type Status int
 
 const (
 	Identical Status = iota
-	Resolved
+	Resolved         // TODO: Remove Resolved state
 	Pending
 	Duplicate
 	Absent
