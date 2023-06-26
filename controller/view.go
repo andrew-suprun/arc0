@@ -41,7 +41,7 @@ func (c *controller) folderView() w.Widget {
 		c.breadcrumbs(),
 		w.Styled(styleArchiveHeader,
 			w.Row(row,
-				w.MouseTarget(sortByStatus, w.Text(" Status"+c.sortIndicator(sortByStatus)).Width(13)),
+				w.Text(" Status").Width(13),
 				w.MouseTarget(sortByName, w.Text(" Document"+c.sortIndicator(sortByName)).Width(20).Flex(1)),
 				w.MouseTarget(sortByTime, w.Text("  Date Modified"+c.sortIndicator(sortByTime)).Width(19)),
 				w.MouseTarget(sortBySize, w.Text(fmt.Sprintf("%22s", "Size"+c.sortIndicator(sortBySize)+" "))),
@@ -203,11 +203,9 @@ var styleBreadcrumbs = w.Style{FG: 250, BG: 17, Flags: w.Bold + w.Italic}
 func statusColor(status model.Status) byte {
 	switch status {
 	case model.Identical:
-		return 250
+		return 195
 	case model.Pending:
 		return 214
-	case model.Resolved:
-		return 82
 	case model.Duplicate:
 		return 196
 	case model.Absent:

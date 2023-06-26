@@ -107,7 +107,6 @@ type sortColumn int
 
 const (
 	sortByName sortColumn = iota
-	sortByStatus
 	sortByTime
 	sortBySize
 )

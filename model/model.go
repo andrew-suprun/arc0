@@ -56,7 +56,6 @@ type Status int
 
 const (
 	Identical Status = iota
-	Resolved         // TODO: Remove Resolved state
 	Pending
 	Duplicate
 	Absent
@@ -66,8 +65,6 @@ func (s Status) String() string {
 	switch s {
 	case Identical:
 		return ""
-	case Resolved:
-		return "Resolved"
 	case Pending:
 		return "Pending"
 	case Duplicate:
