@@ -3,7 +3,6 @@ package mock_fs
 import (
 	"arch/actor"
 	"arch/model"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -113,7 +112,6 @@ func (s *scanner) hashArchive() {
 }
 
 func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
-	log.Printf("### handleFiles: msg=%v", msg)
 	if msg.Copy != nil {
 		for _, meta := range metas[msg.Copy.SourceRoot] {
 			if meta.Name == msg.Copy.Name {

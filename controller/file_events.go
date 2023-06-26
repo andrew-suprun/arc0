@@ -2,7 +2,6 @@ package controller
 
 import (
 	"arch/model"
-	"log"
 	"path/filepath"
 	"time"
 )
@@ -164,8 +163,6 @@ func (c *controller) makeSelectedVisible() {
 }
 
 func (c *controller) filesHandled(handled model.FilesHandled) {
-	log.Printf("### files handled for %s", handled.String())
-
 	c.hashStatus(handled.Hash, model.Resolved)
 
 	if handled.Copy != nil {

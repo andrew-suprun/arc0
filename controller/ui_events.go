@@ -160,14 +160,7 @@ func (c *controller) keepFile(file *model.File) {
 		for _, file := range filesForHash {
 			c.updateFolderStatus(dir(file.Name))
 		}
-	}
-
-	if c.fileHandler == nil {
-		log.Printf("### keepFile: store msg=%v", msg)
-		c.messages = append(c.messages, msg)
-	} else {
-		log.Printf("### keepFile: new msg=%v", msg)
-		c.fileHandler.Send(msg)
+		c.sendMessage(msg)
 	}
 }
 
@@ -246,6 +239,8 @@ func (c *controller) deleteFile(file *model.File) {
 }
 
 func (c *controller) deleteRegularFile(file *model.File) {
+	c.hashStatus(file.Hash, model.Pending)
+
 	filesForHash := c.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
 	for _, fileForHash := range filesForHash {
@@ -262,12 +257,20 @@ func (c *controller) deleteRegularFile(file *model.File) {
 			Name: file.Name,
 		})
 	}
-	c.hashStatus(file.Hash, model.Pending)
+	c.sendMessage(msg)
 }
 
 func (c *controller) deleteFolderFile(file *model.File) {
 	folder := c.folders[file.Name]
 	for _, entry := range folder.entries {
 		c.deleteFile(entry)
+	}
+}
+
+func (c *controller) sendMessage(msg model.HandleFiles) {
+	if c.fileHandler == nil {
+		c.messages = append(c.messages, msg)
+	} else {
+		c.fileHandler.Send(msg)
 	}
 }
