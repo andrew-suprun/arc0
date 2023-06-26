@@ -6,7 +6,7 @@ import (
 	"arch/files/mock_fs"
 	"arch/lifecycle"
 	"arch/model"
-	"arch/renderers/tcell"
+	"arch/renderer/tcell"
 	"log"
 	"os"
 )
