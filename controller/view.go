@@ -173,7 +173,7 @@ func (c *controller) progress() w.Widget {
 
 func (c *controller) fileStats() w.Widget {
 	if c.duplicateFiles == 0 && c.absentFiles == 0 && c.pendingFiles == 0 {
-		return w.Text("All Clear").Flex(1)
+		return w.Text(" All Clear").Flex(1)
 	}
 	stats := []w.Widget{w.Text(" Stats:")}
 	if c.duplicateFiles > 0 {
@@ -186,7 +186,11 @@ func (c *controller) fileStats() w.Widget {
 		stats = append(stats, w.Text(fmt.Sprintf(" Pending: %d", c.pendingFiles)))
 	}
 	stats = append(stats, w.Text("").Flex(1))
-	return w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}}, stats...)
+	return w.Styled(
+		styleAppTitle,
+		w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}}, stats...),
+	)
+
 }
 
 func formatSize(size uint64) string {

@@ -110,6 +110,7 @@ func (c *controller) keepFile(file *model.File) {
 		return
 	}
 	log.Printf("keepFile: %s", file)
+	msg := model.HandleFiles{Hash: file.Hash}
 	if file.Status == model.Duplicate {
 		c.duplicateFiles--
 		c.hashStatus(file.Hash, model.ResolveDuplicate)
@@ -126,7 +127,6 @@ func (c *controller) keepFile(file *model.File) {
 		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
 	}
 
-	msg := model.HandleFiles{Hash: file.Hash}
 	copyFiles := &model.CopyFile{FileId: file.FileId}
 
 	for _, root := range c.roots {
@@ -172,6 +172,7 @@ func (c *controller) keepFile(file *model.File) {
 		for _, file := range filesForHash {
 			c.updateFolderStatus(dir(file.Name))
 		}
+		c.pendingFiles++
 		c.sendMessage(msg)
 	}
 }
@@ -242,6 +243,7 @@ func (c *controller) deleteFile(file *model.File) {
 		return
 	}
 
+	c.absentFiles--
 	if file.Kind == model.FileFolder {
 		c.deleteFolderFile(file)
 	} else {
@@ -252,7 +254,6 @@ func (c *controller) deleteFile(file *model.File) {
 
 func (c *controller) deleteRegularFile(file *model.File) {
 	c.hashStatus(file.Hash, model.ResolveAbsent)
-	c.absentFiles--
 
 	filesForHash := c.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
@@ -282,8 +283,6 @@ func (c *controller) deleteFolderFile(file *model.File) {
 }
 
 func (c *controller) sendMessage(msg model.HandleFiles) {
-	c.pendingFiles++
-
 	if c.fileHandler == nil {
 		c.messages = append(c.messages, msg)
 	} else {

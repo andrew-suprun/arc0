@@ -1,5 +1,4 @@
 * file copied/deleted/moved events
-* reflect stats in status line
 * add descriptors to ScanErrors
 * file operations
 * store hashes as hex encoded strings

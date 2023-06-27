@@ -121,7 +121,7 @@ func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
 	if msg.Copy != nil {
 		for _, meta := range metas[msg.Copy.Root] {
 			if meta.Name == msg.Copy.Name {
-				for copyed := uint64(0); ; copyed += 10000 {
+				for copyed := uint64(0); ; copyed += 50000 {
 					if copyed > meta.Size {
 						copyed = meta.Size
 					}
@@ -213,6 +213,7 @@ var metaMap = map[string][]string{
 		"yyy.txt:yyyy",
 		"1111:0000",
 		"3333:3333",
+		"4444:4444",
 	},
 	"copy 2": {
 		"xxx.txt:xxxx",
@@ -223,5 +224,6 @@ var metaMap = map[string][]string{
 		"q/w/e/r/t/y.txt:12345",
 		"2222:0000",
 		"3333:3333",
+		"5555:4444",
 	},
 }

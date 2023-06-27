@@ -18,7 +18,6 @@ type ArchiveScanner interface {
 
 type HandleFiles struct {
 	Hash   string
-	Status ResulutionStatus
 	Delete []DeleteFile
 	Rename []RenameFile
 	Copy   *CopyFile
