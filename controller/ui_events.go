@@ -109,7 +109,16 @@ func (c *controller) keepFile(file *model.File) {
 	if file == nil || file.Kind != model.FileRegular {
 		return
 	}
-	c.hashStatus(file.Hash, model.Pending)
+	log.Printf("keepFile: %s", file)
+	if file.Status == model.Duplicate {
+		c.duplicateFiles--
+		c.hashStatus(file.Hash, model.ResolveDuplicate)
+	} else if file.Status == model.Absent {
+		c.absentFiles--
+		c.hashStatus(file.Hash, model.ResolveAbsent)
+	} else {
+		c.hashStatus(file.Hash, model.AutoResolve)
+	}
 
 	filesForHash := c.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
@@ -118,10 +127,7 @@ func (c *controller) keepFile(file *model.File) {
 	}
 
 	msg := model.HandleFiles{Hash: file.Hash}
-	copyFiles := &model.CopyFile{
-		SourceRoot: file.Root,
-		Name:       file.Name,
-	}
+	copyFiles := &model.CopyFile{FileId: file.FileId}
 
 	for _, root := range c.roots {
 		if len(byArch[root]) == 0 {
@@ -147,8 +153,10 @@ func (c *controller) keepFile(file *model.File) {
 			if i == keepIdx {
 				if file.Name != archFile.Name {
 					msg.Rename = append(msg.Rename, model.RenameFile{
-						Root:    root,
-						OldName: archFile.Name,
+						FileId: model.FileId{
+							Root: root,
+							Name: archFile.Name,
+						},
 						NewName: file.Name,
 					})
 				}
@@ -207,7 +215,7 @@ func (c *controller) tab() {
 
 func (c *controller) updateFolderStatus(path string) {
 	currentFolder := c.folders[path]
-	status := model.Identical
+	status := model.Resolved
 	for _, entry := range currentFolder.entries {
 		status = status.Merge(entry.Status)
 	}
@@ -243,7 +251,8 @@ func (c *controller) deleteFile(file *model.File) {
 }
 
 func (c *controller) deleteRegularFile(file *model.File) {
-	c.hashStatus(file.Hash, model.Pending)
+	c.hashStatus(file.Hash, model.ResolveAbsent)
+	c.absentFiles--
 
 	filesForHash := c.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
@@ -261,6 +270,7 @@ func (c *controller) deleteRegularFile(file *model.File) {
 			Name: file.Name,
 		})
 	}
+	c.pendingFiles++
 	c.sendMessage(msg)
 }
 
@@ -272,6 +282,8 @@ func (c *controller) deleteFolderFile(file *model.File) {
 }
 
 func (c *controller) sendMessage(msg model.HandleFiles) {
+	c.pendingFiles++
+
 	if c.fileHandler == nil {
 		c.messages = append(c.messages, msg)
 	} else {

@@ -26,6 +26,7 @@ func (c *controller) view() w.Widget {
 		c.title(),
 		c.folderView(),
 		c.progress(),
+		c.fileStats(),
 	)
 }
 
@@ -170,6 +171,24 @@ func (c *controller) progress() w.Widget {
 	)
 }
 
+func (c *controller) fileStats() w.Widget {
+	if c.duplicateFiles == 0 && c.absentFiles == 0 && c.pendingFiles == 0 {
+		return w.Text("All Clear").Flex(1)
+	}
+	stats := []w.Widget{w.Text(" Stats:")}
+	if c.duplicateFiles > 0 {
+		stats = append(stats, w.Text(fmt.Sprintf(" Duplicates: %d", c.duplicateFiles)))
+	}
+	if c.absentFiles > 0 {
+		stats = append(stats, w.Text(fmt.Sprintf(" Absent: %d", c.absentFiles)))
+	}
+	if c.pendingFiles > 0 {
+		stats = append(stats, w.Text(fmt.Sprintf(" Pending: %d", c.pendingFiles)))
+	}
+	stats = append(stats, w.Text("").Flex(1))
+	return w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}}, stats...)
+}
+
 func formatSize(size uint64) string {
 	str := fmt.Sprintf("%13d ", size)
 	slice := []string{str[:1], str[1:4], str[4:7], str[7:10]}
@@ -200,11 +219,11 @@ func styleFile(file *model.File, selected bool) w.Style {
 
 var styleBreadcrumbs = w.Style{FG: 250, BG: 17, Flags: w.Bold + w.Italic}
 
-func statusColor(status model.Status) byte {
+func statusColor(status model.ResulutionStatus) byte {
 	switch status {
-	case model.Identical:
+	case model.Resolved:
 		return 195
-	case model.Pending:
+	case model.AutoResolve, model.ResolveDuplicate, model.ResolveAbsent:
 		return 214
 	case model.Duplicate:
 		return 196

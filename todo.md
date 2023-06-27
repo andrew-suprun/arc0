@@ -1,4 +1,3 @@
-* move 'Renderer' interface to 'renderer' package
 * file copied/deleted/moved events
 * reflect stats in status line
 * add descriptors to ScanErrors

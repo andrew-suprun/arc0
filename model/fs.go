@@ -18,6 +18,7 @@ type ArchiveScanner interface {
 
 type HandleFiles struct {
 	Hash   string
+	Status ResulutionStatus
 	Delete []DeleteFile
 	Rename []RenameFile
 	Copy   *CopyFile
@@ -31,10 +32,10 @@ func (h HandleFiles) String() string {
 	}
 
 	for _, r := range h.Rename {
-		fmt.Fprintf(buf, "    rename: root %q: %q -> %q\n", r.Root, r.OldName, r.NewName)
+		fmt.Fprintf(buf, "    rename: root %q: %q -> %q\n", r.Root, r.Name, r.NewName)
 	}
 	if h.Copy != nil {
-		fmt.Fprintf(buf, "    copy: %q/%q\n", h.Copy.SourceRoot, h.Copy.Name)
+		fmt.Fprintf(buf, "    copy: %q/%q\n", h.Copy.Root, h.Copy.Name)
 		for _, t := range h.Copy.TargetRoots {
 			fmt.Fprintf(buf, "          -> %q\n", t)
 		}
@@ -42,19 +43,14 @@ func (h HandleFiles) String() string {
 	return buf.String()
 }
 
-type DeleteFile struct {
-	Root string
-	Name string
-}
+type DeleteFile FileId
 
 type RenameFile struct {
-	Root    string
-	OldName string
+	FileId
 	NewName string
 }
 
 type CopyFile struct {
-	SourceRoot  string
+	FileId
 	TargetRoots []string
-	Name        string
 }

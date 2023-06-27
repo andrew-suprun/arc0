@@ -22,6 +22,9 @@ type controller struct {
 	copySize           uint64
 	fileCopied         uint64
 	totalCopied        uint64
+	pendingFiles       int
+	duplicateFiles     int
+	absentFiles        int
 	screenSize         model.ScreenSize
 	fileTreeLines      int
 	lastMouseEventTime time.Time
@@ -88,7 +91,7 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, roots []str
 	}
 }
 
-func (c *controller) hashStatus(hash string, status model.Status) {
+func (c *controller) hashStatus(hash string, status model.ResulutionStatus) {
 	for _, file := range c.byHash[hash] {
 		file.Status = status
 		c.updateFolderStatus(dir(file.Name))

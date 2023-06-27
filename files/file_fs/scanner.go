@@ -53,10 +53,7 @@ func (s *scanner) scanArchive() {
 
 		if err != nil {
 			s.events <- model.Error{
-				Meta: model.FileMeta{
-					Root: s.root,
-					Name: path,
-				},
+				Meta:  model.FileMeta{FileId: model.FileId{Root: s.root, Name: path}},
 				Error: err}
 			return nil
 		}
@@ -64,10 +61,7 @@ func (s *scanner) scanArchive() {
 		meta, err := d.Info()
 		if err != nil {
 			s.events <- model.Error{
-				Meta: model.FileMeta{
-					Root: s.root,
-					Name: path,
-				},
+				Meta:  model.FileMeta{FileId: model.FileId{Root: s.root, Name: path}},
 				Error: err}
 			return nil
 		}
@@ -76,8 +70,10 @@ func (s *scanner) scanArchive() {
 		modTime = modTime.UTC().Round(time.Second)
 
 		fileMeta := model.FileMeta{
-			Root:    s.root,
-			Name:    path,
+			FileId: model.FileId{
+				Root: s.root,
+				Name: path,
+			},
 			ModTime: modTime,
 			Size:    uint64(meta.Size()),
 		}
@@ -129,9 +125,8 @@ func (s *scanner) hashArchive() {
 			s.hashFile(fileInfos[i])
 
 			s.events <- model.FileHashed{
-				Root: info.meta.Root,
-				Name: info.meta.Name,
-				Hash: info.hash,
+				FileId: info.meta.FileId,
+				Hash:   info.hash,
 			}
 		}
 	}
@@ -215,8 +210,10 @@ func (s *scanner) readMeta() {
 			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
 				info.hash = hash
 				s.events <- model.FileHashed{
-					Root: s.root,
-					Name: info.meta.Name,
+					FileId: model.FileId{
+						Root: s.root,
+						Name: info.meta.Name,
+					},
 					Hash: hash,
 				}
 				s.totalHashed += info.meta.Size

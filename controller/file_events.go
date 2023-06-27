@@ -72,6 +72,7 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 		originFiles := filesForHash[c.roots[0]]
 		if len(originFiles) == 0 {
 			c.hashStatus(hash, model.Absent)
+			c.absentFiles++
 		} else if len(originFiles) == 1 {
 			for _, root := range c.roots {
 				files := filesForHash[root]
@@ -82,6 +83,7 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 			}
 		} else {
 			c.hashStatus(hash, model.Duplicate)
+			c.duplicateFiles++
 		}
 	}
 }
@@ -92,7 +94,9 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 		parentFolder = &folder{
 			info: &model.File{
 				FileMeta: model.FileMeta{
-					Name:    dir(file.Name),
+					FileId: model.FileId{
+						Name: dir(file.Name),
+					},
 					Size:    file.Size,
 					ModTime: file.ModTime,
 				},
@@ -165,20 +169,21 @@ func (c *controller) makeSelectedVisible() {
 
 func (c *controller) filesHandled(handled model.FilesHandled) {
 	log.Printf("filesHandled: ++++ %s", handled)
-	c.hashStatus(handled.Hash, model.Status(model.Initial))
+	c.hashStatus(handled.Hash, model.ResulutionStatus(model.Initial))
+	c.pendingFiles--
 
 	for _, fileId := range handled.Delete {
-		c.removeFolderFile(fileId.Root, fileId.Name)
+		c.removeFolderFile(model.FileId(fileId))
 	}
 
 renameBlock:
-	for _, fileId := range handled.Rename {
+	for _, rename := range handled.Rename {
 
-		c.removeFolderFile(fileId.Root, fileId.OldName)
+		c.removeFolderFile(rename.FileId)
 
-		meta := c.archives[fileId.Root].byName[fileId.OldName]
-		meta.Name = fileId.NewName
-		path := dir(fileId.NewName)
+		meta := c.archives[rename.Root].byName[rename.Name]
+		meta.Name = rename.NewName
+		path := dir(rename.NewName)
 		entries := c.folders[path].entries
 		for _, entry := range entries {
 			if meta.Name == entry.Name && meta.Hash == entry.Hash {
@@ -190,7 +195,7 @@ renameBlock:
 
 	if handled.Copy != nil {
 		source := handled.Copy
-		archive := c.archives[source.SourceRoot]
+		archive := c.archives[source.Root]
 		meta := archive.byName[source.Name]
 		c.totalCopied += meta.Size
 		c.fileCopied = 0
@@ -204,10 +209,10 @@ renameBlock:
 	log.Printf("filesHandled: ----")
 }
 
-func (c *controller) removeFolderFile(root, name string) {
-	archive := c.archives[root]
-	meta := archive.byName[name]
-	path := dir(name)
+func (c *controller) removeFolderFile(id model.FileId) {
+	archive := c.archives[id.Root]
+	meta := archive.byName[id.Name]
+	path := dir(id.Name)
 	entries := c.folders[path].entries
 	for i, entry := range entries {
 		if meta.Name == entry.Name && meta.Hash == entry.Hash {

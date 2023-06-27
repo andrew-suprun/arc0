@@ -6,9 +6,13 @@ import (
 	"time"
 )
 
+type FileId struct {
+	Root string
+	Name string
+}
+
 type FileMeta struct {
-	Root    string
-	Name    string
+	FileId
 	Size    uint64
 	ModTime time.Time
 }
@@ -26,11 +30,11 @@ type File struct {
 	FileMeta
 	Kind   FileKind
 	Hash   string
-	Status Status
+	Status ResulutionStatus
 }
 
 func (f *File) String() string {
-	return fmt.Sprintf("File{Meta: %v, Kind: %s, Status: %q, Hash: %q}", f.FileMeta.String(), f.Kind, f.Status, f.Hash)
+	return fmt.Sprintf("File{Root: %q, Name: %q, Kind: %s, Status: %q, Hash: %q}", f.Root, f.Name, f.Kind, f.Status, f.Hash)
 }
 
 type Files []*File
@@ -52,20 +56,22 @@ func (k FileKind) String() string {
 	return "UNKNOWN FILE KIND"
 }
 
-type Status int
+type ResulutionStatus int
 
 const (
-	Identical Status = iota
-	Pending
+	Resolved ResulutionStatus = iota
+	AutoResolve
+	ResolveDuplicate
+	ResolveAbsent
 	Duplicate
 	Absent
 )
 
-func (s Status) String() string {
+func (s ResulutionStatus) String() string {
 	switch s {
-	case Identical:
+	case Resolved:
 		return ""
-	case Pending:
+	case AutoResolve, ResolveDuplicate, ResolveAbsent:
 		return "Pending"
 	case Duplicate:
 		return "Duplicate"
@@ -75,7 +81,7 @@ func (s Status) String() string {
 	return "UNKNOWN FILE STATUS"
 }
 
-func (s Status) Merge(other Status) Status {
+func (s ResulutionStatus) Merge(other ResulutionStatus) ResulutionStatus {
 	if s > other {
 		return s
 	}

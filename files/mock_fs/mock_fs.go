@@ -44,8 +44,10 @@ func (s *scanner) scanArchive() {
 	var archiveMetas []model.FileMeta
 	for _, meta := range archFiles {
 		archiveMetas = append(archiveMetas, model.FileMeta{
-			Root:    s.root,
-			Name:    meta.Name,
+			FileId: model.FileId{
+				Root: s.root,
+				Name: meta.Name,
+			},
 			Size:    meta.Size,
 			ModTime: meta.ModTime,
 		})
@@ -68,8 +70,10 @@ func (s *scanner) hashArchive() {
 		if !scans[i] {
 			meta := archFiles[i]
 			s.events <- model.FileHashed{
-				Root: meta.Root,
-				Name: meta.Name,
+				FileId: model.FileId{
+					Root: meta.Root,
+					Name: meta.Name,
+				},
 				Hash: meta.Hash,
 			}
 			totalHashed += meta.Size
@@ -99,8 +103,10 @@ func (s *scanner) hashArchive() {
 			}
 			totalHashed += meta.Size
 			s.events <- model.FileHashed{
-				Root: meta.Root,
-				Name: meta.Name,
+				FileId: model.FileId{
+					Root: meta.Root,
+					Name: meta.Name,
+				},
 				Hash: meta.Hash,
 			}
 		}
@@ -113,7 +119,7 @@ func (s *scanner) hashArchive() {
 
 func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
 	if msg.Copy != nil {
-		for _, meta := range metas[msg.Copy.SourceRoot] {
+		for _, meta := range metas[msg.Copy.Root] {
 			if meta.Name == msg.Copy.Name {
 				for copyed := uint64(0); ; copyed += 10000 {
 					if copyed > meta.Size {

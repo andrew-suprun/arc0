@@ -18,7 +18,8 @@ type ArchiveScanned struct {
 func (ArchiveScanned) event() {}
 
 type FileHashed struct {
-	Root, Name, Hash string
+	FileId
+	Hash string
 }
 
 func (FileHashed) event() {}
