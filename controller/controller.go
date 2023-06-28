@@ -28,7 +28,6 @@ type controller struct {
 	screenSize         model.ScreenSize
 	fileTreeLines      int
 	lastMouseEventTime time.Time
-	messages           []model.HandleFiles
 
 	Errors []any
 

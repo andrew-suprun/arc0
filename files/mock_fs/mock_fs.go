@@ -4,14 +4,14 @@ import (
 	"arch/actor"
 	"arch/model"
 	"math/rand"
-	"strings"
 	"time"
 )
 
 var Scan bool
 
 type mockFs struct {
-	events model.EventChan
+	events  model.EventChan
+	handler actor.Actor[model.HandleFiles]
 }
 
 type scanner struct {
@@ -20,15 +20,17 @@ type scanner struct {
 }
 
 func NewFs(events model.EventChan) model.FS {
-	return &mockFs{events: events}
+	fs := &mockFs{events: events}
+	fs.handler = actor.NewActor[model.HandleFiles](fs.handleFiles)
+	return fs
 }
 
 func (fs *mockFs) NewArchiveScanner(root string) model.ArchiveScanner {
 	return &scanner{root: root, events: fs.events}
 }
 
-func (fs *mockFs) NewFileHandler() actor.Actor[model.HandleFiles] {
-	return actor.NewActor[model.HandleFiles](fs.handleFiles)
+func (fs *mockFs) Send(cmd model.HandleFiles) {
+	fs.handler.Send(cmd)
 }
 
 func (s *scanner) ScanArchive() {
@@ -152,22 +154,24 @@ type fileMeta struct {
 	ModTime time.Time
 }
 
-var sizes = map[string]uint64{}
+var sizeByName = map[string]uint64{}
+var sizeByHash = map[string]uint64{}
 var modTimes = map[string]time.Time{}
 var inode = uint64(0)
 
 func init() {
-	sizes["yyyy"] = 50000000
-	sizes["hhhh"] = 50000000
+	sizeByName["8888"] = 88888888
+	sizeByHash["yyyy"] = 50000000
+	sizeByHash["hhhh"] = 50000000
 	for root, metaStrings := range metaMap {
-		for _, meta := range metaStrings {
-			parts := strings.Split(meta, ":")
-			name := parts[0]
-			hash := parts[1]
-			size, ok := sizes[hash]
+		for name, hash := range metaStrings {
+			size, ok := sizeByName[name]
 			if !ok {
-				size = uint64(rand.Intn(100000000))
-				sizes[hash] = size
+				size, ok = sizeByHash[hash]
+				if !ok {
+					size = uint64(rand.Intn(100000000))
+					sizeByHash[hash] = size
+				}
 			}
 			modTime, ok := modTimes[hash]
 			if !ok {
@@ -189,41 +193,47 @@ func init() {
 }
 
 var metas = map[string][]*fileMeta{}
-var metaMap = map[string][]string{
+var metaMap = map[string]map[string]string{
 	"origin": {
-		"xxx.txt:xxxx",
-		"a/b/c/x.txt:hhhh",
-		"a/b/e/f.txt:gggg",
-		"a/b/e/g.txt:tttt",
-		"x.txt:hhhh",
-		"q/w/e/r/t/y.txt:qwerty",
-		"yyy.txt:yyyy",
-		"0000:0000",
+		"xxx.txt":         "xxxx",
+		"a/b/c/x.txt":     "hhhh",
+		"a/b/e/f.txt":     "gggg",
+		"a/b/e/g.txt":     "tttt",
+		"x.txt":           "hhhh",
+		"q/w/e/r/t/y.txt": "qwerty",
+		"yyy.txt":         "yyyy",
+		"0000":            "0000",
+		"6666":            "6666",
+		"7777":            "7777",
 	},
 	"copy 1": {
-		"xxx.txt:xxxx",
-		"a/b/c/d.txt:llll",
-		"a/b/e/f.txt:hhhh",
-		"a/b/e/g.txt:tttt",
-		"x.txt:mmmm",
-		"y.txt:gggg",
-		"a/b/c/x.txt:hhhh",
-		"zzzz.txt:hhhh",
-		"x/y/z.txt:zzzz",
-		"yyy.txt:yyyy",
-		"1111:0000",
-		"3333:3333",
-		"4444:4444",
+		"xxx.txt":     "xxxx",
+		"a/b/c/d.txt": "llll",
+		"a/b/e/f.txt": "hhhh",
+		"a/b/e/g.txt": "tttt",
+		"x.txt":       "mmmm",
+		"y.txt":       "gggg",
+		"a/b/c/x.txt": "hhhh",
+		"zzzz.txt":    "hhhh",
+		"x/y/z.txt":   "zzzz",
+		"yyy.txt":     "yyyy",
+		"1111":        "0000",
+		"3333":        "3333",
+		"4444":        "4444",
+		"8888":        "9999",
 	},
 	"copy 2": {
-		"xxx.txt:xxxx",
-		"a/b/c/f.txt:hhhh",
-		"a/b/e/x.txt:gggg",
-		"a/b/e/g.txt:tttt",
-		"x:asdfg",
-		"q/w/e/r/t/y.txt:12345",
-		"2222:0000",
-		"3333:3333",
-		"5555:4444",
+		"xxx.txt":         "xxxx",
+		"a/b/c/f.txt":     "hhhh",
+		"a/b/e/x.txt":     "gggg",
+		"a/b/e/g.txt":     "tttt",
+		"x":               "asdfg",
+		"q/w/e/r/t/y.txt": "12345",
+		"2222":            "0000",
+		"3333":            "3333",
+		"5555":            "4444",
+		"6666":            "7777",
+		"7777":            "6666",
+		"8888":            "8888",
 	},
 }

@@ -1,3 +1,5 @@
+* rename functionality
+* develop name conflict resolution
 * file copied/deleted/moved events
 * add descriptors to ScanErrors
 * file operations

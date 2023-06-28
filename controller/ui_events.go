@@ -216,18 +216,14 @@ func (c *controller) tab() {
 
 func (c *controller) updateFolderStatus(path string) {
 	currentFolder := c.folders[path]
-	status := model.Resolved
+	status := currentFolder.info.Status
+	currentFolder.info.Status = model.Resolved
 	for _, entry := range currentFolder.entries {
-		status = status.Merge(entry.Status)
+		currentFolder.info.MergeStatus(entry)
 	}
-	if currentFolder.info.Status == status {
-		return
+	if path != "" && currentFolder.info.Status != status {
+		c.updateFolderStatus(dir(path))
 	}
-	currentFolder.info.Status = status
-	if path == "" {
-		return
-	}
-	c.updateFolderStatus(dir(path))
 }
 
 func (c *controller) deleteSelected() {
@@ -283,8 +279,9 @@ func (c *controller) deleteFolderFile(file *model.File) {
 }
 
 func (c *controller) sendMessage(msg model.HandleFiles) {
+	// TODO: Refactor without messages
 	if c.fileHandler == nil {
-		c.messages = append(c.messages, msg)
+		// c.messages = append(c.messages, msg)
 	} else {
 		c.fileHandler.Send(msg)
 	}

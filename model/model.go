@@ -28,13 +28,31 @@ func (f FileMeta) AbsName() string {
 
 type File struct {
 	FileMeta
-	Kind   FileKind
-	Hash   string
-	Status ResulutionStatus
+	Kind         FileKind
+	Hash         string
+	Status       ResulutionStatus
+	NameConflict bool
 }
 
 func (f *File) String() string {
-	return fmt.Sprintf("File{Root: %q, Name: %q, Kind: %s, Status: %q, Hash: %q}", f.Root, f.Name, f.Kind, f.Status, f.Hash)
+	return fmt.Sprintf("File{Root: %q, Name: %q, Kind: %s, Size: %d, Status: %q, Hash: %q}", f.Root, f.Name, f.Kind, f.Size, f.Status, f.Hash)
+}
+
+func (f *File) StatusString() string {
+	if f.NameConflict {
+		return "Conflict"
+	}
+	switch f.Status {
+	case Resolved:
+		return ""
+	case AutoResolve, ResolveDuplicate, ResolveAbsent:
+		return "Pending"
+	case Duplicate:
+		return "Duplicate"
+	case Absent:
+		return "Absent"
+	}
+	return "UNKNOWN FILE STATUS"
 }
 
 type Files []*File
@@ -70,9 +88,13 @@ const (
 func (s ResulutionStatus) String() string {
 	switch s {
 	case Resolved:
-		return ""
-	case AutoResolve, ResolveDuplicate, ResolveAbsent:
-		return "Pending"
+		return "Resolved"
+	case AutoResolve:
+		return "AutoResolve"
+	case ResolveDuplicate:
+		return "ResolveDuplicate"
+	case ResolveAbsent:
+		return "ResolveAbsent"
 	case Duplicate:
 		return "Duplicate"
 	case Absent:
@@ -81,9 +103,11 @@ func (s ResulutionStatus) String() string {
 	return "UNKNOWN FILE STATUS"
 }
 
-func (s ResulutionStatus) Merge(other ResulutionStatus) ResulutionStatus {
-	if s > other {
-		return s
+func (f *File) MergeStatus(other *File) {
+	if other.NameConflict {
+		f.NameConflict = true
 	}
-	return other
+	if f.Status < other.Status {
+		f.Status = other.Status
+	}
 }

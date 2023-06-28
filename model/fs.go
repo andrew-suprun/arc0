@@ -8,7 +8,7 @@ import (
 
 type FS interface {
 	NewArchiveScanner(root string) ArchiveScanner
-	NewFileHandler() actor.Actor[HandleFiles]
+	actor.Actor[HandleFiles]
 }
 
 type ArchiveScanner interface {

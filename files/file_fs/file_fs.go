@@ -11,15 +11,19 @@ import (
 )
 
 type fileFs struct {
-	events model.EventChan
-	lc     *lifecycle.Lifecycle
+	events  model.EventChan
+	lc      *lifecycle.Lifecycle
+	handler actor.Actor[model.HandleFiles]
 }
 
 func NewFs(events model.EventChan, lc *lifecycle.Lifecycle) model.FS {
-	return &fileFs{
+	fs := &fileFs{
 		events: events,
 		lc:     lc,
 	}
+	fs.handler = actor.NewActor[model.HandleFiles](fs.handleFiles)
+
+	return fs
 }
 
 func (fs *fileFs) NewArchiveScanner(root string) model.ArchiveScanner {
@@ -31,8 +35,8 @@ func (fs *fileFs) NewArchiveScanner(root string) model.ArchiveScanner {
 	}
 }
 
-func (fs *fileFs) NewFileHandler() actor.Actor[model.HandleFiles] {
-	return actor.NewActor[model.HandleFiles](fs.handleFiles)
+func (fs *fileFs) Send(cmd model.HandleFiles) {
+	fs.handler.Send(cmd)
 }
 
 func AbsPath(path string) (string, error) {

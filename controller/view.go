@@ -78,7 +78,7 @@ func (c *controller) folderView() w.Widget {
 }
 
 func (c *controller) fileStatus(file *model.File) []w.Widget {
-	result := []w.Widget{w.Text(" " + file.Status.String()).Width(11)}
+	result := []w.Widget{w.Text(" " + file.StatusString()).Width(11)}
 
 	if file.Kind == model.FileRegular {
 		result = append(result, w.Text("   "))
@@ -214,7 +214,7 @@ func styleFile(file *model.File, selected bool) w.Style {
 	if file.Kind == model.FileFolder {
 		bg = byte(18)
 	}
-	result := w.Style{FG: statusColor(file.Status), BG: bg, Flags: flags}
+	result := w.Style{FG: statusColor(file), BG: bg, Flags: flags}
 	if selected {
 		result.Flags |= w.Reverse
 	}
@@ -223,15 +223,16 @@ func styleFile(file *model.File, selected bool) w.Style {
 
 var styleBreadcrumbs = w.Style{FG: 250, BG: 17, Flags: w.Bold + w.Italic}
 
-func statusColor(status model.ResulutionStatus) byte {
-	switch status {
+func statusColor(file *model.File) byte {
+	if file.NameConflict {
+		return 196
+	}
+	switch file.Status {
 	case model.Resolved:
 		return 195
 	case model.AutoResolve, model.ResolveDuplicate, model.ResolveAbsent:
 		return 214
-	case model.Duplicate:
-		return 196
-	case model.Absent:
+	case model.Duplicate, model.Absent:
 		return 196
 	}
 	return 231

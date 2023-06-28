@@ -33,62 +33,12 @@ func (c *controller) fileScanned(meta model.FileMeta) {
 	archive := c.archives[meta.Root]
 	archive.totalSize += meta.Size
 	archive.byName[meta.Name] = file
-}
 
-func (c *controller) fileHashed(fileHash model.FileHashed) {
-	archive := c.archives[fileHash.Root]
-	file := archive.byName[fileHash.Name]
-	file.Hash = fileHash.Hash
-	c.byHash[fileHash.Hash] = append(c.byHash[fileHash.Hash], file)
-
-	hashes := map[string]struct{}{}
-	filesBySize := c.bySize[file.Size]
-	for _, file := range filesBySize {
-		hashes[file.Hash] = struct{}{}
-	}
-	if _, ok := hashes[""]; ok {
-		return
-	}
-
-	for hash := range hashes {
-		filesForHash := map[string][]*model.File{}
-		for _, file := range filesBySize {
-			if file.Hash != hash {
-				continue
-			}
-			filesForHash[file.Root] = append(filesForHash[file.Root], file)
-		}
-
-		uniqueNames := map[string]struct{}{}
-		for _, files := range filesForHash {
-			for _, file := range files {
-				if _, exist := uniqueNames[file.Name]; !exist {
-					uniqueNames[file.Name] = struct{}{}
-					c.addToFolder(file, file.Size, file.ModTime)
-				}
-			}
-		}
-
-		originFiles := filesForHash[c.roots[0]]
-		if len(originFiles) == 0 {
-			c.hashStatus(hash, model.Absent)
-			c.absentFiles++
-		} else if len(originFiles) == 1 {
-			for _, root := range c.roots {
-				files := filesForHash[root]
-				if len(files) != 1 || originFiles[0].Name != files[0].Name {
-					c.keepFile(originFiles[0])
-					break
-				}
-			}
-		} else {
-			c.hashStatus(hash, model.Duplicate)
-			c.duplicateFiles++
-		}
-	}
+	c.addToFolder(file, file.Size, file.ModTime)
 }
 
 func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
+	log.Printf("### addToFolder: %s", file)
 	parentFolder := c.folders[dir(file.Name)]
 	if parentFolder == nil {
 		parentFolder = &folder{
@@ -107,21 +57,43 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 		}
 		c.folders[dir(file.Name)] = parentFolder
 	} else {
-		folderAlreadyExists := false
-		switch file.Kind {
-		case model.FileRegular:
-			parentFolder.entries = append(parentFolder.entries, file)
-		case model.FileFolder:
-			for _, entry := range parentFolder.entries {
-				if entry.Kind == model.FileFolder && name(file.Name) == name(entry.Name) {
-					folderAlreadyExists = true
-					break
-				}
-			}
-			if !folderAlreadyExists {
-				parentFolder.entries = append(parentFolder.entries, file)
+		sameName := []*model.File{}
+		for _, entry := range parentFolder.entries {
+			if file.Name == entry.Name {
+				sameName = append(sameName, entry)
+				log.Printf("### addToFolder: same name: %s", entry)
 			}
 		}
+		if file.Kind == model.FileFolder {
+			for _, entry := range sameName {
+				if entry.Kind == model.FileFolder {
+					log.Printf("### addToFolder: same folder: %s", entry)
+					return
+				}
+			}
+		}
+		for _, entry := range sameName {
+			if file.Kind == model.FileRegular &&
+				entry.Kind == model.FileRegular &&
+				file.Size == entry.Size &&
+				(entry.Hash == "" || file.Hash == entry.Hash) {
+
+				entry.Hash = file.Hash
+				log.Printf("### addToFolder: same hash: %s", entry)
+				return
+			}
+		}
+		for _, entry := range sameName {
+			entry.NameConflict = true
+			log.Printf("### addToFolder: conflict.1: %s", entry)
+		}
+		if len(sameName) > 0 {
+			file.NameConflict = true
+		}
+		log.Printf("### addToFolder: conflict.2: %s", file)
+
+		parentFolder.entries = append(parentFolder.entries, file)
+
 		parentFolder.info.Size += size
 		if parentFolder.info.ModTime.Before(modTime) {
 			parentFolder.info.ModTime = modTime
@@ -129,6 +101,54 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 	}
 	if dir(file.Name) != "" {
 		c.addToFolder(parentFolder.info, size, modTime)
+	}
+}
+
+func (c *controller) fileHashed(fileHash model.FileHashed) {
+	log.Printf("### fileHashed: %q", fileHash)
+	archive := c.archives[fileHash.Root]
+	file := archive.byName[fileHash.Name]
+	file.Hash = fileHash.Hash
+	c.addToFolder(file, file.Size, file.ModTime)
+	log.Printf("### fileHashed: file %v", file)
+	c.byHash[fileHash.Hash] = append(c.byHash[fileHash.Hash], file)
+
+	hashes := map[string]struct{}{}
+	filesBySize := c.bySize[file.Size]
+	for _, file := range filesBySize {
+		log.Printf("### fileHashed: file by size %v", file)
+		hashes[file.Hash] = struct{}{}
+	}
+
+	if _, ok := hashes[""]; ok {
+		return
+	}
+
+	for hash := range hashes {
+		filesForHash := map[string][]*model.File{}
+		for _, file := range filesBySize {
+			if file.Hash != hash {
+				continue
+			}
+			filesForHash[file.Root] = append(filesForHash[file.Root], file)
+		}
+
+		originFiles := filesForHash[c.roots[0]]
+		if len(originFiles) == 0 {
+			c.hashStatus(hash, model.Absent)
+			c.absentFiles++
+		} else if len(originFiles) == 1 {
+			for _, root := range c.roots {
+				files := filesForHash[root]
+				if len(files) != 1 || originFiles[0].Name != files[0].Name {
+					c.keepFile(originFiles[0])
+					break
+				}
+			}
+		} else {
+			c.hashStatus(hash, model.Duplicate)
+			c.duplicateFiles++
+		}
 	}
 }
 
@@ -244,9 +264,18 @@ func (c *controller) scanProgress(event model.ScanProgress) {
 				return
 			}
 		}
-		c.fileHandler = c.fs.NewFileHandler()
-		for _, msg := range c.messages {
-			c.fileHandler.Send(msg)
+		c.autoResolve()
+	}
+}
+
+func (c *controller) autoResolve() {
+	for hash, files := range c.byHash {
+		log.Printf("--- autoresolve hash %q", hash)
+		for _, file := range files {
+			log.Printf("    +++ autoresolve file %s", file)
+			if file.Status == model.AutoResolve && !file.NameConflict && file.Root == c.roots[0] {
+				log.Printf("        ### autoresolved %s", file)
+			}
 		}
 	}
 }
