@@ -1,4 +1,3 @@
-* selected -> selectedIdx, maybe?
 * check gracefull shutdown in scan/hash/copy operations
 * move name conflict resolution to keepFile()
 * file copied/deleted/moved events
