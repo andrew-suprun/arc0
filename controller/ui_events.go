@@ -109,17 +109,8 @@ func (c *controller) keepFile(file *model.File) {
 	if file == nil || file.Kind != model.FileRegular {
 		return
 	}
-	log.Printf("keepFile: %s", file)
+	log.Printf("keepFile: file %s", file)
 	msg := model.HandleFiles{Hash: file.Hash}
-	if file.Status == model.Duplicate {
-		c.duplicateFiles--
-		c.hashStatus(file.Hash, model.ResolveDuplicate)
-	} else if file.Status == model.Absent {
-		c.absentFiles--
-		c.hashStatus(file.Hash, model.ResolveAbsent)
-	} else {
-		c.hashStatus(file.Hash, model.AutoResolve)
-	}
 
 	filesForHash := c.byHash[file.Hash]
 	byArch := map[string][]*model.File{}
@@ -168,12 +159,14 @@ func (c *controller) keepFile(file *model.File) {
 			}
 		}
 	}
+
+	log.Printf("keepFile: msg: %s", msg)
 	if msg.Copy != nil || msg.Rename != nil || len(msg.Delete) > 0 {
 		for _, file := range filesForHash {
 			c.updateFolderStatus(dir(file.Name))
 		}
 		c.pendingFiles++
-		c.sendMessage(msg)
+		c.fs.Send(msg)
 	}
 }
 
@@ -268,21 +261,12 @@ func (c *controller) deleteRegularFile(file *model.File) {
 		})
 	}
 	c.pendingFiles++
-	c.sendMessage(msg)
+	c.fs.Send(msg)
 }
 
 func (c *controller) deleteFolderFile(file *model.File) {
 	folder := c.folders[file.Name]
 	for _, entry := range folder.entries {
 		c.deleteFile(entry)
-	}
-}
-
-func (c *controller) sendMessage(msg model.HandleFiles) {
-	// TODO: Refactor without messages
-	if c.fileHandler == nil {
-		// c.messages = append(c.messages, msg)
-	} else {
-		c.fileHandler.Send(msg)
 	}
 }

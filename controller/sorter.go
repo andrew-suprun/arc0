@@ -71,6 +71,14 @@ func (s sliceByStatus) Less(i, j int) bool {
 		return false
 	}
 
+	iName := strings.ToLower(s.sliceBy[i].Name)
+	jName := strings.ToLower(s.sliceBy[j].Name)
+	if iName < jName {
+		return true
+	} else if iName > jName {
+		return false
+	}
+
 	return s.sliceBy[i].Size < s.sliceBy[j].Size
 }
 

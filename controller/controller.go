@@ -1,17 +1,15 @@
 package controller
 
 import (
-	"arch/actor"
 	"arch/model"
 	"arch/widgets"
 	"time"
 )
 
 type controller struct {
-	fs          model.FS
-	events      model.EventChan
-	renderer    widgets.Renderer
-	fileHandler actor.Actor[model.HandleFiles]
+	fs       model.FS
+	events   model.EventChan
+	renderer widgets.Renderer
 
 	roots              []string
 	archives           map[string]*archive

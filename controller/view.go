@@ -146,7 +146,7 @@ func (c *controller) progress() w.Widget {
 			})
 		}
 	}
-	if c.fileHandler != nil && c.copySize > 0 {
+	if c.copySize > 0 {
 		progressInfos = append(progressInfos, progressInfo{
 			progressLabel: " Copying: ",
 			labelWidth:    11,

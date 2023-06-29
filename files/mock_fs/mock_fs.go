@@ -123,7 +123,7 @@ func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
 	if msg.Copy != nil {
 		for _, meta := range metas[msg.Copy.Root] {
 			if meta.Name == msg.Copy.Name {
-				for copyed := uint64(0); ; copyed += 50000 {
+				for copyed := uint64(0); ; copyed += 10000 {
 					if copyed > meta.Size {
 						copyed = meta.Size
 					}

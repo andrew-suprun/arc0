@@ -38,7 +38,6 @@ func (c *controller) fileScanned(meta model.FileMeta) {
 }
 
 func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
-	log.Printf("### addToFolder: %s", file)
 	parentFolder := c.folders[dir(file.Name)]
 	if parentFolder == nil {
 		parentFolder = &folder{
@@ -61,13 +60,11 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 		for _, entry := range parentFolder.entries {
 			if file.Name == entry.Name {
 				sameName = append(sameName, entry)
-				log.Printf("### addToFolder: same name: %s", entry)
 			}
 		}
 		if file.Kind == model.FileFolder {
 			for _, entry := range sameName {
 				if entry.Kind == model.FileFolder {
-					log.Printf("### addToFolder: same folder: %s", entry)
 					return
 				}
 			}
@@ -79,11 +76,9 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 				(entry.Hash == "" || file.Hash == entry.Hash) {
 
 				entry.Hash = file.Hash
-				log.Printf("### addToFolder: same hash: %s", entry)
 				return
 			}
 		}
-		log.Printf("### addToFolder: conflict.2: %s", file)
 
 		parentFolder.entries = append(parentFolder.entries, file)
 
@@ -98,18 +93,15 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 }
 
 func (c *controller) fileHashed(fileHash model.FileHashed) {
-	log.Printf("### fileHashed: %q", fileHash)
 	archive := c.archives[fileHash.Root]
 	file := archive.byName[fileHash.Name]
 	file.Hash = fileHash.Hash
 	c.addToFolder(file, file.Size, file.ModTime)
-	log.Printf("### fileHashed: file %v", file)
 	c.byHash[fileHash.Hash] = append(c.byHash[fileHash.Hash], file)
 
 	hashes := map[string]struct{}{}
 	filesBySize := c.bySize[file.Size]
 	for _, file := range filesBySize {
-		log.Printf("### fileHashed: file by size %v", file)
 		hashes[file.Hash] = struct{}{}
 	}
 
@@ -134,7 +126,7 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 			for _, root := range c.roots {
 				files := filesForHash[root]
 				if len(files) != 1 || originFiles[0].Name != files[0].Name {
-					c.keepFile(originFiles[0])
+					c.hashStatus(file.Hash, model.AutoResolve)
 					break
 				}
 			}
@@ -268,6 +260,7 @@ func (c *controller) autoResolve() {
 			log.Printf("    +++ autoresolve file %s", file)
 			if file.Status == model.AutoResolve && file.Root == c.roots[0] {
 				log.Printf("        ### autoresolved %s", file)
+				c.keepFile(file)
 			}
 		}
 	}
