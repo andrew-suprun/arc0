@@ -1,10 +1,10 @@
-* rename functionality
-* develop name conflict resolution
+* selected -> selectedIdx, maybe?
+* move name conflict resolution to keepFile()
 * file copied/deleted/moved events
-* add descriptors to ScanErrors
 * file operations
-* store hashes as hex encoded strings
+* add descriptors to ScanErrors
 * remove directories that only contain .DS_Store and ._* files
+* ??? store hashes as hex encoded strings
 * ??? handle 'keep all' event 
 
 * scanner:
