@@ -12,6 +12,8 @@ func (f *folder) sort() {
 	switch f.sortColumn {
 	case sortByName:
 		slice = sliceByName{sliceBy: files}
+	case sortByStatus:
+		slice = sliceByStatus{sliceBy: files}
 	case sortByTime:
 		slice = sliceByTime{sliceBy: files}
 	case sortBySize:
@@ -45,15 +47,31 @@ func (s sliceByName) Less(i, j int) bool {
 	} else if iName > jName {
 		return false
 	}
-	iSize := s.sliceBy[i].Size
-	jSize := s.sliceBy[j].Size
-	if iSize < jSize {
+	iStatus := s.sliceBy[i].Status
+	jStatus := s.sliceBy[j].Status
+	if iStatus < jStatus {
 		return true
-	} else if iSize > jSize {
+	} else if iStatus > jStatus {
 		return false
 	}
 
 	return s.sliceBy[i].ModTime.Before(s.sliceBy[j].ModTime)
+}
+
+type sliceByStatus struct {
+	sliceBy
+}
+
+func (s sliceByStatus) Less(i, j int) bool {
+	iStatus := s.sliceBy[i].Status
+	jStatus := s.sliceBy[j].Status
+	if iStatus < jStatus {
+		return true
+	} else if iStatus > jStatus {
+		return false
+	}
+
+	return s.sliceBy[i].Size < s.sliceBy[j].Size
 }
 
 type sliceByTime struct {
