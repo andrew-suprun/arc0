@@ -83,13 +83,6 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 				return
 			}
 		}
-		for _, entry := range sameName {
-			entry.NameConflict = true
-			log.Printf("### addToFolder: conflict.1: %s", entry)
-		}
-		if len(sameName) > 0 {
-			file.NameConflict = true
-		}
 		log.Printf("### addToFolder: conflict.2: %s", file)
 
 		parentFolder.entries = append(parentFolder.entries, file)
@@ -273,7 +266,7 @@ func (c *controller) autoResolve() {
 		log.Printf("--- autoresolve hash %q", hash)
 		for _, file := range files {
 			log.Printf("    +++ autoresolve file %s", file)
-			if file.Status == model.AutoResolve && !file.NameConflict && file.Root == c.roots[0] {
+			if file.Status == model.AutoResolve && file.Root == c.roots[0] {
 				log.Printf("        ### autoresolved %s", file)
 			}
 		}

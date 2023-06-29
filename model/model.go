@@ -28,10 +28,9 @@ func (f FileMeta) AbsName() string {
 
 type File struct {
 	FileMeta
-	Kind         FileKind
-	Hash         string
-	Status       ResulutionStatus
-	NameConflict bool
+	Kind   FileKind
+	Hash   string
+	Status ResulutionStatus
 }
 
 func (f *File) String() string {
@@ -39,9 +38,6 @@ func (f *File) String() string {
 }
 
 func (f *File) StatusString() string {
-	if f.NameConflict {
-		return "Conflict"
-	}
 	switch f.Status {
 	case Resolved:
 		return ""
@@ -104,9 +100,6 @@ func (s ResulutionStatus) String() string {
 }
 
 func (f *File) MergeStatus(other *File) {
-	if other.NameConflict {
-		f.NameConflict = true
-	}
 	if f.Status < other.Status {
 		f.Status = other.Status
 	}

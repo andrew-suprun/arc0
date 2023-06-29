@@ -214,7 +214,7 @@ func styleFile(file *model.File, selected bool) w.Style {
 	if file.Kind == model.FileFolder {
 		bg = byte(18)
 	}
-	result := w.Style{FG: statusColor(file), BG: bg, Flags: flags}
+	result := w.Style{FG: statusColor(file.Status), BG: bg, Flags: flags}
 	if selected {
 		result.Flags |= w.Reverse
 	}
@@ -223,11 +223,8 @@ func styleFile(file *model.File, selected bool) w.Style {
 
 var styleBreadcrumbs = w.Style{FG: 250, BG: 17, Flags: w.Bold + w.Italic}
 
-func statusColor(file *model.File) byte {
-	if file.NameConflict {
-		return 196
-	}
-	switch file.Status {
+func statusColor(status model.ResulutionStatus) byte {
+	switch status {
 	case model.Resolved:
 		return 195
 	case model.AutoResolve, model.ResolveDuplicate, model.ResolveAbsent:
