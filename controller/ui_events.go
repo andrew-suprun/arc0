@@ -159,7 +159,6 @@ func (c *controller) keepFile(file *model.File) {
 }
 
 func (c *controller) tab() {
-	log.Printf("### tab")
 	selected := c.folders[c.currentPath].selected
 	if selected == nil || selected.Kind != model.FileRegular {
 		return

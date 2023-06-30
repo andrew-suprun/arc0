@@ -2,7 +2,6 @@ package controller
 
 import (
 	"arch/model"
-	"log"
 	"sort"
 	"strings"
 )
@@ -26,11 +25,9 @@ func (f *folder) sort() {
 	}
 	sort.Sort(slice)
 
-	log.Printf("### sort: selectedIdx=%d  selected=%s", f.selectedIdx, f.selected)
 	foundSelected := false
 	for idx, entry := range f.entries {
 		if entry == f.selected {
-			log.Printf("### sort: foundSelected=%d", idx)
 			f.selectedIdx = idx
 			foundSelected = true
 			break
@@ -41,7 +38,6 @@ func (f *folder) sort() {
 			f.selectedIdx = len(f.entries) - 1
 		}
 		f.selected = f.entries[f.selectedIdx]
-		log.Printf("### sort: not found: selectedIdx=%d  selected=%s", f.selectedIdx, f.selected)
 	}
 }
 

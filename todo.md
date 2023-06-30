@@ -1,4 +1,3 @@
-* fix missing Duplicate marks
 * move name conflict resolution to keepFile()
 * remove empty folders
 * file copied/deleted/moved events

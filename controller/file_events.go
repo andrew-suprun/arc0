@@ -127,7 +127,7 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 			for _, root := range c.roots {
 				files := filesForHash[root]
 				if len(files) != 1 || originFiles[0].FullName() != files[0].FullName() {
-					c.hashStatus(file.Hash, model.AutoResolve)
+					c.hashStatus(hash, model.AutoResolve)
 					break
 				}
 			}
@@ -187,7 +187,6 @@ renameBlock:
 			archive.progress.ProgressState = model.FileTreeHashed
 		}
 	}
-	log.Printf("filesHandled: ----")
 }
 
 func (c *controller) removeFolderFile(id model.FileId) {
