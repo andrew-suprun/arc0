@@ -57,7 +57,8 @@ func (c *controller) moveSelection(lines int) {
 	folder.selectedIdx += lines
 	if folder.selectedIdx < 0 {
 		folder.selectedIdx = 0
-	} else if folder.selectedIdx >= len(folder.entries) {
+	}
+	if folder.selectedIdx >= len(folder.entries) {
 		folder.selectedIdx = len(folder.entries) - 1
 	}
 	folder.selected = nil
@@ -195,6 +196,7 @@ func (c *controller) tab() {
 }
 
 func (c *controller) updateFolderStatus(path string) {
+	log.Printf("### updateFolderStatus path=%q", path)
 	currentFolder := c.folders[path]
 	status := currentFolder.info.Status
 	currentFolder.info.Status = model.Resolved

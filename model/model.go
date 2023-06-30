@@ -47,11 +47,11 @@ func (f *File) StatusString() string {
 	case Resolved:
 		return ""
 	case AutoResolve, ResolveDuplicate, ResolveAbsent:
-		return "Pending"
+		return " Pending"
 	case Duplicate:
-		return "Duplicate"
+		return " Duplicate"
 	case Absent:
-		return "Absent"
+		return " Absent"
 	}
 	return "UNKNOWN FILE STATUS"
 }

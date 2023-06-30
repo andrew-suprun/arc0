@@ -1,4 +1,4 @@
-* move name conflict resolution to keepFile()
+* fix 'Tab' between duplicates
 * remove empty folders
 * file copied/deleted/moved events
 * file operations

@@ -7,6 +7,9 @@ import (
 )
 
 func (f *folder) sort() {
+	if len(f.entries) == 0 {
+		return
+	}
 	files := sliceBy(f.entries)
 	var slice sort.Interface
 	switch f.sortColumn {
@@ -36,6 +39,9 @@ func (f *folder) sort() {
 	if !foundSelected {
 		if f.selectedIdx >= len(f.entries) {
 			f.selectedIdx = len(f.entries) - 1
+		}
+		if f.selectedIdx < 0 {
+			f.selectedIdx = 0
 		}
 		f.selected = f.entries[f.selectedIdx]
 	}

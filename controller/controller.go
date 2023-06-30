@@ -16,6 +16,7 @@ type controller struct {
 	bySize             map[uint64][]*model.File
 	byHash             map[string][]*model.File
 	folders            map[string]*folder
+	conflicts          map[string]struct{}
 	currentPath        string
 	copySize           uint64
 	fileCopied         uint64
@@ -34,6 +35,7 @@ type controller struct {
 
 type archive struct {
 	scanner   model.ArchiveScanner
+	metas     []model.FileMeta
 	progress  model.ScanProgress
 	totalSize uint64
 	byName    map[string]*model.File
@@ -55,14 +57,15 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, roots []str
 		sortAscending: []bool{true, false, false, false},
 	}
 	c := &controller{
-		fs:       fs,
-		renderer: renderer,
-		events:   ev,
-		roots:    roots,
-		archives: map[string]*archive{},
-		bySize:   map[uint64][]*model.File{},
-		byHash:   map[string][]*model.File{},
-		folders:  map[string]*folder{"": rootFolder},
+		fs:        fs,
+		renderer:  renderer,
+		events:    ev,
+		roots:     roots,
+		archives:  map[string]*archive{},
+		bySize:    map[uint64][]*model.File{},
+		byHash:    map[string][]*model.File{},
+		folders:   map[string]*folder{"": rootFolder},
+		conflicts: map[string]struct{}{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)

@@ -34,7 +34,9 @@ func (c *controller) fileScanned(meta model.FileMeta) {
 	archive.totalSize += meta.Size
 	archive.byName[meta.FullName()] = file
 
-	c.addToFolder(file, file.Size, file.ModTime)
+	if file.Root == c.roots[0] {
+		c.addToFolder(file, file.Size, file.ModTime)
+	}
 }
 
 func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
@@ -81,6 +83,10 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 			}
 		}
 
+		if len(sameName) > 0 {
+			c.conflicts[file.FullName()] = struct{}{}
+		}
+
 		parentFolder.entries = append(parentFolder.entries, file)
 
 		parentFolder.info.Size += size
@@ -97,7 +103,6 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 	archive := c.archives[fileHash.Root]
 	file := archive.byName[fileHash.FullName()]
 	file.Hash = fileHash.Hash
-	c.addToFolder(file, file.Size, file.ModTime)
 	c.byHash[fileHash.Hash] = append(c.byHash[fileHash.Hash], file)
 
 	hashes := map[string]struct{}{}
@@ -121,6 +126,7 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 
 		originFiles := filesForHash[c.roots[0]]
 		if len(originFiles) == 0 {
+			c.addToFolder(file, file.Size, file.ModTime)
 			c.hashStatus(hash, model.Absent)
 			c.absentFiles++
 		} else if len(originFiles) == 1 {
@@ -233,7 +239,8 @@ func (c *controller) autoResolve() {
 		log.Printf("--- autoresolve hash %q", hash)
 		for _, file := range files {
 			log.Printf("    +++ autoresolve file %s", file)
-			if file.Status == model.AutoResolve && file.Root == c.roots[0] {
+			_, conflict := c.conflicts[file.FullName()]
+			if file.Status == model.AutoResolve && !conflict && file.Root == c.roots[0] {
 				log.Printf("        ### autoresolved %s", file)
 				c.keepFile(file)
 			}

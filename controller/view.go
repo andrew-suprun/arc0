@@ -64,7 +64,7 @@ func (c *controller) folderView() w.Widget {
 					if i >= size.Height {
 						break
 					}
-					rows = append(rows, w.Styled(styleFile(file, c.folders[c.currentPath].selected == file),
+					rows = append(rows, w.Styled(c.styleFile(file, c.folders[c.currentPath].selected == file),
 						w.MouseTarget(selectFile(file), w.Row(row,
 							c.fileStatus(file)...,
 						)),
@@ -78,7 +78,7 @@ func (c *controller) folderView() w.Widget {
 }
 
 func (c *controller) fileStatus(file *model.File) []w.Widget {
-	result := []w.Widget{w.Text(" " + file.StatusString()).Width(11)}
+	result := []w.Widget{w.Text(c.statusString(file)).Width(11)} // todo conflict status
 
 	if file.Kind == model.FileRegular {
 		result = append(result, w.Text("   "))
@@ -91,6 +91,13 @@ func (c *controller) fileStatus(file *model.File) []w.Widget {
 	result = append(result, w.Text("  "))
 	result = append(result, w.Text(formatSize(file.Size)).Width(18))
 	return result
+}
+
+func (c *controller) statusString(file *model.File) string {
+	if _, conflict := c.conflicts[file.FullName()]; conflict {
+		return " Conflict"
+	}
+	return file.StatusString()
 }
 
 func (c *controller) sortIndicator(column sortColumn) string {
@@ -209,12 +216,12 @@ func formatSize(size uint64) string {
 	return b.String()
 }
 
-func styleFile(file *model.File, selected bool) w.Style {
+func (c *controller) styleFile(file *model.File, selected bool) w.Style {
 	bg, flags := byte(17), w.Flags(0)
 	if file.Kind == model.FileFolder {
 		bg = byte(18)
 	}
-	result := w.Style{FG: statusColor(file.Status), BG: bg, Flags: flags}
+	result := w.Style{FG: c.statusColor(file), BG: bg, Flags: flags}
 	if selected {
 		result.Flags |= w.Reverse
 	}
@@ -223,8 +230,11 @@ func styleFile(file *model.File, selected bool) w.Style {
 
 var styleBreadcrumbs = w.Style{FG: 250, BG: 17, Flags: w.Bold + w.Italic}
 
-func statusColor(status model.ResulutionStatus) byte {
-	switch status {
+func (c *controller) statusColor(file *model.File) byte {
+	if _, conflict := c.conflicts[file.FullName()]; conflict && file.Root != c.roots[0] {
+		return 196
+	}
+	switch file.Status {
 	case model.Resolved:
 		return 195
 	case model.AutoResolve, model.ResolveDuplicate, model.ResolveAbsent:
