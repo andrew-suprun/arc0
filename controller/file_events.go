@@ -140,24 +140,11 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 
 func (c *controller) makeSelectedVisible() {
 	folder := c.folders[c.currentPath]
-	if folder.selected == nil {
-		return
+	if folder.offsetIdx > folder.selectedIdx {
+		folder.offsetIdx = folder.selectedIdx
 	}
-
-	idx := -1
-	for i := range folder.entries {
-		if folder.selected == folder.entries[i] {
-			idx = i
-			break
-		}
-	}
-	if idx >= 0 {
-		if folder.lineOffset > idx {
-			folder.lineOffset = idx
-		}
-		if folder.lineOffset < idx+1-c.fileTreeLines {
-			folder.lineOffset = idx + 1 - c.fileTreeLines
-		}
+	if folder.offsetIdx < folder.selectedIdx+1-c.fileTreeLines {
+		folder.offsetIdx = folder.selectedIdx + 1 - c.fileTreeLines
 	}
 }
 

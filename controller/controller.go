@@ -42,7 +42,8 @@ type archive struct {
 type folder struct {
 	info          *model.File
 	selected      *model.File
-	lineOffset    int
+	selectedIdx   int
+	offsetIdx     int
 	sortColumn    sortColumn
 	sortAscending []bool
 	entries       []*model.File

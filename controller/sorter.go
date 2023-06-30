@@ -2,6 +2,7 @@ package controller
 
 import (
 	"arch/model"
+	"log"
 	"sort"
 	"strings"
 )
@@ -14,6 +15,7 @@ func (f *folder) sort() {
 		slice = sliceByName{sliceBy: files}
 	case sortByStatus:
 		slice = sliceByStatus{sliceBy: files}
+		f.selected = nil
 	case sortByTime:
 		slice = sliceByTime{sliceBy: files}
 	case sortBySize:
@@ -23,6 +25,24 @@ func (f *folder) sort() {
 		slice = sort.Reverse(slice)
 	}
 	sort.Sort(slice)
+
+	log.Printf("### sort: selectedIdx=%d  selected=%s", f.selectedIdx, f.selected)
+	foundSelected := false
+	for idx, entry := range f.entries {
+		if entry == f.selected {
+			log.Printf("### sort: foundSelected=%d", idx)
+			f.selectedIdx = idx
+			foundSelected = true
+			break
+		}
+	}
+	if !foundSelected {
+		if f.selectedIdx >= len(f.entries) {
+			f.selectedIdx = len(f.entries) - 1
+		}
+		f.selected = f.entries[f.selectedIdx]
+		log.Printf("### sort: not found: selectedIdx=%d  selected=%s", f.selectedIdx, f.selected)
+	}
 }
 
 type sliceBy model.Files

@@ -15,7 +15,13 @@ func (c *controller) mouseTarget(cmd any) {
 		if folder.selected == cmd && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
 			c.enter()
 		} else {
-			folder.selected = cmd
+			for idx, entry := range folder.entries {
+				if entry == cmd {
+					folder.selectedIdx = idx
+					folder.selected = nil
+					break
+				}
+			}
 		}
 		c.lastMouseEventTime = time.Now()
 
@@ -48,34 +54,13 @@ func (c *controller) selectLast() {
 
 func (c *controller) moveSelection(lines int) {
 	folder := c.folders[c.currentPath]
-	selected := folder.selected
-	if selected == nil {
-		if lines > 0 {
-			c.selectFirst()
-		} else if lines < 0 {
-			c.selectLast()
-		}
+	folder.selectedIdx += lines
+	if folder.selectedIdx < 0 {
+		folder.selectedIdx = 0
+	} else if folder.selectedIdx >= len(folder.entries) {
+		folder.selectedIdx = len(folder.entries) - 1
 	}
-	entries := folder.entries
-	idxSelected := 0
-	foundSelected := false
-
-	for i := 0; i < len(entries); i++ {
-		if entries[i] == selected {
-			idxSelected = i
-			foundSelected = true
-			break
-		}
-	}
-	if foundSelected {
-		idxSelected += lines
-		if idxSelected < 0 {
-			idxSelected = 0
-		} else if idxSelected >= len(entries) {
-			idxSelected = len(entries) - 1
-		}
-		folder.selected = entries[idxSelected]
-	}
+	folder.selected = nil
 }
 
 func (c *controller) enter() {
@@ -93,11 +78,11 @@ func (c *controller) enter() {
 func (c *controller) shiftOffset(lines int) {
 	folder := c.folders[c.currentPath]
 	nEntries := len(folder.entries)
-	folder.lineOffset += lines
-	if folder.lineOffset < 0 {
-		folder.lineOffset = 0
-	} else if folder.lineOffset >= nEntries {
-		folder.lineOffset = nEntries - 1
+	folder.offsetIdx += lines
+	if folder.offsetIdx < 0 {
+		folder.offsetIdx = 0
+	} else if folder.offsetIdx >= nEntries {
+		folder.offsetIdx = nEntries - 1
 	}
 }
 
@@ -269,7 +254,7 @@ func (c *controller) deleteRegularFile(file *model.File) {
 }
 
 func (c *controller) deleteFolderFile(file *model.File) {
-	folder := c.folders[file.Path]
+	folder := c.folders[file.FullName()]
 	for _, entry := range folder.entries {
 		c.deleteFile(entry)
 	}

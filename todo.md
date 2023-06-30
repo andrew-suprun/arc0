@@ -1,7 +1,9 @@
-* check gracefull shutdown in scan/hash/copy operations
+* fix missing Duplicate marks
 * move name conflict resolution to keepFile()
+* remove empty folders
 * file copied/deleted/moved events
 * file operations
+* check gracefull shutdown in scan/hash/copy operations
 * add descriptors to ScanErrors
 * remove directories that only contain .DS_Store and ._* files
 * ??? store hashes as hex encoded strings

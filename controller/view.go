@@ -51,16 +51,16 @@ func (c *controller) folderView() w.Widget {
 		w.Scroll(model.Scroll{}, w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}},
 			func(size w.Size) w.Widget {
 				c.fileTreeLines = size.Height
-				if folder.lineOffset > len(folder.entries)+1-size.Height {
-					folder.lineOffset = len(folder.entries) + 1 - size.Height
+				if folder.offsetIdx > len(folder.entries)+1-size.Height {
+					folder.offsetIdx = len(folder.entries) + 1 - size.Height
 				}
-				if folder.lineOffset < 0 {
-					folder.lineOffset = 0
+				if folder.offsetIdx < 0 {
+					folder.offsetIdx = 0
 				}
 				rows := []w.Widget{}
 				i := 0
 				var file *model.File
-				for i, file = range folder.entries[folder.lineOffset:] {
+				for i, file = range folder.entries[folder.offsetIdx:] {
 					if i >= size.Height {
 						break
 					}
