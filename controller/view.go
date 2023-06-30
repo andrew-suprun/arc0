@@ -85,7 +85,7 @@ func (c *controller) fileStatus(file *model.File) []w.Widget {
 	} else {
 		result = append(result, w.Text(" ▶ "))
 	}
-	result = append(result, w.Text(name(file.Name)).Width(20).Flex(1))
+	result = append(result, w.Text(file.Name).Width(20).Flex(1))
 	result = append(result, w.Text("  "))
 	result = append(result, w.Text(file.ModTime.Format(time.DateTime)))
 	result = append(result, w.Text("  "))

@@ -27,14 +27,14 @@ func (h HandleFiles) String() string {
 	buf := &strings.Builder{}
 	fmt.Fprintf(buf, "hash: %q\n", h.Hash)
 	for _, d := range h.Delete {
-		fmt.Fprintf(buf, "    delete: %q/%q\n", d.Root, d.Name)
+		fmt.Fprintf(buf, "    delete: %q/%q/%q\n", d.Root, d.Path, d.Name)
 	}
 
 	for _, r := range h.Rename {
-		fmt.Fprintf(buf, "    rename: root %q: %q -> %q\n", r.Root, r.Name, r.NewName)
+		fmt.Fprintf(buf, "    rename: root %q: %q/%q -> %q/%q\n", r.Root, r.Path, r.Name, r.NewPath, r.NewBase)
 	}
 	if h.Copy != nil {
-		fmt.Fprintf(buf, "    copy: %q/%q\n", h.Copy.Root, h.Copy.Name)
+		fmt.Fprintf(buf, "    copy: %q/%q/%q\n", h.Copy.Root, h.Copy.Path, h.Copy.Name)
 		for _, t := range h.Copy.TargetRoots {
 			fmt.Fprintf(buf, "          -> %q\n", t)
 		}
@@ -46,7 +46,8 @@ type DeleteFile FileId
 
 type RenameFile struct {
 	FileId
-	NewName string
+	NewPath string
+	NewBase string
 }
 
 type CopyFile struct {

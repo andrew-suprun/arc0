@@ -53,7 +53,7 @@ func (s *scanner) scanArchive() {
 
 		if err != nil {
 			s.events <- model.Error{
-				Meta:  model.FileMeta{FileId: model.FileId{Root: s.root, Name: path}},
+				Path:  path,
 				Error: err}
 			return nil
 		}
@@ -61,7 +61,7 @@ func (s *scanner) scanArchive() {
 		meta, err := d.Info()
 		if err != nil {
 			s.events <- model.Error{
-				Meta:  model.FileMeta{FileId: model.FileId{Root: s.root, Name: path}},
+				Path:  path,
 				Error: err}
 			return nil
 		}
@@ -72,7 +72,8 @@ func (s *scanner) scanArchive() {
 		fileMeta := model.FileMeta{
 			FileId: model.FileId{
 				Root: s.root,
-				Name: path,
+				Path: dir(path),
+				Name: name(path),
 			},
 			ModTime: modTime,
 			Size:    uint64(meta.Size()),
@@ -137,9 +138,9 @@ func (s *scanner) hashFile(info *fileInfo) {
 	buf := make([]byte, 1024*1024)
 
 	fsys := os.DirFS(info.meta.Root)
-	file, err := fsys.Open(info.meta.Name)
+	file, err := fsys.Open(info.meta.FullName())
 	if err != nil {
-		s.events <- model.Error{Meta: info.meta, Error: err}
+		s.events <- model.Error{Path: info.meta.FullName(), Error: err}
 		return
 	}
 	defer file.Close()
@@ -154,12 +155,12 @@ func (s *scanner) hashFile(info *fileInfo) {
 			nw, ew := hash.Write(buf[0:nr])
 			if ew != nil {
 				if err != nil {
-					s.events <- model.Error{Meta: info.meta, Error: err}
+					s.events <- model.Error{Path: info.meta.FullName(), Error: err}
 					return
 				}
 			}
 			if nr != nw {
-				s.events <- model.Error{Meta: info.meta, Error: err}
+				s.events <- model.Error{Path: info.meta.FullName(), Error: err}
 				return
 			}
 		}
@@ -168,7 +169,7 @@ func (s *scanner) hashFile(info *fileInfo) {
 			break
 		}
 		if er != nil {
-			s.events <- model.Error{Meta: info.meta, Error: er}
+			s.events <- model.Error{Path: info.meta.FullName(), Error: er}
 			return
 		}
 
@@ -212,6 +213,7 @@ func (s *scanner) readMeta() {
 				s.events <- model.FileHashed{
 					FileId: model.FileId{
 						Root: s.root,
+						Path: info.meta.Path,
 						Name: info.meta.Name,
 					},
 					Hash: hash,
@@ -234,7 +236,7 @@ func (s *scanner) storeMeta() error {
 	for iNode, info := range s.infos {
 		result = append(result, []string{
 			fmt.Sprint(iNode),
-			norm.NFC.String(info.meta.Name),
+			norm.NFC.String(info.meta.FullName()),
 			fmt.Sprint(info.meta.Size),
 			info.meta.ModTime.UTC().Format(time.RFC3339Nano),
 			info.hash,
@@ -250,4 +252,16 @@ func (s *scanner) storeMeta() error {
 	err = csv.NewWriter(hashInfoFile).WriteAll(result)
 	hashInfoFile.Close()
 	return err
+}
+
+func dir(path string) string {
+	path = filepath.Dir(path)
+	if path == "." {
+		return ""
+	}
+	return path
+}
+
+func name(path string) string {
+	return filepath.Base(path)
 }

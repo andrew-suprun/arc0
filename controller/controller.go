@@ -91,7 +91,7 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, roots []str
 func (c *controller) hashStatus(hash string, status model.ResulutionStatus) {
 	for _, file := range c.byHash[hash] {
 		file.Status = status
-		c.updateFolderStatus(dir(file.Name))
+		c.updateFolderStatus(file.Path)
 	}
 }
 

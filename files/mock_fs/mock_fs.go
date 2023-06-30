@@ -4,6 +4,7 @@ import (
 	"arch/actor"
 	"arch/model"
 	"math/rand"
+	"path/filepath"
 	"time"
 )
 
@@ -48,7 +49,8 @@ func (s *scanner) scanArchive() {
 		archiveMetas = append(archiveMetas, model.FileMeta{
 			FileId: model.FileId{
 				Root: s.root,
-				Name: meta.Name,
+				Path: dir(meta.Name),
+				Name: name(meta.Name),
 			},
 			Size:    meta.Size,
 			ModTime: meta.ModTime,
@@ -74,7 +76,8 @@ func (s *scanner) hashArchive() {
 			s.events <- model.FileHashed{
 				FileId: model.FileId{
 					Root: meta.Root,
-					Name: meta.Name,
+					Path: dir(meta.Name),
+					Name: name(meta.Name),
 				},
 				Hash: meta.Hash,
 			}
@@ -107,7 +110,8 @@ func (s *scanner) hashArchive() {
 			s.events <- model.FileHashed{
 				FileId: model.FileId{
 					Root: meta.Root,
-					Name: meta.Name,
+					Path: dir(meta.Name),
+					Name: name(meta.Name),
 				},
 				Hash: meta.Hash,
 			}
@@ -122,7 +126,7 @@ func (s *scanner) hashArchive() {
 func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
 	if msg.Copy != nil {
 		for _, meta := range metas[msg.Copy.Root] {
-			if meta.Name == msg.Copy.Name {
+			if meta.Name == msg.Copy.FullName() {
 				for copyed := uint64(0); ; copyed += 10000 {
 					if copyed > meta.Size {
 						copyed = meta.Size
@@ -236,4 +240,16 @@ var metaMap = map[string]map[string]string{
 		"7777":            "6666",
 		"8888":            "8888",
 	},
+}
+
+func dir(path string) string {
+	path = filepath.Dir(path)
+	if path == "." {
+		return ""
+	}
+	return path
+}
+
+func name(path string) string {
+	return filepath.Base(path)
 }

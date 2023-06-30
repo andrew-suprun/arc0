@@ -8,7 +8,16 @@ import (
 
 type FileId struct {
 	Root string
+	Path string
 	Name string
+}
+
+func (id FileId) AbsName() string {
+	return filepath.Join(id.Root, id.Path, id.Name)
+}
+
+func (id FileId) FullName() string {
+	return filepath.Join(id.Path, id.Name)
 }
 
 type FileMeta struct {
@@ -18,12 +27,8 @@ type FileMeta struct {
 }
 
 func (m *FileMeta) String() string {
-	return fmt.Sprintf("Meta{Root: %q, Name: %q, Size: %d, ModTime: %s}",
-		m.Root, m.Name, m.Size, m.ModTime.Format(time.DateTime))
-}
-
-func (f FileMeta) AbsName() string {
-	return filepath.Join(f.Root, f.Name)
+	return fmt.Sprintf("Meta{Root: %q, Path: %q Name: %q, Size: %d, ModTime: %s}",
+		m.Root, m.Path, m.Name, m.Size, m.ModTime.Format(time.DateTime))
 }
 
 type File struct {
@@ -34,7 +39,7 @@ type File struct {
 }
 
 func (f *File) String() string {
-	return fmt.Sprintf("File{Root: %q, Name: %q, Kind: %s, Size: %d, Status: %q, Hash: %q}", f.Root, f.Name, f.Kind, f.Size, f.Status, f.Hash)
+	return fmt.Sprintf("File{Root: %q, Path: %q, Name: %q, Kind: %s, Size: %d, Status: %q, Hash: %q}", f.Root, f.Path, f.Name, f.Kind, f.Size, f.Status, f.Hash)
 }
 
 func (f *File) StatusString() string {

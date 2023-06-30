@@ -54,7 +54,7 @@ type FileCopyProgress uint64
 func (FileCopyProgress) event() {}
 
 type Error struct {
-	Meta  FileMeta
+	Path  string
 	Error error
 }
 

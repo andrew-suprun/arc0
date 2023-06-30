@@ -32,19 +32,20 @@ func (c *controller) fileScanned(meta model.FileMeta) {
 
 	archive := c.archives[meta.Root]
 	archive.totalSize += meta.Size
-	archive.byName[meta.Name] = file
+	archive.byName[meta.FullName()] = file
 
 	c.addToFolder(file, file.Size, file.ModTime)
 }
 
 func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Time) {
-	parentFolder := c.folders[dir(file.Name)]
+	parentFolder := c.folders[file.Path]
 	if parentFolder == nil {
 		parentFolder = &folder{
 			info: &model.File{
 				FileMeta: model.FileMeta{
 					FileId: model.FileId{
-						Name: dir(file.Name),
+						Path: dir(file.Path),
+						Name: name(file.Path),
 					},
 					Size:    file.Size,
 					ModTime: file.ModTime,
@@ -54,7 +55,7 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 			sortAscending: []bool{true, false, false, false},
 			entries:       []*model.File{file},
 		}
-		c.folders[dir(file.Name)] = parentFolder
+		c.folders[file.Path] = parentFolder
 	} else {
 		sameName := []*model.File{}
 		for _, entry := range parentFolder.entries {
@@ -87,14 +88,14 @@ func (c *controller) addToFolder(file *model.File, size uint64, modTime time.Tim
 			parentFolder.info.ModTime = modTime
 		}
 	}
-	if dir(file.Name) != "" {
+	if file.Path != "" {
 		c.addToFolder(parentFolder.info, size, modTime)
 	}
 }
 
 func (c *controller) fileHashed(fileHash model.FileHashed) {
 	archive := c.archives[fileHash.Root]
-	file := archive.byName[fileHash.Name]
+	file := archive.byName[fileHash.FullName()]
 	file.Hash = fileHash.Hash
 	c.addToFolder(file, file.Size, file.ModTime)
 	c.byHash[fileHash.Hash] = append(c.byHash[fileHash.Hash], file)
@@ -125,7 +126,7 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 		} else if len(originFiles) == 1 {
 			for _, root := range c.roots {
 				files := filesForHash[root]
-				if len(files) != 1 || originFiles[0].Name != files[0].Name {
+				if len(files) != 1 || originFiles[0].FullName() != files[0].FullName() {
 					c.hashStatus(file.Hash, model.AutoResolve)
 					break
 				}
@@ -135,18 +136,6 @@ func (c *controller) fileHashed(fileHash model.FileHashed) {
 			c.duplicateFiles++
 		}
 	}
-}
-
-func dir(path string) string {
-	path = filepath.Dir(path)
-	if path == "." {
-		return ""
-	}
-	return path
-}
-
-func name(path string) string {
-	return filepath.Base(path)
 }
 
 func (c *controller) makeSelectedVisible() {
@@ -186,22 +175,22 @@ renameBlock:
 
 		c.removeFolderFile(rename.FileId)
 
-		meta := c.archives[rename.Root].byName[rename.Name]
-		meta.Name = rename.NewName
-		path := dir(rename.NewName)
-		entries := c.folders[path].entries
+		meta := c.archives[rename.Root].byName[rename.FullName()]
+		meta.Path = rename.NewPath
+		meta.Name = rename.NewBase
+		entries := c.folders[meta.Path].entries
 		for _, entry := range entries {
 			if meta.Name == entry.Name && meta.Hash == entry.Hash {
 				continue renameBlock
 			}
 		}
-		c.folders[path].entries = append(entries, meta)
+		c.folders[meta.Path].entries = append(entries, meta)
 	}
 
 	if handled.Copy != nil {
 		source := handled.Copy
 		archive := c.archives[source.Root]
-		meta := archive.byName[source.Name]
+		meta := archive.byName[source.FullName()]
 		c.totalCopied += meta.Size
 		c.fileCopied = 0
 		archive.progress.TotalHashed = 0
@@ -216,8 +205,8 @@ renameBlock:
 
 func (c *controller) removeFolderFile(id model.FileId) {
 	archive := c.archives[id.Root]
-	meta := archive.byName[id.Name]
-	path := dir(id.Name)
+	meta := archive.byName[id.FullName()]
+	path := id.Path
 	entries := c.folders[path].entries
 	for i, entry := range entries {
 		if meta.Name == entry.Name && meta.Hash == entry.Hash {
@@ -268,4 +257,16 @@ func (c *controller) autoResolve() {
 
 func (c *controller) fileCopyProgress(event model.FileCopyProgress) {
 	c.fileCopied = uint64(event)
+}
+
+func dir(path string) string {
+	path = filepath.Dir(path)
+	if path == "." {
+		return ""
+	}
+	return path
+}
+
+func name(path string) string {
+	return filepath.Base(path)
 }

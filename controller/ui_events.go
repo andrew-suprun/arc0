@@ -20,7 +20,7 @@ func (c *controller) mouseTarget(cmd any) {
 		c.lastMouseEventTime = time.Now()
 
 	case selectFolder:
-		c.currentPath = cmd.Name
+		c.currentPath = cmd.FileId.FullName()
 
 	case sortColumn:
 		if cmd == folder.sortColumn {
@@ -83,7 +83,7 @@ func (c *controller) enter() {
 	selected := folder.selected
 	if selected != nil {
 		if selected.Kind == model.FileFolder {
-			c.currentPath = selected.Name
+			c.currentPath = selected.FullName()
 		} else {
 			exec.Command("open", selected.AbsName()).Start()
 		}
@@ -135,25 +135,28 @@ func (c *controller) keepFile(file *model.File) {
 
 		keepIdx := 0
 		for i, archFile := range archFiles {
-			if archFile == file || archFile.Name == file.Name {
+			if archFile == file || archFile.FullName() == file.FullName() {
 				keepIdx = i
 				break
 			}
 		}
 		for i, archFile := range archFiles {
 			if i == keepIdx {
-				if file.Name != archFile.Name {
+				if file.FullName() != archFile.FullName() {
 					msg.Rename = append(msg.Rename, model.RenameFile{
 						FileId: model.FileId{
 							Root: root,
+							Path: archFile.Path,
 							Name: archFile.Name,
 						},
-						NewName: file.Name,
+						NewPath: file.Path,
+						NewBase: file.Name,
 					})
 				}
 			} else {
 				msg.Delete = append(msg.Delete, model.DeleteFile{
 					Root: archFile.Root,
+					Path: archFile.Path,
 					Name: archFile.Name,
 				})
 			}
@@ -163,7 +166,7 @@ func (c *controller) keepFile(file *model.File) {
 	log.Printf("keepFile: msg: %s", msg)
 	if msg.Copy != nil || msg.Rename != nil || len(msg.Delete) > 0 {
 		for _, file := range filesForHash {
-			c.updateFolderStatus(dir(file.Name))
+			c.updateFolderStatus(file.Path)
 		}
 		c.pendingFiles++
 		c.fs.Send(msg)
@@ -176,13 +179,13 @@ func (c *controller) tab() {
 	if selected == nil || selected.Kind != model.FileRegular {
 		return
 	}
-	name := selected.Name
+	name := selected.FullName()
 	hash := selected.Hash
 
 	byHash := c.byHash[hash]
 	uniqueNames := map[string]struct{}{}
 	for _, meta := range byHash {
-		uniqueNames[meta.Name] = struct{}{}
+		uniqueNames[meta.FullName()] = struct{}{}
 	}
 	names := []string{}
 	for name := range uniqueNames {
@@ -199,7 +202,7 @@ func (c *controller) tab() {
 	c.currentPath = dir(name)
 	folder := c.folders[c.currentPath]
 	for _, meta := range folder.entries {
-		if name == meta.Name && hash == meta.Hash {
+		if name == meta.FullName() && hash == meta.Hash {
 			folder.selected = meta
 			break
 		}
@@ -238,7 +241,7 @@ func (c *controller) deleteFile(file *model.File) {
 	} else {
 		c.deleteRegularFile(file)
 	}
-	c.updateFolderStatus(dir(file.Name))
+	c.updateFolderStatus(file.Path)
 }
 
 func (c *controller) deleteRegularFile(file *model.File) {
@@ -257,6 +260,7 @@ func (c *controller) deleteRegularFile(file *model.File) {
 	for _, file := range filesForHash {
 		msg.Delete = append(msg.Delete, model.DeleteFile{
 			Root: file.Root,
+			Path: file.Path,
 			Name: file.Name,
 		})
 	}
@@ -265,7 +269,7 @@ func (c *controller) deleteRegularFile(file *model.File) {
 }
 
 func (c *controller) deleteFolderFile(file *model.File) {
-	folder := c.folders[file.Name]
+	folder := c.folders[file.Path]
 	for _, entry := range folder.entries {
 		c.deleteFile(entry)
 	}
