@@ -161,16 +161,20 @@ func (c *controller) keepFile(file *model.File) {
 
 func (c *controller) tab() {
 	selected := c.folders[c.currentPath].selected
-	if selected == nil || selected.Kind != model.FileRegular {
+	if selected == nil || selected.Kind != model.FileRegular || selected.Status != model.Duplicate {
 		return
 	}
 	name := selected.FullName()
 	hash := selected.Hash
+	log.Printf("### tab: name=%q hash=%q", name, hash)
 
 	byHash := c.byHash[hash]
 	uniqueNames := map[string]struct{}{}
 	for _, meta := range byHash {
-		uniqueNames[meta.FullName()] = struct{}{}
+		if meta.Root == c.roots[0] {
+			log.Printf("### tab: name=%q hash=%q", meta.FullName(), hash)
+			uniqueNames[meta.FullName()] = struct{}{}
+		}
 	}
 	names := []string{}
 	for name := range uniqueNames {
