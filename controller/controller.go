@@ -35,7 +35,6 @@ type controller struct {
 
 type archive struct {
 	scanner   model.ArchiveScanner
-	metas     []model.FileMeta
 	progress  model.ScanProgress
 	totalSize uint64
 	byName    map[string]*model.File

@@ -94,7 +94,7 @@ func (c *controller) fileStatus(file *model.File) []w.Widget {
 }
 
 func (c *controller) statusString(file *model.File) string {
-	if _, conflict := c.conflicts[file.FullName()]; conflict {
+	if _, conflict := c.conflicts[file.FullName()]; conflict && file.Root != c.roots[0] {
 		return " Conflict"
 	}
 	return file.StatusString()
