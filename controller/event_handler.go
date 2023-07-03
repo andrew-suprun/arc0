@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"arch/model"
+	m "arch/model"
 	"log"
 	"os/exec"
 	"path/filepath"
@@ -14,85 +14,85 @@ func (c *controller) handleEvent(event any) {
 	}
 
 	switch event := event.(type) {
-	case model.ArchiveScanned:
+	case m.ArchiveScanned:
 		c.archiveScanned(event)
 
-	case model.FileHashed:
+	case m.FileHashed:
 		c.fileHashed(event)
 
-	case model.FilesHandled:
+	case m.FilesHandled:
 		c.filesHandled(event)
 
-	case model.ScanProgress:
+	case m.ScanProgress:
 		c.scanProgress(event)
 
-	case model.FileCopyProgress:
+	case m.FileCopyProgress:
 		c.fileCopyProgress(event)
 
-	case model.ScreenSize:
-		c.screenSize = model.ScreenSize{Width: event.Width, Height: event.Height}
+	case m.ScreenSize:
+		c.screenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
 
-	case model.Enter:
+	case m.Enter:
 		c.enter()
 
-	case model.Esc:
+	case m.Esc:
 		if c.currentPath == "" {
 			return
 		}
-		parts := strings.Split(c.currentPath, "/")
+		parts := strings.Split(c.currentPath.String(), "/")
 		if len(parts) == 1 {
 			c.currentPath = ""
 		}
-		c.currentPath = filepath.Join(parts[:len(parts)-1]...)
+		c.currentPath = m.Path(filepath.Join(parts[:len(parts)-1]...))
 
-	case model.RevealInFinder:
+	case m.RevealInFinder:
 		folder := c.folders[c.currentPath]
 		if folder.selected != nil {
 			exec.Command("open", "-R", folder.selected.AbsName()).Start()
 		}
 
-	case model.MoveSelection:
+	case m.MoveSelection:
 		c.moveSelection(event.Lines)
 		c.makeSelectedVisible()
 
-	case model.SelectFirst:
+	case m.SelectFirst:
 		c.selectFirst()
 		c.makeSelectedVisible()
 
-	case model.SelectLast:
+	case m.SelectLast:
 		c.selectLast()
 		c.makeSelectedVisible()
 
-	case model.Scroll:
+	case m.Scroll:
 		c.shiftOffset(event.Lines)
 
-	case model.MouseTarget:
+	case m.MouseTarget:
 		c.mouseTarget(event.Command)
 
-	case model.PgUp:
+	case m.PgUp:
 		c.shiftOffset(-c.fileTreeLines)
 		c.moveSelection(-c.fileTreeLines)
 
-	case model.PgDn:
+	case m.PgDn:
 		c.shiftOffset(c.fileTreeLines)
 		c.moveSelection(c.fileTreeLines)
 
-	case model.KeepOne:
+	case m.KeepOne:
 		c.keepSelected()
 
-	case model.Tab:
+	case m.Tab:
 		c.tab()
 
-	case model.KeepAll:
+	case m.KeepAll:
 		// TODO: Implement, maybe?
 
-	case model.Delete:
+	case m.Delete:
 		c.deleteSelected()
 
-	case model.Error:
+	case m.Error:
 		c.Errors = append(c.Errors, event)
 
-	case model.Quit:
+	case m.Quit:
 		c.quit = true
 
 	default:

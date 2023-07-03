@@ -6,18 +6,51 @@ import (
 	"time"
 )
 
+type Root string
+
+func (root Root) String() string {
+	return string(root)
+}
+
+type Path string
+
+func (path Path) String() string {
+	return string(path)
+}
+
+type Name string
+
+func (name Name) String() string {
+	return string(name)
+}
+
+type FullName struct {
+	Path
+	Name
+}
+
+func (name FullName) String() string {
+	return filepath.Join(name.Path.String(), name.Name.String())
+}
+
 type FileId struct {
-	Root string
-	Path string
-	Name string
+	Root
+	Path
+	Name
 }
 
 func (id FileId) AbsName() string {
-	return filepath.Join(id.Root, id.Path, id.Name)
+	return filepath.Join(id.Root.String(), id.Path.String(), id.Name.String())
 }
 
-func (id FileId) FullName() string {
-	return filepath.Join(id.Path, id.Name)
+func (id FileId) FullName() FullName {
+	return FullName{Path: id.Path, Name: id.Name}
+}
+
+type Hash string
+
+func (hash Hash) String() string {
+	return string(hash)
 }
 
 type FileMeta struct {
@@ -33,20 +66,20 @@ func (m *FileMeta) String() string {
 
 type File struct {
 	FileMeta
-	Kind   FileKind
-	Hash   string
-	Status ResulutionStatus
+	FileKind
+	Hash
+	Status
 }
 
 func (f *File) String() string {
-	return fmt.Sprintf("File{Root: %q, Path: %q, Name: %q, Kind: %s, Size: %d, Status: %q, Hash: %q}", f.Root, f.Path, f.Name, f.Kind, f.Size, f.Status, f.Hash)
+	return fmt.Sprintf("File{Root: %q, Path: %q, Name: %q, Kind: %s, Size: %d, Status: %q, Hash: %q}", f.Root, f.Path, f.Name, f.FileKind, f.Size, f.Status, f.Hash)
 }
 
 func (f *File) StatusString() string {
 	switch f.Status {
 	case Resolved:
 		return ""
-	case AutoResolve, ResolveDuplicate, ResolveAbsent:
+	case Pending:
 		return " Pending"
 	case Duplicate:
 		return " Duplicate"
@@ -75,27 +108,21 @@ func (k FileKind) String() string {
 	return "UNKNOWN FILE KIND"
 }
 
-type ResulutionStatus int
+type Status int
 
 const (
-	Resolved ResulutionStatus = iota
-	AutoResolve
-	ResolveDuplicate
-	ResolveAbsent
+	Resolved Status = iota
+	Pending
 	Duplicate
 	Absent
 )
 
-func (s ResulutionStatus) String() string {
+func (s Status) String() string {
 	switch s {
 	case Resolved:
 		return "Resolved"
-	case AutoResolve:
-		return "AutoResolve"
-	case ResolveDuplicate:
-		return "ResolveDuplicate"
-	case ResolveAbsent:
-		return "ResolveAbsent"
+	case Pending:
+		return "Pending"
 	case Duplicate:
 		return "Duplicate"
 	case Absent:

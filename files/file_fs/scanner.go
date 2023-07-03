@@ -2,7 +2,7 @@ package file_fs
 
 import (
 	"arch/lifecycle"
-	"arch/model"
+	m "arch/model"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
@@ -22,16 +22,16 @@ import (
 )
 
 type scanner struct {
-	root        string
-	events      model.EventChan
+	root        m.Root
+	events      m.EventChan
 	lc          *lifecycle.Lifecycle
 	infos       map[uint64]*fileInfo
 	totalHashed uint64
 }
 
 type fileInfo struct {
-	meta model.FileMeta
-	hash string
+	meta m.FileMeta
+	hash m.Hash
 }
 
 const hashFileName = ".meta.csv"
@@ -45,35 +45,35 @@ func (s *scanner) HashArchive() {
 }
 
 func (s *scanner) scanArchive() {
-	fsys := os.DirFS(s.root)
+	fsys := os.DirFS(s.root.String())
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if s.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 
 		if err != nil {
-			s.events <- model.Error{
-				Path:  path,
-				Error: err}
+			s.events <- m.Error{
+				FullName: m.FullName{Path: m.Path(dir(path)), Name: m.Name(name(path))},
+				Error:    err}
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			s.events <- model.Error{
-				Path:  path,
-				Error: err}
+			s.events <- m.Error{
+				FullName: m.FullName{Path: m.Path(dir(path)), Name: m.Name(name(path))},
+				Error:    err}
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
 		modTime := meta.ModTime()
 		modTime = modTime.UTC().Round(time.Second)
 
-		fileMeta := model.FileMeta{
-			FileId: model.FileId{
+		fileMeta := m.FileMeta{
+			FileId: m.FileId{
 				Root: s.root,
-				Path: dir(path),
-				Name: name(path),
+				Path: m.Path(dir(path)),
+				Name: m.Name(name(path)),
 			},
 			ModTime: modTime,
 			Size:    uint64(meta.Size()),
@@ -86,7 +86,7 @@ func (s *scanner) scanArchive() {
 		return nil
 	})
 
-	result := model.ArchiveScanned{Root: s.root}
+	result := m.ArchiveScanned{Root: s.root}
 	for _, info := range s.infos {
 		result.Metas = append(result.Metas, info.meta)
 	}
@@ -103,9 +103,9 @@ func (s *scanner) hashArchive() {
 	}()
 
 	defer func() {
-		s.events <- model.ScanProgress{
+		s.events <- m.ScanProgress{
 			Root:          s.root,
-			ProgressState: model.FileTreeHashed,
+			ProgressState: m.FileTreeHashed,
 		}
 	}()
 
@@ -125,7 +125,7 @@ func (s *scanner) hashArchive() {
 			}
 			s.hashFile(fileInfos[i])
 
-			s.events <- model.FileHashed{
+			s.events <- m.FileHashed{
 				FileId: info.meta.FileId,
 				Hash:   info.hash,
 			}
@@ -137,10 +137,10 @@ func (s *scanner) hashFile(info *fileInfo) {
 	hash := sha256.New()
 	buf := make([]byte, 1024*1024)
 
-	fsys := os.DirFS(info.meta.Root)
-	file, err := fsys.Open(info.meta.FullName())
+	fsys := os.DirFS(info.meta.Root.String())
+	file, err := fsys.Open(info.meta.FullName().String())
 	if err != nil {
-		s.events <- model.Error{Path: info.meta.FullName(), Error: err}
+		s.events <- m.Error{FullName: info.meta.FullName(), Error: err}
 		return
 	}
 	defer file.Close()
@@ -155,12 +155,12 @@ func (s *scanner) hashFile(info *fileInfo) {
 			nw, ew := hash.Write(buf[0:nr])
 			if ew != nil {
 				if err != nil {
-					s.events <- model.Error{Path: info.meta.FullName(), Error: err}
+					s.events <- m.Error{FullName: info.meta.FullName(), Error: err}
 					return
 				}
 			}
 			if nr != nw {
-				s.events <- model.Error{Path: info.meta.FullName(), Error: err}
+				s.events <- m.Error{FullName: info.meta.FullName(), Error: err}
 				return
 			}
 		}
@@ -169,22 +169,22 @@ func (s *scanner) hashFile(info *fileInfo) {
 			break
 		}
 		if er != nil {
-			s.events <- model.Error{Path: info.meta.FullName(), Error: er}
+			s.events <- m.Error{FullName: info.meta.FullName(), Error: er}
 			return
 		}
 
 		s.totalHashed += uint64(nr)
-		s.events <- model.ScanProgress{
+		s.events <- m.ScanProgress{
 			Root:          info.meta.Root,
-			ProgressState: model.HashingFileTree,
+			ProgressState: m.HashingFileTree,
 			TotalHashed:   s.totalHashed,
 		}
 	}
-	info.hash = base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
+	info.hash = m.Hash(base64.RawURLEncoding.EncodeToString(hash.Sum(nil)))
 }
 
 func (s *scanner) readMeta() {
-	absHashFileName := filepath.Join(s.root, hashFileName)
+	absHashFileName := filepath.Join(s.root.String(), hashFileName)
 	hashInfoFile, err := os.Open(absHashFileName)
 	if err != nil {
 		return
@@ -209,19 +209,19 @@ func (s *scanner) readMeta() {
 
 			info, ok := s.infos[iNode]
 			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
-				info.hash = hash
-				s.events <- model.FileHashed{
-					FileId: model.FileId{
+				info.hash = m.Hash(hash)
+				s.events <- m.FileHashed{
+					FileId: m.FileId{
 						Root: s.root,
 						Path: info.meta.Path,
 						Name: info.meta.Name,
 					},
-					Hash: hash,
+					Hash: m.Hash(hash),
 				}
 				s.totalHashed += info.meta.Size
-				s.events <- model.ScanProgress{
+				s.events <- m.ScanProgress{
 					Root:          s.root,
-					ProgressState: model.HashingFileTree,
+					ProgressState: m.HashingFileTree,
 					TotalHashed:   s.totalHashed,
 				}
 			}
@@ -236,14 +236,14 @@ func (s *scanner) storeMeta() error {
 	for iNode, info := range s.infos {
 		result = append(result, []string{
 			fmt.Sprint(iNode),
-			norm.NFC.String(info.meta.FullName()),
+			norm.NFC.String(info.meta.FullName().String()),
 			fmt.Sprint(info.meta.Size),
 			info.meta.ModTime.UTC().Format(time.RFC3339Nano),
-			info.hash,
+			info.hash.String(),
 		})
 	}
 
-	absHashFileName := filepath.Join(s.root, hashFileName)
+	absHashFileName := filepath.Join(s.root.String(), hashFileName)
 	hashInfoFile, err := os.Create(absHashFileName)
 
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 )
 
 type FS interface {
-	NewArchiveScanner(root string) ArchiveScanner
+	NewArchiveScanner(root Root) ArchiveScanner
 	actor.Actor[HandleFiles]
 }
 
@@ -17,7 +17,7 @@ type ArchiveScanner interface {
 }
 
 type HandleFiles struct {
-	Hash   string
+	Hash
 	Delete []DeleteFile
 	Rename []RenameFile
 	Copy   *CopyFile
@@ -31,7 +31,7 @@ func (h HandleFiles) String() string {
 	}
 
 	for _, r := range h.Rename {
-		fmt.Fprintf(buf, "    rename: root %q: %q/%q -> %q/%q\n", r.Root, r.Path, r.Name, r.NewPath, r.NewBase)
+		fmt.Fprintf(buf, "    rename: root %q: %q/%q -> %q/%q\n", r.Root, r.Path, r.Name, r.NewPath, r.NewName)
 	}
 	if h.Copy != nil {
 		fmt.Fprintf(buf, "    copy: %q/%q/%q\n", h.Copy.Root, h.Copy.Path, h.Copy.Name)
@@ -46,11 +46,11 @@ type DeleteFile FileId
 
 type RenameFile struct {
 	FileId
-	NewPath string
-	NewBase string
+	NewPath Path
+	NewName Name
 }
 
 type CopyFile struct {
 	FileId
-	TargetRoots []string
+	TargetRoots []Root
 }

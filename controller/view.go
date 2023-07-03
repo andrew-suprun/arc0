@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"arch/model"
+	m "arch/model"
 	w "arch/widgets"
 	"fmt"
 	"path/filepath"
@@ -48,7 +48,7 @@ func (c *controller) folderView() w.Widget {
 				w.MouseTarget(sortBySize, w.Text(fmt.Sprintf("%22s", "Size"+c.sortIndicator(sortBySize)+" "))),
 			),
 		),
-		w.Scroll(model.Scroll{}, w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}},
+		w.Scroll(m.Scroll{}, w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}},
 			func(size w.Size) w.Widget {
 				c.fileTreeLines = size.Height
 				if folder.offsetIdx > len(folder.entries)+1-size.Height {
@@ -59,7 +59,7 @@ func (c *controller) folderView() w.Widget {
 				}
 				rows := []w.Widget{}
 				i := 0
-				var file *model.File
+				var file *m.File
 				for i, file = range folder.entries[folder.offsetIdx:] {
 					if i >= size.Height {
 						break
@@ -77,15 +77,15 @@ func (c *controller) folderView() w.Widget {
 	)
 }
 
-func (c *controller) fileStatus(file *model.File) []w.Widget {
+func (c *controller) fileStatus(file *m.File) []w.Widget {
 	result := []w.Widget{w.Text(c.statusString(file)).Width(11)} // todo conflict status
 
-	if file.Kind == model.FileRegular {
+	if file.FileKind == m.FileRegular {
 		result = append(result, w.Text("   "))
 	} else {
 		result = append(result, w.Text(" ▶ "))
 	}
-	result = append(result, w.Text(file.Name).Width(20).Flex(1))
+	result = append(result, w.Text(file.Name.String()).Width(20).Flex(1))
 	result = append(result, w.Text("  "))
 	result = append(result, w.Text(file.ModTime.Format(time.DateTime)))
 	result = append(result, w.Text("  "))
@@ -93,7 +93,7 @@ func (c *controller) fileStatus(file *model.File) []w.Widget {
 	return result
 }
 
-func (c *controller) statusString(file *model.File) string {
+func (c *controller) statusString(file *m.File) string {
 	if _, conflict := c.conflicts[file.FullName()]; conflict && file.Root != c.roots[0] {
 		return " Conflict"
 	}
@@ -112,7 +112,7 @@ func (c *controller) sortIndicator(column sortColumn) string {
 }
 
 func (c *controller) breadcrumbs() w.Widget {
-	names := strings.Split(c.currentPath, "/")
+	names := strings.Split(c.currentPath.String(), "/")
 	widgets := make([]w.Widget, 0, len(names)*2+2)
 	widgets = append(widgets, w.MouseTarget(selectFolder(c.folders[""].info),
 		w.Styled(styleBreadcrumbs, w.Text(" Root")),
@@ -120,7 +120,7 @@ func (c *controller) breadcrumbs() w.Widget {
 	for i := range names {
 		widgets = append(widgets, w.Text(" / "))
 		widgets = append(widgets,
-			w.MouseTarget(selectFolder(c.folders[filepath.Join(names[:i+1]...)].info),
+			w.MouseTarget(selectFolder(c.folders[m.Path(filepath.Join(names[:i+1]...))].info),
 				w.Styled(styleBreadcrumbs, w.Text(names[i])),
 			),
 		)
@@ -145,9 +145,9 @@ func (c *controller) progress() w.Widget {
 	progressInfos := make([]progressInfo, 0, len(c.archives)+1)
 	for _, root := range c.roots {
 		archive := c.archives[root]
-		if archive.progress.ProgressState == model.HashingFileTree {
+		if archive.progress.ProgressState == m.HashingFileTree {
 			progressInfos = append(progressInfos, progressInfo{
-				progressLabel: " Hashing: " + root,
+				progressLabel: " Hashing: " + root.String(),
 				labelWidth:    11 + rootLen,
 				value:         float64(archive.progress.TotalHashed) / float64(archive.totalSize),
 			})
@@ -216,9 +216,9 @@ func formatSize(size uint64) string {
 	return b.String()
 }
 
-func (c *controller) styleFile(file *model.File, selected bool) w.Style {
+func (c *controller) styleFile(file *m.File, selected bool) w.Style {
 	bg, flags := byte(17), w.Flags(0)
-	if file.Kind == model.FileFolder {
+	if file.FileKind == m.FileFolder {
 		bg = byte(18)
 	}
 	result := w.Style{FG: c.statusColor(file), BG: bg, Flags: flags}
@@ -230,16 +230,16 @@ func (c *controller) styleFile(file *model.File, selected bool) w.Style {
 
 var styleBreadcrumbs = w.Style{FG: 250, BG: 17, Flags: w.Bold + w.Italic}
 
-func (c *controller) statusColor(file *model.File) byte {
+func (c *controller) statusColor(file *m.File) byte {
 	if _, conflict := c.conflicts[file.FullName()]; conflict && file.Root != c.roots[0] {
 		return 196
 	}
 	switch file.Status {
-	case model.Resolved:
+	case m.Resolved:
 		return 195
-	case model.AutoResolve, model.ResolveDuplicate, model.ResolveAbsent:
+	case m.Pending:
 		return 214
-	case model.Duplicate, model.Absent:
+	case m.Duplicate, m.Absent:
 		return 196
 	}
 	return 231

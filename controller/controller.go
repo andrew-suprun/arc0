@@ -1,30 +1,30 @@
 package controller
 
 import (
-	"arch/model"
+	m "arch/model"
 	"arch/widgets"
 	"time"
 )
 
 type controller struct {
-	fs       model.FS
-	events   model.EventChan
+	fs       m.FS
+	events   m.EventChan
 	renderer widgets.Renderer
 
-	roots              []string
-	archives           map[string]*archive
-	bySize             map[uint64][]*model.File
-	byHash             map[string][]*model.File
-	folders            map[string]*folder
-	conflicts          map[string]struct{}
-	currentPath        string
+	roots              []m.Root
+	archives           map[m.Root]*archive
+	bySize             map[uint64][]*m.File
+	byHash             map[m.Hash][]*m.File
+	folders            map[m.Path]*folder
+	conflicts          map[m.FullName]struct{}
+	currentPath        m.Path
 	copySize           uint64
 	fileCopied         uint64
 	totalCopied        uint64
 	pendingFiles       int
 	duplicateFiles     int
 	absentFiles        int
-	screenSize         model.ScreenSize
+	screenSize         m.ScreenSize
 	fileTreeLines      int
 	lastMouseEventTime time.Time
 
@@ -34,25 +34,25 @@ type controller struct {
 }
 
 type archive struct {
-	scanner   model.ArchiveScanner
-	progress  model.ScanProgress
+	scanner   m.ArchiveScanner
+	progress  m.ScanProgress
 	totalSize uint64
-	byName    map[string]*model.File
+	byName    map[m.FullName]*m.File
 }
 
 type folder struct {
-	info          *model.File
-	selected      *model.File
+	info          *m.File
+	selected      *m.File
 	selectedIdx   int
 	offsetIdx     int
 	sortColumn    sortColumn
 	sortAscending []bool
-	entries       []*model.File
+	entries       []*m.File
 }
 
-func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, roots []string) {
+func Run(fs m.FS, renderer widgets.Renderer, ev m.EventChan, roots []m.Root) {
 	rootFolder := &folder{
-		info:          &model.File{Kind: model.FileFolder},
+		info:          &m.File{FileKind: m.FileFolder},
 		sortAscending: []bool{true, false, false, false},
 	}
 	c := &controller{
@@ -60,17 +60,17 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, roots []str
 		renderer:  renderer,
 		events:    ev,
 		roots:     roots,
-		archives:  map[string]*archive{},
-		bySize:    map[uint64][]*model.File{},
-		byHash:    map[string][]*model.File{},
-		folders:   map[string]*folder{"": rootFolder},
-		conflicts: map[string]struct{}{},
+		archives:  map[m.Root]*archive{},
+		bySize:    map[uint64][]*m.File{},
+		byHash:    map[m.Hash][]*m.File{},
+		folders:   map[m.Path]*folder{"": rootFolder},
+		conflicts: map[m.FullName]struct{}{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
 			scanner: scanner,
-			byName:  map[string]*model.File{},
+			byName:  map[m.FullName]*m.File{},
 		}
 		scanner.ScanArchive()
 	}
@@ -91,20 +91,20 @@ func Run(fs model.FS, renderer widgets.Renderer, ev model.EventChan, roots []str
 	}
 }
 
-func (c *controller) hashStatus(hash string, status model.ResulutionStatus) {
+func (c *controller) hashStatus(hash m.Hash, status m.Status) {
 	for _, file := range c.byHash[hash] {
 		file.Status = status
 		c.updateFolderStatus(file.Path)
 	}
 }
 
-func (c *controller) ScreenSize() model.ScreenSize {
+func (c *controller) ScreenSize() m.ScreenSize {
 	return c.screenSize
 }
 
-type selectFile *model.File
+type selectFile *m.File
 
-type selectFolder *model.File
+type selectFolder *m.File
 
 type sortColumn int
 

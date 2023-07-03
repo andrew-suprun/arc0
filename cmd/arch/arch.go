@@ -5,7 +5,7 @@ import (
 	"arch/files/file_fs"
 	"arch/files/mock_fs"
 	"arch/lifecycle"
-	"arch/model"
+	m "arch/model"
 	"arch/renderer/tcell"
 	"log"
 	"os"
@@ -14,14 +14,14 @@ import (
 func main() {
 	log.SetFlags(0)
 
-	var paths []string
+	var paths []m.Root
 	if len(os.Args) >= 1 && (os.Args[1] == "-sim" || os.Args[1] == "-sim2") {
-		paths = []string{"origin", "copy 1", "copy 2"}
+		paths = []m.Root{"origin", "copy 1", "copy 2"}
 	} else {
-		paths = make([]string, len(os.Args)-1)
-		var err error
+		paths = make([]m.Root, len(os.Args)-1)
 		for i, path := range os.Args[1:] {
-			paths[i], err = file_fs.AbsPath(path)
+			path, err := file_fs.AbsPath(path)
+			paths[i] = m.Root(path)
 			if err != nil {
 				log.Panicf("Failed to scan archives: %#v", err)
 			}
@@ -29,14 +29,14 @@ func main() {
 	}
 
 	lc := lifecycle.New()
-	events := make(model.EventChan, 10)
+	events := make(m.EventChan, 10)
 	renderer, err := tcell.NewRenderer(events)
 	if err != nil {
 		log.Printf("Failed to open terminal: %#v", err)
 		return
 	}
 
-	var fs model.FS
+	var fs m.FS
 
 	if len(os.Args) >= 1 && os.Args[1] == "-sim" {
 		fs = mock_fs.NewFs(events)

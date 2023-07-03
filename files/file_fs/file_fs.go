@@ -3,7 +3,7 @@ package file_fs
 import (
 	"arch/actor"
 	"arch/lifecycle"
-	"arch/model"
+	m "arch/model"
 	"os"
 	"path/filepath"
 
@@ -11,22 +11,22 @@ import (
 )
 
 type fileFs struct {
-	events  model.EventChan
+	events  m.EventChan
 	lc      *lifecycle.Lifecycle
-	handler actor.Actor[model.HandleFiles]
+	handler actor.Actor[m.HandleFiles]
 }
 
-func NewFs(events model.EventChan, lc *lifecycle.Lifecycle) model.FS {
+func NewFs(events m.EventChan, lc *lifecycle.Lifecycle) m.FS {
 	fs := &fileFs{
 		events: events,
 		lc:     lc,
 	}
-	fs.handler = actor.NewActor[model.HandleFiles](fs.handleFiles)
+	fs.handler = actor.NewActor[m.HandleFiles](fs.handleFiles)
 
 	return fs
 }
 
-func (fs *fileFs) NewArchiveScanner(root string) model.ArchiveScanner {
+func (fs *fileFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 	return &scanner{
 		root:   root,
 		events: fs.events,
@@ -35,7 +35,7 @@ func (fs *fileFs) NewArchiveScanner(root string) model.ArchiveScanner {
 	}
 }
 
-func (fs *fileFs) Send(cmd model.HandleFiles) {
+func (fs *fileFs) Send(cmd m.HandleFiles) {
 	fs.handler.Send(cmd)
 }
 

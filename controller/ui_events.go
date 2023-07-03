@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"arch/model"
+	m "arch/model"
 	"log"
 	"os/exec"
 	"sort"
@@ -26,7 +26,7 @@ func (c *controller) mouseTarget(cmd any) {
 		c.lastMouseEventTime = time.Now()
 
 	case selectFolder:
-		c.currentPath = cmd.FileId.FullName()
+		c.currentPath = m.Path(cmd.FileId.FullName().String())
 
 	case sortColumn:
 		if cmd == folder.sortColumn {
@@ -68,8 +68,8 @@ func (c *controller) enter() {
 	folder := c.folders[c.currentPath]
 	selected := folder.selected
 	if selected != nil {
-		if selected.Kind == model.FileFolder {
-			c.currentPath = selected.FullName()
+		if selected.FileKind == m.FileFolder {
+			c.currentPath = m.Path(selected.FullName().String())
 		} else {
 			exec.Command("open", selected.AbsName()).Start()
 		}
@@ -91,20 +91,20 @@ func (c *controller) keepSelected() {
 	c.keepFile(c.folders[c.currentPath].selected)
 }
 
-func (c *controller) keepFile(file *model.File) {
-	if file == nil || file.Kind != model.FileRegular {
+func (c *controller) keepFile(file *m.File) {
+	if file == nil || file.FileKind != m.FileRegular {
 		return
 	}
 	log.Printf("keepFile: file %s", file)
-	msg := model.HandleFiles{Hash: file.Hash}
+	msg := m.HandleFiles{Hash: file.Hash}
 
 	filesForHash := c.byHash[file.Hash]
-	byArch := map[string][]*model.File{}
+	byArch := map[m.Root][]*m.File{}
 	for _, fileForHash := range filesForHash {
 		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
 	}
 
-	copyFiles := &model.CopyFile{FileId: file.FileId}
+	copyFiles := &m.CopyFile{FileId: file.FileId}
 
 	for _, root := range c.roots {
 		if len(byArch[root]) == 0 {
@@ -129,18 +129,18 @@ func (c *controller) keepFile(file *model.File) {
 		for i, archFile := range archFiles {
 			if i == keepIdx {
 				if file.FullName() != archFile.FullName() {
-					msg.Rename = append(msg.Rename, model.RenameFile{
-						FileId: model.FileId{
+					msg.Rename = append(msg.Rename, m.RenameFile{
+						FileId: m.FileId{
 							Root: root,
 							Path: archFile.Path,
 							Name: archFile.Name,
 						},
 						NewPath: file.Path,
-						NewBase: file.Name,
+						NewName: file.Name,
 					})
 				}
 			} else {
-				msg.Delete = append(msg.Delete, model.DeleteFile{
+				msg.Delete = append(msg.Delete, m.DeleteFile{
 					Root: archFile.Root,
 					Path: archFile.Path,
 					Name: archFile.Name,
@@ -161,15 +161,15 @@ func (c *controller) keepFile(file *model.File) {
 
 func (c *controller) tab() {
 	selected := c.folders[c.currentPath].selected
-	if selected == nil || selected.Kind != model.FileRegular || selected.Status != model.Duplicate {
+	if selected == nil || selected.FileKind != m.FileRegular || selected.Status != m.Duplicate {
 		return
 	}
-	name := selected.FullName()
+	name := selected.FullName().String()
 	hash := selected.Hash
 	log.Printf("### tab: name=%q hash=%q", name, hash)
 
 	byHash := c.byHash[hash]
-	uniqueNames := map[string]struct{}{}
+	uniqueNames := map[m.FullName]struct{}{}
 	for _, meta := range byHash {
 		if meta.Root == c.roots[0] {
 			log.Printf("### tab: name=%q hash=%q", meta.FullName(), hash)
@@ -178,7 +178,7 @@ func (c *controller) tab() {
 	}
 	names := []string{}
 	for name := range uniqueNames {
-		names = append(names, name)
+		names = append(names, name.String())
 	}
 	sort.Strings(names)
 	idx := 0
@@ -188,10 +188,10 @@ func (c *controller) tab() {
 		}
 	}
 	name = names[(idx+1)%len(names)]
-	c.currentPath = dir(name)
+	c.currentPath = dir(m.Path(name))
 	folder := c.folders[c.currentPath]
 	for _, meta := range folder.entries {
-		if name == meta.FullName() && hash == meta.Hash {
+		if name == meta.FullName().String() && hash == meta.Hash {
 			folder.selected = meta
 			break
 		}
@@ -199,11 +199,11 @@ func (c *controller) tab() {
 	c.makeSelectedVisible()
 }
 
-func (c *controller) updateFolderStatus(path string) {
+func (c *controller) updateFolderStatus(path m.Path) {
 	log.Printf("### updateFolderStatus path=%q", path)
 	currentFolder := c.folders[path]
 	status := currentFolder.info.Status
-	currentFolder.info.Status = model.Resolved
+	currentFolder.info.Status = m.Resolved
 	for _, entry := range currentFolder.entries {
 		currentFolder.info.MergeStatus(entry)
 	}
@@ -216,17 +216,17 @@ func (c *controller) deleteSelected() {
 	c.deleteFile(c.folders[c.currentPath].selected)
 }
 
-func (c *controller) deleteFile(file *model.File) {
+func (c *controller) deleteFile(file *m.File) {
 	if file == nil {
 		return
 	}
 	status := file.Status
-	if status != model.Absent {
+	if status != m.Absent {
 		return
 	}
 
 	c.absentFiles--
-	if file.Kind == model.FileFolder {
+	if file.FileKind == m.FileFolder {
 		c.deleteFolderFile(file)
 	} else {
 		c.deleteRegularFile(file)
@@ -234,11 +234,11 @@ func (c *controller) deleteFile(file *model.File) {
 	c.updateFolderStatus(file.Path)
 }
 
-func (c *controller) deleteRegularFile(file *model.File) {
-	c.hashStatus(file.Hash, model.ResolveAbsent)
+func (c *controller) deleteRegularFile(file *m.File) {
+	c.hashStatus(file.Hash, m.Pending)
 
 	filesForHash := c.byHash[file.Hash]
-	byArch := map[string][]*model.File{}
+	byArch := map[m.Root][]*m.File{}
 	for _, fileForHash := range filesForHash {
 		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
 	}
@@ -246,9 +246,9 @@ func (c *controller) deleteRegularFile(file *model.File) {
 		return
 	}
 
-	msg := model.HandleFiles{Hash: file.Hash}
+	msg := m.HandleFiles{Hash: file.Hash}
 	for _, file := range filesForHash {
-		msg.Delete = append(msg.Delete, model.DeleteFile{
+		msg.Delete = append(msg.Delete, m.DeleteFile{
 			Root: file.Root,
 			Path: file.Path,
 			Name: file.Name,
@@ -258,8 +258,8 @@ func (c *controller) deleteRegularFile(file *model.File) {
 	c.fs.Send(msg)
 }
 
-func (c *controller) deleteFolderFile(file *model.File) {
-	folder := c.folders[file.FullName()]
+func (c *controller) deleteFolderFile(file *m.File) {
+	folder := c.folders[m.Path(file.FullName().String())]
 	for _, entry := range folder.entries {
 		c.deleteFile(entry)
 	}

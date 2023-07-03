@@ -2,7 +2,7 @@ package mock_fs
 
 import (
 	"arch/actor"
-	"arch/model"
+	m "arch/model"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -11,26 +11,26 @@ import (
 var Scan bool
 
 type mockFs struct {
-	events  model.EventChan
-	handler actor.Actor[model.HandleFiles]
+	events  m.EventChan
+	handler actor.Actor[m.HandleFiles]
 }
 
 type scanner struct {
-	root   string
-	events model.EventChan
+	root   m.Root
+	events m.EventChan
 }
 
-func NewFs(events model.EventChan) model.FS {
+func NewFs(events m.EventChan) m.FS {
 	fs := &mockFs{events: events}
-	fs.handler = actor.NewActor[model.HandleFiles](fs.handleFiles)
+	fs.handler = actor.NewActor[m.HandleFiles](fs.handleFiles)
 	return fs
 }
 
-func (fs *mockFs) NewArchiveScanner(root string) model.ArchiveScanner {
+func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 	return &scanner{root: root, events: fs.events}
 }
 
-func (fs *mockFs) Send(cmd model.HandleFiles) {
+func (fs *mockFs) Send(cmd m.HandleFiles) {
 	fs.handler.Send(cmd)
 }
 
@@ -44,19 +44,19 @@ func (s *scanner) HashArchive() {
 
 func (s *scanner) scanArchive() {
 	archFiles := metas[s.root]
-	var archiveMetas []model.FileMeta
+	var archiveMetas []m.FileMeta
 	for _, meta := range archFiles {
-		archiveMetas = append(archiveMetas, model.FileMeta{
-			FileId: model.FileId{
+		archiveMetas = append(archiveMetas, m.FileMeta{
+			FileId: m.FileId{
 				Root: s.root,
-				Path: dir(meta.Name),
-				Name: name(meta.Name),
+				Path: dir(meta.FullName),
+				Name: name(meta.FullName),
 			},
 			Size:    meta.Size,
 			ModTime: meta.ModTime,
 		})
 	}
-	s.events <- model.ArchiveScanned{
+	s.events <- m.ArchiveScanned{
 		Root:  s.root,
 		Metas: archiveMetas,
 	}
@@ -73,18 +73,18 @@ func (s *scanner) hashArchive() {
 	for i := range archFiles {
 		if !scans[i] {
 			meta := archFiles[i]
-			s.events <- model.FileHashed{
-				FileId: model.FileId{
+			s.events <- m.FileHashed{
+				FileId: m.FileId{
 					Root: meta.Root,
-					Path: dir(meta.Name),
-					Name: name(meta.Name),
+					Path: dir(meta.FullName),
+					Name: name(meta.FullName),
 				},
 				Hash: meta.Hash,
 			}
 			totalHashed += meta.Size
-			s.events <- model.ScanProgress{
+			s.events <- m.ScanProgress{
 				Root:          s.root,
-				ProgressState: model.HashingFileTree,
+				ProgressState: m.HashingFileTree,
 				TotalHashed:   totalHashed,
 			}
 		}
@@ -96,9 +96,9 @@ func (s *scanner) hashArchive() {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
-				s.events <- model.ScanProgress{
+				s.events <- m.ScanProgress{
 					Root:          meta.Root,
-					ProgressState: model.HashingFileTree,
+					ProgressState: m.HashingFileTree,
 					TotalHashed:   totalHashed + hashed,
 				}
 				if hashed == meta.Size {
@@ -107,31 +107,31 @@ func (s *scanner) hashArchive() {
 				time.Sleep(time.Millisecond)
 			}
 			totalHashed += meta.Size
-			s.events <- model.FileHashed{
-				FileId: model.FileId{
+			s.events <- m.FileHashed{
+				FileId: m.FileId{
 					Root: meta.Root,
-					Path: dir(meta.Name),
-					Name: name(meta.Name),
+					Path: dir(meta.FullName),
+					Name: name(meta.FullName),
 				},
 				Hash: meta.Hash,
 			}
 		}
 	}
-	s.events <- model.ScanProgress{
+	s.events <- m.ScanProgress{
 		Root:          s.root,
-		ProgressState: model.FileTreeHashed,
+		ProgressState: m.FileTreeHashed,
 	}
 }
 
-func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
+func (fs *mockFs) handleFiles(msg m.HandleFiles) bool {
 	if msg.Copy != nil {
 		for _, meta := range metas[msg.Copy.Root] {
-			if meta.Name == msg.Copy.FullName() {
+			if meta.FullName == msg.Copy.FullName().String() {
 				for copyed := uint64(0); ; copyed += 10000 {
 					if copyed > meta.Size {
 						copyed = meta.Size
 					}
-					fs.events <- model.FileCopyProgress(copyed)
+					fs.events <- m.FileCopyProgress(copyed)
 					if copyed == meta.Size {
 						break
 					}
@@ -141,7 +141,7 @@ func (fs *mockFs) handleFiles(msg model.HandleFiles) bool {
 			}
 		}
 	}
-	fs.events <- model.FilesHandled(msg)
+	fs.events <- m.FilesHandled(msg)
 	return true
 }
 
@@ -150,17 +150,17 @@ var end = time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 var duration = end.Sub(beginning)
 
 type fileMeta struct {
-	INode   uint64
-	Root    string
-	Name    string
-	Hash    string
+	INode uint64
+	m.Root
+	FullName string
+	m.Hash
 	Size    uint64
 	ModTime time.Time
 }
 
 var sizeByName = map[string]uint64{}
-var sizeByHash = map[string]uint64{}
-var modTimes = map[string]time.Time{}
+var sizeByHash = map[m.Hash]uint64{}
+var modTimes = map[m.Hash]time.Time{}
 var inode = uint64(0)
 
 func init() {
@@ -184,20 +184,20 @@ func init() {
 			}
 			inode++
 			file := &fileMeta{
-				INode:   inode,
-				Root:    root,
-				Name:    name,
-				Hash:    hash,
-				Size:    size,
-				ModTime: modTime,
+				INode:    inode,
+				Root:     root,
+				FullName: name,
+				Hash:     hash,
+				Size:     size,
+				ModTime:  modTime,
 			}
 			metas[root] = append(metas[root], file)
 		}
 	}
 }
 
-var metas = map[string][]*fileMeta{}
-var metaMap = map[string]map[string]string{
+var metas = map[m.Root][]*fileMeta{}
+var metaMap = map[m.Root]map[string]m.Hash{
 	"origin": {
 		"xxx.txt":         "xxxx",
 		"a/b/c/x.txt":     "hhhh",
@@ -242,14 +242,14 @@ var metaMap = map[string]map[string]string{
 	},
 }
 
-func dir(path string) string {
+func dir(path string) m.Path {
 	path = filepath.Dir(path)
 	if path == "." {
 		return ""
 	}
-	return path
+	return m.Path(path)
 }
 
-func name(path string) string {
-	return filepath.Base(path)
+func name(path string) m.Name {
+	return m.Name(filepath.Base(path))
 }

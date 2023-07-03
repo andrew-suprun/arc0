@@ -11,7 +11,7 @@ type Event interface {
 }
 
 type ArchiveScanned struct {
-	Root  string
+	Root  Root
 	Metas []FileMeta
 }
 
@@ -19,7 +19,7 @@ func (ArchiveScanned) event() {}
 
 type FileHashed struct {
 	FileId
-	Hash string
+	Hash
 }
 
 func (FileHashed) event() {}
@@ -33,9 +33,9 @@ func (h FilesHandled) String() string {
 func (FilesHandled) event() {}
 
 type ScanProgress struct {
-	Root          string
-	ProgressState ProgressState
-	TotalHashed   uint64
+	Root
+	ProgressState
+	TotalHashed uint64
 }
 
 func (ScanProgress) event() {}
@@ -54,7 +54,7 @@ type FileCopyProgress uint64
 func (FileCopyProgress) event() {}
 
 type Error struct {
-	Path  string
+	FullName
 	Error error
 }
 
