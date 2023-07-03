@@ -1,3 +1,6 @@
+* make model types stricter
+* rebuild folder on every event
+* ??? split view in onw package
 * remove empty folders
 * file copied/deleted/moved events
 * file operations
