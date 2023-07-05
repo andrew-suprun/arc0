@@ -1,9 +1,10 @@
+* implement buildScreen()
 * rebuild folder on every event
 * ??? split view in onw package
 * remove empty folders
 * file copied/deleted/moved events
 * file operations
-* check gracefull shutdown in scan/hash/copy operations
+* Separate Scroll into Scroll and Sized
 * add descriptors to ScanErrors
 * remove directories that only contain .DS_Store and ._* files
 * ??? store hashes as hex encoded strings

@@ -11,8 +11,8 @@ type Event interface {
 }
 
 type ArchiveScanned struct {
-	Root  Root
-	Metas []FileMeta
+	Root
+	FileMetas
 }
 
 func (ArchiveScanned) event() {}
@@ -24,13 +24,17 @@ type FileHashed struct {
 
 func (FileHashed) event() {}
 
-type FilesHandled HandleFiles
+type FileDeleted DeleteFile
 
-func (h FilesHandled) String() string {
-	return HandleFiles(h).String()
-}
+func (FileDeleted) event() {}
 
-func (FilesHandled) event() {}
+type FileRenamed RenameFile
+
+func (FileRenamed) event() {}
+
+type FileCopied CopyFile
+
+func (FileCopied) event() {}
 
 type ScanProgress struct {
 	Root

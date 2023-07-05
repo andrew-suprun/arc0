@@ -11,18 +11,17 @@ import (
 var Scan bool
 
 type mockFs struct {
-	events  m.EventChan
-	handler actor.Actor[m.HandleFiles]
+	events m.EventChan
 }
 
 type scanner struct {
-	root   m.Root
-	events m.EventChan
+	root    m.Root
+	events  m.EventChan
+	handler actor.Actor[m.FileCommand]
 }
 
 func NewFs(events m.EventChan) m.FS {
 	fs := &mockFs{events: events}
-	fs.handler = actor.NewActor[m.HandleFiles](fs.handleFiles)
 	return fs
 }
 
@@ -30,21 +29,43 @@ func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 	return &scanner{root: root, events: fs.events}
 }
 
-func (fs *mockFs) Send(cmd m.HandleFiles) {
-	fs.handler.Send(cmd)
-}
+func (s *scanner) Send(cmd m.FileCommand) {
+	switch cmd := cmd.(type) {
+	case m.ScanArchive:
+		s.scanArchive()
 
-func (s *scanner) ScanArchive() {
-	go s.scanArchive()
-}
+	case m.HashArchive:
+		s.hashArchive()
 
-func (s *scanner) HashArchive() {
-	go s.hashArchive()
+	case m.DeleteFile:
+		s.events <- m.FileDeleted(cmd)
+
+	case m.RenameFile:
+		s.events <- m.FileRenamed(cmd)
+
+	case m.CopyFile:
+		for _, meta := range metas[cmd.From.Root] {
+			if meta.FullName == cmd.From.FullName().String() {
+				for copyed := uint64(0); ; copyed += 10000 {
+					if copyed > meta.Size {
+						copyed = meta.Size
+					}
+					s.events <- m.FileCopyProgress(copyed)
+					if copyed == meta.Size {
+						break
+					}
+					time.Sleep(time.Millisecond)
+				}
+				break
+			}
+		}
+		s.events <- m.FileCopied(cmd)
+	}
 }
 
 func (s *scanner) scanArchive() {
 	archFiles := metas[s.root]
-	var archiveMetas []m.FileMeta
+	var archiveMetas m.FileMetas
 	for _, meta := range archFiles {
 		archiveMetas = append(archiveMetas, m.FileMeta{
 			FileId: m.FileId{
@@ -57,8 +78,8 @@ func (s *scanner) scanArchive() {
 		})
 	}
 	s.events <- m.ArchiveScanned{
-		Root:  s.root,
-		Metas: archiveMetas,
+		Root:      s.root,
+		FileMetas: archiveMetas,
 	}
 }
 
@@ -123,10 +144,17 @@ func (s *scanner) hashArchive() {
 	}
 }
 
-func (fs *mockFs) handleFiles(msg m.HandleFiles) bool {
-	if msg.Copy != nil {
-		for _, meta := range metas[msg.Copy.Root] {
-			if meta.FullName == msg.Copy.FullName().String() {
+func (fs *mockFs) handleFiles(cmd m.FileCommand) bool {
+	switch cmd := cmd.(type) {
+	case m.DeleteFile:
+		fs.events <- m.FileDeleted(cmd)
+
+	case m.RenameFile:
+		fs.events <- m.FileRenamed(cmd)
+
+	case m.CopyFile:
+		for _, meta := range metas[cmd.From.Root] {
+			if meta.FullName == cmd.From.FullName().String() {
 				for copyed := uint64(0); ; copyed += 10000 {
 					if copyed > meta.Size {
 						copyed = meta.Size
@@ -140,8 +168,9 @@ func (fs *mockFs) handleFiles(msg m.HandleFiles) bool {
 				break
 			}
 		}
+		fs.events <- m.FileCopied(cmd)
 	}
-	fs.events <- m.FilesHandled(msg)
+
 	return true
 }
 

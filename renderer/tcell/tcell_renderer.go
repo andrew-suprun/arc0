@@ -11,7 +11,6 @@ import (
 type tcellRenderer struct {
 	events           model.EventChan
 	screen           tcell.Screen
-	lastMouseEvent   *tcell.EventMouse
 	mouseTargetAreas []mouseTargetArea
 	scrollAreas      []scrollArea
 	style            widgets.Style
@@ -42,10 +41,9 @@ func NewRenderer(events model.EventChan) (*tcellRenderer, error) {
 	screen.EnableMouse()
 
 	device := &tcellRenderer{
-		events:         events,
-		screen:         screen,
-		lastMouseEvent: tcell.NewEventMouse(0, 0, 0, 0),
-		style:          defaultStyle,
+		events: events,
+		screen: screen,
+		style:  defaultStyle,
 	}
 
 	go func() {

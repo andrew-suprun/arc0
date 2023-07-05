@@ -2,33 +2,31 @@ package controller
 
 import (
 	m "arch/model"
+	w "arch/widgets"
+	"fmt"
 	"log"
 	"os/exec"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
 func (c *controller) mouseTarget(cmd any) {
 	folder := c.folders[c.currentPath]
 	switch cmd := cmd.(type) {
-	case selectFile:
-		if folder.selected == cmd && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
+	case m.SelectFile:
+		if folder.selectedId == m.FileId(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
 			c.enter()
 		} else {
-			for idx, entry := range folder.entries {
-				if entry == cmd {
-					folder.selectedIdx = idx
-					folder.selected = nil
-					break
-				}
-			}
+			folder.selectedId = m.FileId(cmd)
 		}
 		c.lastMouseEventTime = time.Now()
 
-	case selectFolder:
-		c.currentPath = m.Path(cmd.FileId.FullName().String())
+	case m.SelectFolder:
+		c.currentPath = m.Path(cmd)
 
-	case sortColumn:
+	case w.SortColumn:
 		if cmd == folder.sortColumn {
 			folder.sortAscending[folder.sortColumn] = !folder.sortAscending[folder.sortColumn]
 		} else {
@@ -39,228 +37,296 @@ func (c *controller) mouseTarget(cmd any) {
 
 func (c *controller) selectFirst() {
 	folder := c.folders[c.currentPath]
-	if len(folder.entries) > 0 {
-		folder.selected = folder.entries[0]
-	}
+	folder.selectedId = c.entries[0].FileId
+	folder.offsetIdx = 0
 }
 
 func (c *controller) selectLast() {
 	folder := c.folders[c.currentPath]
-	entries := folder.entries
-	if len(entries) > 0 {
-		folder.selected = entries[len(entries)-1]
+	folder.selectedId = c.entries[len(c.entries)-1].FileId
+	c.makeSelectedVisible()
+}
+
+func (c *controller) enter() {
+	selectedId := c.folders[c.currentPath].selectedId
+	file := c.archives[selectedId.Root].infoByName[selectedId.FullName()]
+	if file != nil && file.FileKind == w.FileFolder {
+		c.currentPath = m.Path(file.FullName().String())
+	} else {
+		exec.Command("open", file.AbsName()).Start()
+	}
+}
+
+func (c *controller) pgUp() {
+	c.shiftOffset(-c.feedback.FileTreeLines)
+	c.moveSelection(-c.feedback.FileTreeLines)
+}
+
+func (c *controller) pgDn() {
+	c.shiftOffset(c.feedback.FileTreeLines)
+	c.moveSelection(c.feedback.FileTreeLines)
+}
+
+func (c *controller) esc() {
+	if c.currentPath == "" {
+		return
+	}
+	parts := strings.Split(c.currentPath.String(), "/")
+	if len(parts) == 1 {
+		c.currentPath = ""
+	}
+	c.currentPath = m.Path(filepath.Join(parts[:len(parts)-1]...))
+}
+
+func (c *controller) revealInFinder() {
+	selectedId := c.folders[c.currentPath].selectedId
+	file := c.archives[selectedId.Root].infoByName[selectedId.FullName()]
+	if file != nil {
+		exec.Command("open", "-R", file.AbsName()).Start()
 	}
 }
 
 func (c *controller) moveSelection(lines int) {
 	folder := c.folders[c.currentPath]
-	folder.selectedIdx += lines
-	if folder.selectedIdx < 0 {
-		folder.selectedIdx = 0
-	}
-	if folder.selectedIdx >= len(folder.entries) {
-		folder.selectedIdx = len(folder.entries) - 1
-	}
-	folder.selected = nil
-}
-
-func (c *controller) enter() {
-	folder := c.folders[c.currentPath]
-	selected := folder.selected
-	if selected != nil {
-		if selected.FileKind == m.FileFolder {
-			c.currentPath = m.Path(selected.FullName().String())
-		} else {
-			exec.Command("open", selected.AbsName()).Start()
+	selectedIdx := 0
+	for ind, entry := range c.entries {
+		if entry.FileId == folder.selectedId {
+			selectedIdx = ind
+			break
 		}
 	}
+	selectedIdx += lines
+	if selectedIdx < 0 {
+		selectedIdx = 0
+	}
+	if selectedIdx >= len(c.entries) {
+		selectedIdx = len(c.entries) - 1
+	}
+	folder.selectedId = c.entries[selectedIdx].FileId
+	c.makeSelectedVisible()
 }
 
 func (c *controller) shiftOffset(lines int) {
 	folder := c.folders[c.currentPath]
-	nEntries := len(folder.entries)
 	folder.offsetIdx += lines
 	if folder.offsetIdx < 0 {
 		folder.offsetIdx = 0
-	} else if folder.offsetIdx >= nEntries {
-		folder.offsetIdx = nEntries - 1
+	} else if folder.offsetIdx >= len(c.entries) {
+		folder.offsetIdx = len(c.entries) - 1
 	}
 }
 
 func (c *controller) keepSelected() {
-	c.keepFile(c.folders[c.currentPath].selected)
+	selectedId := c.folders[c.currentPath].selectedId
+	selectedFile := c.archives[selectedId.Root].infoByName[selectedId.FullName()]
+	c.keepFile(selectedFile)
 }
 
-func (c *controller) keepFile(file *m.File) {
-	if file == nil || file.FileKind != m.FileRegular {
+func (c *controller) keepFile(file *w.File) {
+	if file == nil || file.FileKind != w.FileRegular {
 		return
 	}
 	log.Printf("keepFile: file %s", file)
-	msg := m.HandleFiles{Hash: file.Hash}
 
-	filesForHash := c.byHash[file.Hash]
-	byArch := map[m.Root][]*m.File{}
-	for _, fileForHash := range filesForHash {
-		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
-	}
-
-	copyFiles := &m.CopyFile{FileId: file.FileId}
-
-	for _, root := range c.roots {
-		if len(byArch[root]) == 0 {
-			copyFiles.TargetRoots = append(copyFiles.TargetRoots, root)
-		}
-	}
-	if len(copyFiles.TargetRoots) > 0 {
-		msg.Copy = copyFiles
-		c.copySize += file.Size
-	}
-
-	for _, root := range c.roots {
-		archFiles := byArch[root]
-
-		keepIdx := 0
-		for i, archFile := range archFiles {
-			if archFile == file || archFile.FullName() == file.FullName() {
-				keepIdx = i
-				break
-			}
-		}
-		for i, archFile := range archFiles {
-			if i == keepIdx {
-				if file.FullName() != archFile.FullName() {
-					msg.Rename = append(msg.Rename, m.RenameFile{
-						FileId: m.FileId{
-							Root: root,
-							Path: archFile.Path,
-							Name: archFile.Name,
-						},
-						NewPath: file.Path,
-						NewName: file.Name,
-					})
+	keepFiles := map[m.Root]*w.File{}
+	for root, archive := range c.archives {
+		for _, entry := range archive.infoByName {
+			if entry.Hash == file.Hash {
+				if prevFile, ok := keepFiles[root]; ok {
+					if entry.FullName() == file.FullName() {
+						keepFiles[root] = entry
+					} else if entry.Path == file.Path && entry.Path != prevFile.Path {
+						keepFiles[root] = entry
+					} else if entry.Name == file.Name && entry.Name != prevFile.Name {
+						keepFiles[root] = entry
+					}
+				} else {
+					keepFiles[root] = entry
 				}
-			} else {
-				msg.Delete = append(msg.Delete, m.DeleteFile{
-					Root: archFile.Root,
-					Path: archFile.Path,
-					Name: archFile.Name,
-				})
 			}
 		}
 	}
 
-	log.Printf("keepFile: msg: %s", msg)
-	if msg.Copy != nil || msg.Rename != nil || len(msg.Delete) > 0 {
-		for _, file := range filesForHash {
-			c.updateFolderStatus(file.Path)
+	for root, archive := range c.archives {
+		for _, entry := range archive.infoByName {
+			if entry.Hash == file.Hash {
+				keepFile := keepFiles[root]
+				if entry == keepFile {
+					if keepFile.FullName() != file.FullName() {
+						archive.scanner.Send(m.RenameFile{FileId: keepFile.FileId, NewFullName: file.FullName()})
+						keepFile.Status = w.Pending
+					}
+				} else {
+					archive.scanner.Send(m.DeleteFile(entry.FileId))
+					entry.Status = w.Pending
+				}
+			}
 		}
-		c.pendingFiles++
-		c.fs.Send(msg)
+	}
+
+	nameByHash := map[m.Hash]m.Name{}
+	for _, entry := range c.entries {
+		if entry.Name == file.Name && entry.Root == c.origin {
+			nameByHash[entry.Hash] = entry.Name
+		}
+	}
+	if len(nameByHash) == 0 {
+		nameByHash[file.Hash] = file.Name
+	}
+
+	for _, entry := range c.entries {
+		if entry.Name == file.Name {
+			if _, ok := nameByHash[entry.Hash]; !ok {
+				nameByHash[entry.Hash] = c.newName(entry.Name)
+			}
+			newName := nameByHash[entry.Hash]
+			if newName != entry.Name {
+				c.archives[entry.Root].scanner.Send(m.RenameFile{
+					FileId: entry.FileId,
+					NewFullName: m.FullName{
+						Path: entry.Path,
+						Name: newName,
+					},
+				})
+				entry.Status = w.Pending
+			}
+		}
+	}
+
+	for root, archive := range c.archives {
+		if _, ok := keepFiles[root]; !ok {
+			archive.scanner.Send(m.CopyFile{
+				From: file.FileId,
+				To:   root,
+			})
+			file.Status = w.Pending
+		}
 	}
 }
 
 func (c *controller) tab() {
-	selected := c.folders[c.currentPath].selected
-	if selected == nil || selected.FileKind != m.FileRegular || selected.Status != m.Duplicate {
+	selectedId := c.folders[c.currentPath].selectedId
+	selected := c.archives[selectedId.Root].infoByName[selectedId.FullName()]
+
+	if selected.FileKind != w.FileRegular || selected.Status != w.Duplicate {
 		return
 	}
 	name := selected.FullName().String()
 	hash := selected.Hash
 	log.Printf("### tab: name=%q hash=%q", name, hash)
-
-	byHash := c.byHash[hash]
-	uniqueNames := map[m.FullName]struct{}{}
-	for _, meta := range byHash {
-		if meta.Root == c.roots[0] {
-			log.Printf("### tab: name=%q hash=%q", meta.FullName(), hash)
-			uniqueNames[meta.FullName()] = struct{}{}
+	sameHash := []m.FileId{}
+	for _, file := range c.archives[c.origin].infoByName {
+		if file.Hash == selected.Hash {
+			sameHash = append(sameHash, file.FileId)
 		}
 	}
-	names := []string{}
-	for name := range uniqueNames {
-		names = append(names, name.String())
-	}
-	sort.Strings(names)
+	sort.Slice(sameHash, func(i, j int) bool {
+		return strings.ToLower(sameHash[i].FullName().String()) < strings.ToLower(sameHash[j].FullName().String())
+	})
 	idx := 0
-	for ; idx < len(names); idx++ {
-		if name == names[idx] {
+	for idx = range sameHash {
+		if sameHash[idx] == selected.FileId {
 			break
 		}
 	}
-	name = names[(idx+1)%len(names)]
-	c.currentPath = dir(m.Path(name))
-	folder := c.folders[c.currentPath]
-	for _, meta := range folder.entries {
-		if name == meta.FullName().String() && hash == meta.Hash {
-			folder.selected = meta
-			break
-		}
+	idx++
+	if idx == len(sameHash) {
+		idx = 0
 	}
+	id := sameHash[idx]
+	c.currentPath = id.Path
+	c.folders[c.currentPath].selectedId = id
+
 	c.makeSelectedVisible()
 }
 
-func (c *controller) updateFolderStatus(path m.Path) {
-	log.Printf("### updateFolderStatus path=%q", path)
-	currentFolder := c.folders[path]
-	status := currentFolder.info.Status
-	currentFolder.info.Status = m.Resolved
-	for _, entry := range currentFolder.entries {
-		currentFolder.info.MergeStatus(entry)
-	}
-	if path != "" && currentFolder.info.Status != status {
-		c.updateFolderStatus(dir(path))
-	}
-}
-
 func (c *controller) deleteSelected() {
-	c.deleteFile(c.folders[c.currentPath].selected)
+	selectedId := c.folders[c.currentPath].selectedId
+	selected := c.archives[selectedId.Root].infoByName[selectedId.FullName()]
+	c.deleteFile(selected)
 }
 
-func (c *controller) deleteFile(file *m.File) {
+func (c *controller) deleteFile(file *w.File) {
 	if file == nil {
 		return
 	}
 	status := file.Status
-	if status != m.Absent {
+	if status != w.Absent {
 		return
 	}
 
-	c.absentFiles--
-	if file.FileKind == m.FileFolder {
+	if file.FileKind == w.FileFolder {
 		c.deleteFolderFile(file)
 	} else {
 		c.deleteRegularFile(file)
 	}
-	c.updateFolderStatus(file.Path)
 }
 
-func (c *controller) deleteRegularFile(file *m.File) {
-	c.hashStatus(file.Hash, m.Pending)
-
-	filesForHash := c.byHash[file.Hash]
-	byArch := map[m.Root][]*m.File{}
-	for _, fileForHash := range filesForHash {
-		byArch[fileForHash.Root] = append(byArch[fileForHash.Root], fileForHash)
-	}
-	if len(byArch[c.roots[0]]) > 0 {
-		return
-	}
-
-	msg := m.HandleFiles{Hash: file.Hash}
-	for _, file := range filesForHash {
-		msg.Delete = append(msg.Delete, m.DeleteFile{
-			Root: file.Root,
-			Path: file.Path,
-			Name: file.Name,
-		})
-	}
-	c.pendingFiles++
-	c.fs.Send(msg)
+func (c *controller) deleteRegularFile(file *w.File) {
+	c.archives[file.Root].scanner.Send(m.DeleteFile(file.FileId))
 }
 
-func (c *controller) deleteFolderFile(file *m.File) {
-	folder := c.folders[m.Path(file.FullName().String())]
-	for _, entry := range folder.entries {
-		c.deleteFile(entry)
+func (c *controller) deleteFolderFile(file *w.File) {
+	// TODO: need it?
+}
+
+func (c *controller) newName(name m.Name) m.Name {
+	parts := strings.Split(name.String(), ".")
+
+	var part string
+	if len(parts) == 1 {
+		part = stripIdx(parts[0])
+	} else {
+		part = stripIdx(parts[len(parts)-2])
 	}
+	for idx := 1; ; idx++ {
+		var newName string
+		if len(parts) == 1 {
+			newName = fmt.Sprintf("%s [%d]", part, idx)
+		} else {
+			parts[len(parts)-2] = fmt.Sprintf("%s [%d]", part, idx)
+			newName = strings.Join(parts, ".")
+		}
+		exists := false
+		for _, entity := range c.entries {
+			if newName == entity.Name.String() {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			return m.Name(newName)
+		}
+	}
+}
+
+type stripIdxState int
+
+const (
+	expectCloseBracket stripIdxState = iota
+	expectDigit
+	expectDigitOrOpenBracket
+	expectOpenBracket
+	expectSpace
+	done
+)
+
+func stripIdx(name string) string {
+	state := expectCloseBracket
+	i := len(name) - 1
+	for ; i >= 0; i-- {
+		ch := name[i]
+		if ch == ']' && state == expectCloseBracket {
+			state = expectDigit
+		} else if ch >= '0' && ch <= '9' && (state == expectDigit || state == expectDigitOrOpenBracket) {
+			state = expectDigitOrOpenBracket
+		} else if ch == '[' && state == expectDigitOrOpenBracket {
+			state = expectSpace
+		} else if ch == ' ' && state == expectSpace {
+			break
+		} else {
+			return name
+		}
+	}
+	return name[:i]
 }

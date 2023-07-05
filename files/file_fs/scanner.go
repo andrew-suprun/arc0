@@ -36,12 +36,23 @@ type fileInfo struct {
 
 const hashFileName = ".meta.csv"
 
-func (s *scanner) ScanArchive() {
-	go s.scanArchive()
-}
+func (s *scanner) Send(cmd m.FileCommand) {
+	switch cmd := cmd.(type) {
+	case m.ScanArchive:
+		s.scanArchive()
 
-func (s *scanner) HashArchive() {
-	go s.hashArchive()
+	case m.HashArchive:
+		s.hashArchive()
+
+	case m.DeleteFile:
+		_ = cmd
+
+	case m.RenameFile:
+		_ = cmd
+
+	case m.CopyFile:
+		_ = cmd
+	}
 }
 
 func (s *scanner) scanArchive() {
@@ -88,7 +99,7 @@ func (s *scanner) scanArchive() {
 
 	result := m.ArchiveScanned{Root: s.root}
 	for _, info := range s.infos {
-		result.Metas = append(result.Metas, info.meta)
+		result.FileMetas = append(result.FileMetas, info.meta)
 	}
 	s.events <- result
 }

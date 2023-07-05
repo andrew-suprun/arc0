@@ -2,80 +2,90 @@ package controller
 
 import (
 	m "arch/model"
-	"arch/widgets"
+	w "arch/widgets"
 	"time"
 )
 
 type controller struct {
-	fs       m.FS
-	events   m.EventChan
-	renderer widgets.Renderer
+	fs     m.FS
+	events m.EventChan
 
-	roots              []m.Root
-	archives           map[m.Root]*archive
-	bySize             map[uint64][]*m.File
-	byHash             map[m.Hash][]*m.File
-	folders            map[m.Path]*folder
-	conflicts          map[m.FullName]struct{}
-	currentPath        m.Path
-	copySize           uint64
-	fileCopied         uint64
-	totalCopied        uint64
-	pendingFiles       int
-	duplicateFiles     int
-	absentFiles        int
+	roots    []m.Root
+	origin   m.Root
+	archives map[m.Root]*archive
+	folders  map[m.Path]*folder
+	hashById map[m.FileId]m.Hash
+
 	screenSize         m.ScreenSize
-	fileTreeLines      int
 	lastMouseEventTime time.Time
+
+	currentPath m.Path
+	entries     []*w.File
+
+	feedback w.Feedback
 
 	Errors []any
 
 	quit bool
+
+	// sizes    	  map[uint64]struct{}
+	// bySize         map[uint64][]*w.File
+	// byHash         map[m.Hash][]*w.File
+	// conflicts      map[m.FullName]struct{}
+	// pendingFiles   int
+	// duplicateFiles int
+	// absentFiles    int
 }
 
 type archive struct {
-	scanner   m.ArchiveScanner
-	progress  m.ScanProgress
-	totalSize uint64
-	byName    map[m.FullName]*m.File
+	scanner     m.ArchiveScanner
+	infoByName  map[m.FullName]*w.File
+	infosBySize map[uint64]map[*w.File]struct{}
+	progress    m.ScanProgress
+	totalSize   uint64
+	copySize    uint64
+	fileCopied  uint64
+	totalCopied uint64
+
+	// byName map[m.FullName]fileInfo
 }
 
 type folder struct {
-	info          *m.File
-	selected      *m.File
-	selectedIdx   int
+	selectedId    m.FileId
 	offsetIdx     int
-	sortColumn    sortColumn
+	sortColumn    w.SortColumn
 	sortAscending []bool
-	entries       []*m.File
 }
 
-func Run(fs m.FS, renderer widgets.Renderer, ev m.EventChan, roots []m.Root) {
+func Run(fs m.FS, renderer w.Renderer, ev m.EventChan, roots []m.Root) {
 	rootFolder := &folder{
-		info:          &m.File{FileKind: m.FileFolder},
 		sortAscending: []bool{true, false, false, false},
 	}
 	c := &controller{
-		fs:        fs,
-		renderer:  renderer,
-		events:    ev,
-		roots:     roots,
-		archives:  map[m.Root]*archive{},
-		bySize:    map[uint64][]*m.File{},
-		byHash:    map[m.Hash][]*m.File{},
-		folders:   map[m.Path]*folder{"": rootFolder},
-		conflicts: map[m.FullName]struct{}{},
+		fs:       fs,
+		events:   ev,
+		roots:    roots,
+		origin:   roots[0],
+		archives: map[m.Root]*archive{},
+		folders:  map[m.Path]*folder{"": rootFolder},
+		hashById: map[m.FileId]m.Hash{},
+		// sizes:    map[uint64]struct{}{},
+		// bySize:   map[uint64][]*w.File{},
+		// byHash:   map[m.Hash][]*w.File{},
+		// conflicts: map[m.FullName]struct{}{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
-			scanner: scanner,
-			byName:  map[m.FullName]*m.File{},
+			scanner:     scanner,
+			infosBySize: map[uint64]map[*w.File]struct{}{},
+			infoByName:  map[m.FullName]*w.File{},
 		}
-		scanner.ScanArchive()
+		scanner.Send(m.ScanArchive{})
 	}
 
 	for !c.quit {
+
 		event := <-c.events
 		c.handleEvent(event)
 		select {
@@ -84,33 +94,12 @@ func Run(fs m.FS, renderer widgets.Renderer, ev m.EventChan, roots []m.Root) {
 		default:
 		}
 
-		c.folders[c.currentPath].sort()
-		c.renderer.Reset()
-		c.view().Render(c.renderer, widgets.Position{X: 0, Y: 0}, widgets.Size(c.ScreenSize()))
-		c.renderer.Show()
+		renderer.Reset()
+		screen := c.buildScreen()
+
+		widget, feedback := screen.View()
+		widget.Render(renderer, w.Position{X: 0, Y: 0}, w.Size(c.screenSize))
+		c.feedback = feedback
+		renderer.Show()
 	}
 }
-
-func (c *controller) hashStatus(hash m.Hash, status m.Status) {
-	for _, file := range c.byHash[hash] {
-		file.Status = status
-		c.updateFolderStatus(file.Path)
-	}
-}
-
-func (c *controller) ScreenSize() m.ScreenSize {
-	return c.screenSize
-}
-
-type selectFile *m.File
-
-type selectFolder *m.File
-
-type sortColumn int
-
-const (
-	sortByName sortColumn = iota
-	sortByStatus
-	sortByTime
-	sortBySize
-)

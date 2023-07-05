@@ -1,7 +1,7 @@
 package widgets
 
 import (
-	"arch/model"
+	m "arch/model"
 	"fmt"
 	"strings"
 )
@@ -14,8 +14,8 @@ type Widget interface {
 }
 
 type Renderer interface {
-	AddMouseTarget(model.MouseTarget, Position, Size)
-	AddScrollArea(model.Scroll, Position, Size)
+	AddMouseTarget(m.MouseTarget, Position, Size)
+	AddScrollArea(m.Scroll, Position, Size)
 	SetStyle(style Style)
 	CurrentStyle() Style
 	Text([]rune, Position)
@@ -28,15 +28,11 @@ type Constraint struct {
 	Flex
 }
 
-func (c Constraint) String() string {
-	return fmt.Sprintf("Constraint(Size(Width: %d, Height: %d), Flex(X: %d, Y:%d))", c.Width, c.Height, c.X, c.Y)
-}
-
 type Position struct {
 	X, Y int
 }
 
-//lint:ignore U1000 Casted into model.ScreenSize
+//lint:ignore U1000 Casted into m.ScreenSize
 type Size struct {
 	Width, Height int
 }
@@ -50,10 +46,6 @@ type Style struct {
 	Flags  Flags
 }
 
-func (s Style) String() string {
-	return fmt.Sprintf("Style{FG: %d, BG: %d, Flags: {%s}", s.FG, s.BG, s.Flags)
-}
-
 type Flags byte
 
 const (
@@ -61,6 +53,120 @@ const (
 	Italic  Flags = 2
 	Reverse Flags = 4
 )
+
+type Screen struct {
+	CurrentPath    m.Path
+	Entries        []File
+	Progress       []ProgressInfo
+	SelectedId     m.FileId
+	OffsetIdx      int
+	SortColumn     SortColumn
+	SortAscending  []bool
+	PendingFiles   int
+	DuplicateFiles int
+	AbsentFiles    int
+}
+
+type Feedback struct {
+	FileTreeLines int
+}
+
+type SortColumn int
+
+const (
+	SortByName SortColumn = iota
+	SortByStatus
+	SortByTime
+	SortBySize
+)
+
+type File struct {
+	m.FileMeta
+	FileKind
+	m.Hash
+	Status
+}
+
+type FileKind int
+
+const (
+	FileRegular FileKind = iota
+	FileFolder
+)
+
+type Status int
+
+const (
+	Resolved Status = iota
+	Pending
+	Duplicate
+	Absent
+	Conflict
+)
+
+type ProgressInfo struct {
+	m.Root
+	Tab   string
+	Value float64
+}
+
+func (f *File) String() string {
+	return fmt.Sprintf("File{Root: %q, Path: %q, Name: %q, Kind: %s, Size: %d, Status: %q, Hash: %q}", f.Root, f.Path, f.Name, f.FileKind, f.Size, f.Status, f.Hash)
+}
+
+func (k FileKind) String() string {
+	switch k {
+	case FileFolder:
+		return "FileFolder"
+	case FileRegular:
+		return "FileRegular"
+	}
+	return "UNKNOWN FILE KIND"
+}
+
+func (s Status) String() string {
+	switch s {
+	case Resolved:
+		return "Resolved"
+	case Pending:
+		return "Pending"
+	case Duplicate:
+		return "Duplicate"
+	case Absent:
+		return "Absent"
+	case Conflict:
+		return "Conflict"
+	}
+	return "UNKNOWN FILE STATUS"
+}
+
+func (f *File) StatusString() string {
+	switch f.Status {
+	case Resolved:
+		return ""
+	case Pending:
+		return " Pending"
+	case Duplicate:
+		return " Duplicate"
+	case Absent:
+		return " Absent"
+	}
+	return "UNKNOWN FILE STATUS"
+}
+
+func (f *File) MergeStatus(other *File) {
+	if f.Status < other.Status {
+		f.Status = other.Status
+	}
+}
+
+func (s Style) String() string {
+	return fmt.Sprintf("Style{FG: %d, BG: %d, Flags: {%s}", s.FG, s.BG, s.Flags)
+}
+
+func (c Constraint) String() string {
+	return fmt.Sprintf("Constraint(Size(Width: %d, Height: %d), Flex(X: %d, Y:%d))", c.Width, c.Height, c.X, c.Y)
+}
 
 func (f Flags) String() string {
 	flags := []string{}

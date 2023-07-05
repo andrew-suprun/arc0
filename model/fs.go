@@ -1,56 +1,41 @@
 package model
 
-import (
-	"arch/actor"
-	"fmt"
-	"strings"
-)
+import "arch/actor"
 
 type FS interface {
 	NewArchiveScanner(root Root) ArchiveScanner
-	actor.Actor[HandleFiles]
 }
 
 type ArchiveScanner interface {
-	ScanArchive()
-	HashArchive()
+	actor.Actor[FileCommand]
 }
 
-type HandleFiles struct {
-	Hash
-	Delete []DeleteFile
-	Rename []RenameFile
-	Copy   *CopyFile
+type FileCommand interface {
+	cmd()
 }
 
-func (h HandleFiles) String() string {
-	buf := &strings.Builder{}
-	fmt.Fprintf(buf, "hash: %q\n", h.Hash)
-	for _, d := range h.Delete {
-		fmt.Fprintf(buf, "    delete: %q/%q/%q\n", d.Root, d.Path, d.Name)
-	}
+type ScanArchive struct{}
 
-	for _, r := range h.Rename {
-		fmt.Fprintf(buf, "    rename: root %q: %q/%q -> %q/%q\n", r.Root, r.Path, r.Name, r.NewPath, r.NewName)
-	}
-	if h.Copy != nil {
-		fmt.Fprintf(buf, "    copy: %q/%q/%q\n", h.Copy.Root, h.Copy.Path, h.Copy.Name)
-		for _, t := range h.Copy.TargetRoots {
-			fmt.Fprintf(buf, "          -> %q\n", t)
-		}
-	}
-	return buf.String()
-}
+func (ScanArchive) cmd() {}
+
+type HashArchive struct{}
+
+func (HashArchive) cmd() {}
 
 type DeleteFile FileId
 
+func (DeleteFile) cmd() {}
+
 type RenameFile struct {
 	FileId
-	NewPath Path
-	NewName Name
+	NewFullName FullName
 }
 
+func (RenameFile) cmd() {}
+
 type CopyFile struct {
-	FileId
-	TargetRoots []Root
+	From FileId
+	To   Root
 }
+
+func (CopyFile) cmd() {}

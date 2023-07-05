@@ -1,53 +1,36 @@
 package controller
 
 import (
-	"arch/model"
+	w "arch/widgets"
 	"sort"
 	"strings"
 )
 
-func (f *folder) sort() {
-	if len(f.entries) == 0 {
+func (c *controller) sort() {
+	if len(c.entries) == 0 {
 		return
 	}
-	files := sliceBy(f.entries)
+
+	folder := c.folders[c.currentPath]
+	files := sliceBy(c.entries)
 	var slice sort.Interface
-	switch f.sortColumn {
-	case sortByName:
+	switch folder.sortColumn {
+	case w.SortByName:
 		slice = sliceByName{sliceBy: files}
-	case sortByStatus:
+	case w.SortByStatus:
 		slice = sliceByStatus{sliceBy: files}
-		f.selected = nil
-	case sortByTime:
+	case w.SortByTime:
 		slice = sliceByTime{sliceBy: files}
-	case sortBySize:
+	case w.SortBySize:
 		slice = sliceBySize{sliceBy: files}
 	}
-	if !f.sortAscending[f.sortColumn] {
+	if !folder.sortAscending[folder.sortColumn] {
 		slice = sort.Reverse(slice)
 	}
 	sort.Sort(slice)
-
-	foundSelected := false
-	for idx, entry := range f.entries {
-		if entry == f.selected {
-			f.selectedIdx = idx
-			foundSelected = true
-			break
-		}
-	}
-	if !foundSelected {
-		if f.selectedIdx >= len(f.entries) {
-			f.selectedIdx = len(f.entries) - 1
-		}
-		if f.selectedIdx < 0 {
-			f.selectedIdx = 0
-		}
-		f.selected = f.entries[f.selectedIdx]
-	}
 }
 
-type sliceBy model.Files
+type sliceBy []*w.File
 
 func (s sliceBy) Len() int {
 	return len(s)

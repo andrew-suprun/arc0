@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-func (fs *fileFs) handleFiles(msg model.HandleFiles) bool {
+func (fs *fileFs) handleFiles(msg model.FileCommand) bool {
 	log.Printf("### handleFiles: msg=%v", msg)
 	return true
 }

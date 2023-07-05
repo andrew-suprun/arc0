@@ -1,7 +1,6 @@
 package file_fs
 
 import (
-	"arch/actor"
 	"arch/lifecycle"
 	m "arch/model"
 	"os"
@@ -11,9 +10,8 @@ import (
 )
 
 type fileFs struct {
-	events  m.EventChan
-	lc      *lifecycle.Lifecycle
-	handler actor.Actor[m.HandleFiles]
+	events m.EventChan
+	lc     *lifecycle.Lifecycle
 }
 
 func NewFs(events m.EventChan, lc *lifecycle.Lifecycle) m.FS {
@@ -21,7 +19,6 @@ func NewFs(events m.EventChan, lc *lifecycle.Lifecycle) m.FS {
 		events: events,
 		lc:     lc,
 	}
-	fs.handler = actor.NewActor[m.HandleFiles](fs.handleFiles)
 
 	return fs
 }
@@ -33,10 +30,6 @@ func (fs *fileFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 		lc:     fs.lc,
 		infos:  map[uint64]*fileInfo{},
 	}
-}
-
-func (fs *fileFs) Send(cmd m.HandleFiles) {
-	fs.handler.Send(cmd)
 }
 
 func AbsPath(path string) (string, error) {

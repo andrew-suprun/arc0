@@ -3,9 +3,6 @@ package controller
 import (
 	m "arch/model"
 	"log"
-	"os/exec"
-	"path/filepath"
-	"strings"
 )
 
 func (c *controller) handleEvent(event any) {
@@ -16,12 +13,23 @@ func (c *controller) handleEvent(event any) {
 	switch event := event.(type) {
 	case m.ArchiveScanned:
 		c.archiveScanned(event)
+		c.buildEntries()
 
 	case m.FileHashed:
 		c.fileHashed(event)
+		c.buildEntries()
 
-	case m.FilesHandled:
-		c.filesHandled(event)
+	case m.FileDeleted:
+		c.fileDeleted(event)
+		c.buildEntries()
+
+	case m.FileRenamed:
+		c.fileRenamed(event)
+		c.buildEntries()
+
+	case m.FileCopied:
+		c.fileCopied(event)
+		c.buildEntries()
 
 	case m.ScanProgress:
 		c.scanProgress(event)
@@ -34,60 +42,51 @@ func (c *controller) handleEvent(event any) {
 
 	case m.Enter:
 		c.enter()
+		c.buildEntries()
 
 	case m.Esc:
-		if c.currentPath == "" {
-			return
-		}
-		parts := strings.Split(c.currentPath.String(), "/")
-		if len(parts) == 1 {
-			c.currentPath = ""
-		}
-		c.currentPath = m.Path(filepath.Join(parts[:len(parts)-1]...))
+		c.esc()
+		c.buildEntries()
 
 	case m.RevealInFinder:
-		folder := c.folders[c.currentPath]
-		if folder.selected != nil {
-			exec.Command("open", "-R", folder.selected.AbsName()).Start()
-		}
+		c.revealInFinder()
 
 	case m.MoveSelection:
 		c.moveSelection(event.Lines)
-		c.makeSelectedVisible()
 
 	case m.SelectFirst:
 		c.selectFirst()
-		c.makeSelectedVisible()
 
 	case m.SelectLast:
 		c.selectLast()
-		c.makeSelectedVisible()
 
 	case m.Scroll:
 		c.shiftOffset(event.Lines)
 
 	case m.MouseTarget:
 		c.mouseTarget(event.Command)
+		c.buildEntries()
 
 	case m.PgUp:
-		c.shiftOffset(-c.fileTreeLines)
-		c.moveSelection(-c.fileTreeLines)
+		c.pgUp()
 
 	case m.PgDn:
-		c.shiftOffset(c.fileTreeLines)
-		c.moveSelection(c.fileTreeLines)
-
-	case m.KeepOne:
-		c.keepSelected()
+		c.pgDn()
 
 	case m.Tab:
 		c.tab()
+		c.buildEntries()
+
+	case m.KeepOne:
+		c.keepSelected()
+		c.buildEntries()
 
 	case m.KeepAll:
 		// TODO: Implement, maybe?
 
 	case m.Delete:
 		c.deleteSelected()
+		c.buildEntries()
 
 	case m.Error:
 		c.Errors = append(c.Errors, event)

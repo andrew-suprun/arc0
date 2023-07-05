@@ -1,18 +1,18 @@
 package widgets
 
 import (
-	"arch/model"
+	m "arch/model"
 	"fmt"
 	"strings"
 )
 
 type mouseTarget struct {
-	event  model.MouseTarget
+	event  m.MouseTarget
 	widget Widget
 }
 
 func MouseTarget(cmd any, widget Widget) Widget {
-	return mouseTarget{event: model.MouseTarget{Command: cmd}, widget: widget}
+	return mouseTarget{event: m.MouseTarget{Command: cmd}, widget: widget}
 }
 
 func (t mouseTarget) Constraint() Constraint {
