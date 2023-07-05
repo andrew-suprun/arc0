@@ -15,9 +15,9 @@ type mockFs struct {
 }
 
 type scanner struct {
-	root    m.Root
-	events  m.EventChan
-	handler actor.Actor[m.FileCommand]
+	root   m.Root
+	events m.EventChan
+	actor.Actor[m.FileCommand]
 }
 
 func NewFs(events m.EventChan) m.FS {
@@ -26,10 +26,15 @@ func NewFs(events m.EventChan) m.FS {
 }
 
 func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
-	return &scanner{root: root, events: fs.events}
+	s := &scanner{
+		root:   root,
+		events: fs.events,
+	}
+	s.Actor = actor.NewActor[m.FileCommand](s.handleFiles)
+	return s
 }
 
-func (s *scanner) Send(cmd m.FileCommand) {
+func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
 		s.scanArchive()
@@ -61,6 +66,7 @@ func (s *scanner) Send(cmd m.FileCommand) {
 		}
 		s.events <- m.FileCopied(cmd)
 	}
+	return true
 }
 
 func (s *scanner) scanArchive() {
@@ -142,36 +148,6 @@ func (s *scanner) hashArchive() {
 		Root:          s.root,
 		ProgressState: m.FileTreeHashed,
 	}
-}
-
-func (fs *mockFs) handleFiles(cmd m.FileCommand) bool {
-	switch cmd := cmd.(type) {
-	case m.DeleteFile:
-		fs.events <- m.FileDeleted(cmd)
-
-	case m.RenameFile:
-		fs.events <- m.FileRenamed(cmd)
-
-	case m.CopyFile:
-		for _, meta := range metas[cmd.From.Root] {
-			if meta.FullName == cmd.From.FullName().String() {
-				for copyed := uint64(0); ; copyed += 10000 {
-					if copyed > meta.Size {
-						copyed = meta.Size
-					}
-					fs.events <- m.FileCopyProgress(copyed)
-					if copyed == meta.Size {
-						break
-					}
-					time.Sleep(time.Millisecond)
-				}
-				break
-			}
-		}
-		fs.events <- m.FileCopied(cmd)
-	}
-
-	return true
 }
 
 var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)

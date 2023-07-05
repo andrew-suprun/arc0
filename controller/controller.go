@@ -27,14 +27,6 @@ type controller struct {
 	Errors []any
 
 	quit bool
-
-	// sizes    	  map[uint64]struct{}
-	// bySize         map[uint64][]*w.File
-	// byHash         map[m.Hash][]*w.File
-	// conflicts      map[m.FullName]struct{}
-	// pendingFiles   int
-	// duplicateFiles int
-	// absentFiles    int
 }
 
 type archive struct {
@@ -46,8 +38,6 @@ type archive struct {
 	copySize    uint64
 	fileCopied  uint64
 	totalCopied uint64
-
-	// byName map[m.FullName]fileInfo
 }
 
 type folder struct {
@@ -69,10 +59,6 @@ func Run(fs m.FS, renderer w.Renderer, ev m.EventChan, roots []m.Root) {
 		archives: map[m.Root]*archive{},
 		folders:  map[m.Path]*folder{"": rootFolder},
 		hashById: map[m.FileId]m.Hash{},
-		// sizes:    map[uint64]struct{}{},
-		// bySize:   map[uint64][]*w.File{},
-		// byHash:   map[m.Hash][]*w.File{},
-		// conflicts: map[m.FullName]struct{}{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
@@ -85,7 +71,6 @@ func Run(fs m.FS, renderer w.Renderer, ev m.EventChan, roots []m.Root) {
 	}
 
 	for !c.quit {
-
 		event := <-c.events
 		c.handleEvent(event)
 		select {

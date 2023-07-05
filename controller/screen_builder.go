@@ -24,15 +24,15 @@ func (c *controller) buildScreen() *w.Screen {
 
 	for root, archive := range c.archives {
 		if root == c.origin {
-			c.handleOrigin(archive, screen)
+			c.handleOrigin(archive)
 		} else {
-			c.handleCopy(archive, screen)
+			c.handleCopy(archive)
 		}
 	}
 	return screen
 }
 
-func (c *controller) handleOrigin(archive *archive, screen *w.Screen) {
+func (c *controller) handleOrigin(archive *archive) {
 	for _, file := range archive.infoByName {
 		if file.Path == c.currentPath {
 			c.entries = append(c.entries, &w.File{
@@ -40,7 +40,7 @@ func (c *controller) handleOrigin(archive *archive, screen *w.Screen) {
 				FileKind: w.FileRegular,
 			})
 		} else if strings.HasPrefix(file.Path.String(), c.currentPath.String()) {
-			relPath := c.currentPath[len(file.Path)+1:]
+			relPath := file.Path[len(c.currentPath)+1:]
 			name := m.Name(strings.SplitN(relPath.String(), "/", 2)[0])
 			hasName := false
 			for i := range c.entries {
@@ -71,9 +71,11 @@ func (c *controller) handleOrigin(archive *archive, screen *w.Screen) {
 	}
 }
 
-func (c *controller) handleCopy(archive *archive, screen *w.Screen) {
+func (c *controller) handleCopy(archive *archive) {
+	// TODO
 }
 
 func (c *controller) progress() []w.ProgressInfo {
+	// TODO
 	return nil
 }

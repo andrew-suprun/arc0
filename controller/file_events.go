@@ -3,6 +3,7 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
+	"log"
 	"path/filepath"
 )
 
@@ -11,9 +12,17 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 	for _, meta := range tree.FileMetas {
 		file := &w.File{FileMeta: meta}
 		archive.infoByName[meta.FullName()] = file
-		archive.infosBySize[file.Size][file] = struct{}{}
+
+		bySize := archive.infosBySize[file.Size]
+		if bySize == nil {
+			bySize = map[*w.File]struct{}{file: {}}
+			archive.infosBySize[file.Size] = bySize
+		} else {
+			bySize[file] = struct{}{}
+		}
 	}
 
+	log.Printf("### archiveScanned.2")
 	c.archives[tree.Root].progress.ProgressState = m.FileTreeScanned
 	for _, archive := range c.archives {
 		if archive.progress.ProgressState != m.FileTreeScanned {
