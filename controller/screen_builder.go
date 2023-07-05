@@ -7,9 +7,22 @@ import (
 	"strings"
 )
 
+type screenBuilder struct {
+	*controller
+	duplicateCounts map[m.Hash]int
+	copyHashName    map[m.Hash]m.Name
+	absentHashes    map[m.Hash]struct{}
+	originHashed    bool
+}
+
 func (c *controller) buildScreen() *w.Screen {
-	log.Printf("### build screen ----")
-	c.buildEntries()
+	builder := &screenBuilder{
+		controller:      c,
+		duplicateCounts: map[m.Hash]int{},
+		copyHashName:    map[m.Hash]m.Name{},
+		absentHashes:    map[m.Hash]struct{}{},
+	}
+	builder.buildEntries()
 
 	folder := c.folders[c.currentPath]
 	screen := &w.Screen{
@@ -29,63 +42,74 @@ func (c *controller) buildScreen() *w.Screen {
 	return screen
 }
 
-func (c *controller) buildEntries() {
-	c.pendingFiles, c.duplicateFiles, c.absentFiles = 0, 0, 0
-	c.entries = c.entries[:0]
-	for root, archive := range c.archives {
-		if root == c.origin {
-			c.handleOrigin(archive)
-		} else {
-			c.handleCopy(archive)
-		}
+func (b *screenBuilder) buildEntries() {
+	log.Printf("\n\n### buildEntries: --------")
+	b.controller.pendingFiles, b.controller.duplicateFiles, b.controller.absentFiles = 0, 0, 0
+	b.controller.entries = b.controller.entries[:0]
+
+	b.duplicates(b.controller.archives[b.controller.origin])
+
+	b.handleOrigin(b.controller.archives[b.controller.origin])
+
+	for _, root := range b.controller.roots[1:] {
+		b.handleCopy(b.controller.archives[root])
 	}
-	c.sort()
+
+	b.controller.sort()
 }
 
-func (c *controller) handleOrigin(archive *archive) {
-	hashCounts := map[m.Hash]int{}
-	for _, file := range archive.infoByName {
-		if file.Hash != "" && file.Root == c.origin {
-			hashCounts[file.Hash]++
+func (b *screenBuilder) duplicates(a *archive) {
+	b.originHashed = true
+	for _, file := range a.infoByName {
+		if file.Hash != "" {
+			b.duplicateCounts[file.Hash]++
+		} else {
+			b.originHashed = false
 		}
 	}
-	for _, count := range hashCounts {
+	for _, count := range b.duplicateCounts {
 		if count > 1 {
-			c.duplicateFiles++
+			b.controller.duplicateFiles++
 		}
 	}
+}
+
+func (b *screenBuilder) handleOrigin(archive *archive) {
+	log.Printf("### handleOrigin ---- ")
 	for _, file := range archive.infoByName {
-		if file.Path == c.currentPath {
+		if file.Path == b.controller.currentPath {
 			entry := w.File{
 				FileMeta: file.FileMeta,
 				FileKind: w.FileRegular,
+				Hash:     file.Hash,
 			}
-			if hashCounts[file.Hash] > 1 {
+			if b.duplicateCounts[file.Hash] > 1 {
 				entry.Status = w.Duplicate
 			}
-			c.entries = append(c.entries, entry)
-		} else if strings.HasPrefix(file.Path.String(), c.currentPath.String()) {
+			b.controller.entries = append(b.controller.entries, entry)
+			log.Printf("### handleOrigin.1: entry %v", entry)
+		} else if strings.HasPrefix(file.Path.String(), b.controller.currentPath.String()) {
 			relPath := file.Path
-			if len(c.currentPath) > 0 {
-				relPath = file.Path[len(c.currentPath)+1:]
+			if len(b.controller.currentPath) > 0 {
+				relPath = file.Path[len(b.controller.currentPath)+1:]
 			}
 			name := m.Name(strings.SplitN(relPath.String(), "/", 2)[0])
 
-			i, found := m.Find(c.entries, func(entry w.File) bool { return name == entry.Name })
+			i, found := m.Find(b.controller.entries, func(entry w.File) bool { return name == entry.Name })
 			if found {
-				c.entries[i].Size += file.Size
-				if c.entries[i].ModTime.Before(file.ModTime) {
-					c.entries[i].ModTime = file.ModTime
+				b.controller.entries[i].Size += file.Size
+				if b.controller.entries[i].ModTime.Before(file.ModTime) {
+					b.controller.entries[i].ModTime = file.ModTime
 				}
-				if hashCounts[file.Hash] > 1 {
-					c.entries[i].Status = w.Duplicate
+				if b.duplicateCounts[file.Hash] > 1 {
+					b.controller.entries[i].Status = w.Duplicate
 				}
 			} else {
 				entry := w.File{
 					FileMeta: m.FileMeta{
 						FileId: m.FileId{
 							Root: file.Root,
-							Path: c.currentPath,
+							Path: b.controller.currentPath,
 							Name: name,
 						},
 						Size:    file.Size,
@@ -93,17 +117,73 @@ func (c *controller) handleOrigin(archive *archive) {
 					},
 					FileKind: w.FileFolder,
 				}
-				if hashCounts[file.Hash] > 1 {
+				if b.duplicateCounts[file.Hash] > 1 {
 					entry.Status = w.Duplicate
 				}
-				c.entries = append(c.entries, entry)
+				b.controller.entries = append(b.controller.entries, entry)
+				log.Printf("### handleOrigin.2: entry %v", entry)
 			}
 		}
 	}
 }
 
-func (c *controller) handleCopy(archive *archive) {
-	// TODO
+func (b screenBuilder) handleCopy(archive *archive) {
+	if !b.originHashed {
+		return
+	}
+	log.Printf("### handleCopy ---- ")
+
+	for _, file := range archive.infoByName {
+		if file.Hash == "" {
+			continue
+		}
+		if _, ok := b.duplicateCounts[file.Hash]; ok {
+			continue
+		}
+		if _, ok := b.absentHashes[file.Hash]; !ok {
+			b.controller.absentFiles++
+		}
+		if name, ok := b.copyHashName[file.Hash]; ok && file.Name == name {
+			continue
+		}
+		if file.Path == b.controller.currentPath {
+			entry := w.File{
+				FileMeta: file.FileMeta,
+				FileKind: w.FileRegular,
+				Hash:     file.Hash,
+				Status:   w.Absent,
+			}
+
+			log.Printf("### handleCopy.1: entry %v", entry)
+			b.controller.entries = append(b.controller.entries, entry)
+			b.copyHashName[entry.Hash] = entry.Name
+		} else if strings.HasPrefix(file.Path.String(), b.controller.currentPath.String()) {
+			relPath := file.Path
+			if len(b.controller.currentPath) > 0 {
+				relPath = file.Path[len(b.controller.currentPath)+1:]
+			}
+			name := m.Name(strings.SplitN(relPath.String(), "/", 2)[0])
+
+			_, found := m.Find(b.controller.entries, func(entry w.File) bool { return name == entry.Name })
+			if found {
+				continue
+			}
+			entry := w.File{
+				FileMeta: m.FileMeta{
+					FileId: m.FileId{
+						Root: file.Root,
+						Path: b.controller.currentPath,
+						Name: name,
+					},
+				},
+				FileKind: w.FileFolder,
+				Status:   w.Absent,
+			}
+			b.controller.entries = append(b.controller.entries, entry)
+			log.Printf("### handleCopy.2: entry %v", entry)
+
+		}
+	}
 }
 
 func (c *controller) progress() []w.ProgressInfo {

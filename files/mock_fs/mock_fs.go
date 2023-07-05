@@ -209,7 +209,7 @@ var metaMap = map[m.Root]map[string]m.Hash{
 		"7777":            "7777",
 		"a/b/e/f.txt":     "gggg",
 		"a/b/e/g.txt":     "tttt",
-		"a/x.txt":         "hhhh",
+		"x/xxx.txt":       "hhhh",
 		"q/w/e/r/t/y.txt": "qwerty",
 		"qqq.txt":         "hhhh",
 		"xxx.txt":         "xxxx",
@@ -222,7 +222,7 @@ var metaMap = map[m.Root]map[string]m.Hash{
 		"a/b/e/g.txt": "tttt",
 		"qqq.txt":     "mmmm",
 		"y.txt":       "gggg",
-		"a/x.txt":     "hhhh",
+		"x/xxx.txt":   "hhhh",
 		"zzz.txt":     "hhhh",
 		"x/y/z.txt":   "zzzz",
 		"yyy.txt":     "yyyy",
@@ -230,6 +230,7 @@ var metaMap = map[m.Root]map[string]m.Hash{
 		"3333":        "3333",
 		"4444":        "4444",
 		"8888":        "9999",
+		"b/bbb.txt":   "bbbb",
 	},
 	"copy 2": {
 		"xxx.txt":         "xxxx",
@@ -244,6 +245,7 @@ var metaMap = map[m.Root]map[string]m.Hash{
 		"6666":            "7777",
 		"7777":            "6666",
 		"8888":            "8888",
+		"c/ccc.txt":       "bbbb",
 	},
 }
 

@@ -1,6 +1,4 @@
-* implement buildScreen()
-* rebuild folder on every event
-* write generic find([]T, func(T) bool) -> (idx, T, bool)
+* restore scan progress indicatore
 * ??? move Screen{} and View() into separate package
 * remove empty folders
 * file copied/deleted/moved events
