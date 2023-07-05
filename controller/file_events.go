@@ -120,11 +120,10 @@ func name(path m.Path) m.Name {
 
 func (c *controller) selectedIdx() int {
 	selectedId := c.folders[c.currentPath].selectedId
-	for idx, entry := range c.entries {
-		if entry.FileId == selectedId {
-			return idx
-		}
+	if idx, found := m.Find(c.entries, func(entry w.File) bool { return entry.FileId == selectedId }); found {
+		return idx
 	}
+
 	log.Panicf("selectedIdx filed")
 	return 0
 }

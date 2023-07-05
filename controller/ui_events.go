@@ -91,13 +91,8 @@ func (c *controller) revealInFinder() {
 
 func (c *controller) moveSelection(lines int) {
 	folder := c.folders[c.currentPath]
-	selectedIdx := 0
-	for ind, entry := range c.entries {
-		if entry.FileId == folder.selectedId {
-			selectedIdx = ind
-			break
-		}
-	}
+
+	selectedIdx, _ := m.Find(c.entries, func(entry w.File) bool { return entry.FileId == folder.selectedId })
 	selectedIdx += lines
 	if selectedIdx < 0 {
 		selectedIdx = 0
@@ -226,12 +221,8 @@ func (c *controller) tab() {
 	sort.Slice(sameHash, func(i, j int) bool {
 		return strings.ToLower(sameHash[i].FullName().String()) < strings.ToLower(sameHash[j].FullName().String())
 	})
-	idx := 0
-	for idx = range sameHash {
-		if sameHash[idx] == selected.FileId {
-			break
-		}
-	}
+
+	idx, _ := m.Find(sameHash, func(id m.FileId) bool { return id == selected.FileId })
 	idx++
 	if idx == len(sameHash) {
 		idx = 0

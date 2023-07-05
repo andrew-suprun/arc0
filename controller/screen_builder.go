@@ -77,8 +77,11 @@ func (c *controller) handleOrigin(archive *archive) {
 				if c.entries[i].ModTime.Before(file.ModTime) {
 					c.entries[i].ModTime = file.ModTime
 				}
+				if hashCounts[file.Hash] > 1 {
+					c.entries[i].Status = w.Duplicate
+				}
 			} else {
-				c.entries = append(c.entries, w.File{
+				entry := w.File{
 					FileMeta: m.FileMeta{
 						FileId: m.FileId{
 							Root: file.Root,
@@ -89,7 +92,11 @@ func (c *controller) handleOrigin(archive *archive) {
 						ModTime: file.ModTime,
 					},
 					FileKind: w.FileFolder,
-				})
+				}
+				if hashCounts[file.Hash] > 1 {
+					entry.Status = w.Duplicate
+				}
+				c.entries = append(c.entries, entry)
 			}
 		}
 	}
