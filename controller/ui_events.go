@@ -198,6 +198,7 @@ func (c *controller) keepFile(file *w.File) {
 				To:   root,
 			})
 			file.Status = w.Pending
+			archive.totalSize += file.Size
 		}
 	}
 }

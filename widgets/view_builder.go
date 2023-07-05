@@ -140,7 +140,7 @@ func (s *Screen) progress() Widget {
 	rootWidth := 0
 	for _, progress := range s.Progress {
 		if tabWidth < len(progress.Tab) {
-			rootWidth = len(progress.Tab)
+			tabWidth = len(progress.Tab)
 		}
 		if rootWidth < len(progress.Root) {
 			rootWidth = len(progress.Root)
@@ -152,11 +152,9 @@ func (s *Screen) progress() Widget {
 		stats = append(stats,
 			Row(Constraint{Size: Size{Width: 0, Height: 1}, Flex: Flex{X: 1, Y: 0}},
 				Text(progress.Tab).Width(tabWidth),
-				Text(progress.Root.String()).Width(rootWidth),
+				Styled(styleAppTitle, Text(progress.Root.String()).Width(rootWidth)),
 				Text(fmt.Sprintf(" %6.2f%%", progress.Value*100)), Text(" "),
-				Styled(styleProgressBar,
-					ProgressBar(progress.Value),
-				),
+				Styled(styleProgressBar, ProgressBar(progress.Value)),
 				Text(" "),
 			),
 		)

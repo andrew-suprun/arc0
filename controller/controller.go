@@ -33,14 +33,12 @@ type controller struct {
 }
 
 type archive struct {
-	scanner     m.ArchiveScanner
-	infoByName  map[m.FullName]*w.File
-	infosBySize map[uint64]map[*w.File]struct{}
-	progress    m.ScanProgress
-	totalSize   uint64
-	copySize    uint64
-	fileCopied  uint64
-	totalCopied uint64
+	scanner      m.ArchiveScanner
+	infoByName   map[m.FullName]*w.File
+	infosBySize  map[uint64]map[*w.File]struct{}
+	progress     m.Progress
+	totalSize    uint64
+	totalHandled uint64
 }
 
 type folder struct {

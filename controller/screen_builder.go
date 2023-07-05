@@ -3,7 +3,6 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
-	"log"
 	"strings"
 )
 
@@ -43,7 +42,6 @@ func (c *controller) buildScreen() *w.Screen {
 }
 
 func (b *screenBuilder) buildEntries() {
-	log.Printf("\n\n### buildEntries: --------")
 	b.controller.pendingFiles, b.controller.duplicateFiles, b.controller.absentFiles = 0, 0, 0
 	b.controller.entries = b.controller.entries[:0]
 
@@ -75,7 +73,6 @@ func (b *screenBuilder) duplicates(a *archive) {
 }
 
 func (b *screenBuilder) handleOrigin(archive *archive) {
-	log.Printf("### handleOrigin ---- ")
 	for _, file := range archive.infoByName {
 		if file.Path == b.controller.currentPath {
 			entry := w.File{
@@ -87,7 +84,6 @@ func (b *screenBuilder) handleOrigin(archive *archive) {
 				entry.Status = w.Duplicate
 			}
 			b.controller.entries = append(b.controller.entries, entry)
-			log.Printf("### handleOrigin.1: entry %v", entry)
 		} else if strings.HasPrefix(file.Path.String(), b.controller.currentPath.String()) {
 			relPath := file.Path
 			if len(b.controller.currentPath) > 0 {
@@ -121,7 +117,6 @@ func (b *screenBuilder) handleOrigin(archive *archive) {
 					entry.Status = w.Duplicate
 				}
 				b.controller.entries = append(b.controller.entries, entry)
-				log.Printf("### handleOrigin.2: entry %v", entry)
 			}
 		}
 	}
@@ -131,7 +126,6 @@ func (b screenBuilder) handleCopy(archive *archive) {
 	if !b.originHashed {
 		return
 	}
-	log.Printf("### handleCopy ---- ")
 
 	for _, file := range archive.infoByName {
 		if file.Hash == "" {
@@ -154,7 +148,6 @@ func (b screenBuilder) handleCopy(archive *archive) {
 				Status:   w.Absent,
 			}
 
-			log.Printf("### handleCopy.1: entry %v", entry)
 			b.controller.entries = append(b.controller.entries, entry)
 			b.copyHashName[entry.Hash] = entry.Name
 		} else if strings.HasPrefix(file.Path.String(), b.controller.currentPath.String()) {
@@ -180,13 +173,30 @@ func (b screenBuilder) handleCopy(archive *archive) {
 				Status:   w.Absent,
 			}
 			b.controller.entries = append(b.controller.entries, entry)
-			log.Printf("### handleCopy.2: entry %v", entry)
 
 		}
 	}
 }
 
 func (c *controller) progress() []w.ProgressInfo {
-	// TODO
-	return nil
+	infos := []w.ProgressInfo{}
+	var tab string
+	for _, root := range c.roots {
+		archive := c.archives[root]
+		if archive.totalSize == 0 {
+			continue
+		}
+		switch archive.progress.ProgressState {
+		case m.HashingFile:
+			tab = " Hashing "
+		case m.CopyingFile:
+			tab = " Copying "
+		}
+		infos = append(infos, w.ProgressInfo{
+			Root:  root,
+			Tab:   tab,
+			Value: float64(archive.totalHandled+archive.progress.HandledSize) / float64(archive.totalSize),
+		})
+	}
+	return infos
 }

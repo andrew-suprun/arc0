@@ -26,7 +26,6 @@ type scanner struct {
 	events      m.EventChan
 	lc          *lifecycle.Lifecycle
 	infos       map[uint64]*fileInfo
-	totalHashed uint64
 }
 
 type fileInfo struct {
@@ -114,7 +113,7 @@ func (s *scanner) hashArchive() {
 	}()
 
 	defer func() {
-		s.events <- m.ScanProgress{
+		s.events <- m.Progress{
 			Root:          s.root,
 			ProgressState: m.FileTreeHashed,
 		}
@@ -147,6 +146,7 @@ func (s *scanner) hashArchive() {
 func (s *scanner) hashFile(info *fileInfo) {
 	hash := sha256.New()
 	buf := make([]byte, 1024*1024)
+	var hashed uint64
 
 	fsys := os.DirFS(info.meta.Root.String())
 	file, err := fsys.Open(info.meta.FullName().String())
@@ -184,11 +184,11 @@ func (s *scanner) hashFile(info *fileInfo) {
 			return
 		}
 
-		s.totalHashed += uint64(nr)
-		s.events <- m.ScanProgress{
+		hashed += uint64(nr)
+		s.events <- m.Progress{
 			Root:          info.meta.Root,
-			ProgressState: m.HashingFileTree,
-			TotalHashed:   s.totalHashed,
+			ProgressState: m.HashingFile,
+			HandledSize:   hashed,
 		}
 	}
 	info.hash = m.Hash(base64.RawURLEncoding.EncodeToString(hash.Sum(nil)))
@@ -228,12 +228,6 @@ func (s *scanner) readMeta() {
 						Name: info.meta.Name,
 					},
 					Hash: m.Hash(hash),
-				}
-				s.totalHashed += info.meta.Size
-				s.events <- m.ScanProgress{
-					Root:          s.root,
-					ProgressState: m.HashingFileTree,
-					TotalHashed:   s.totalHashed,
 				}
 			}
 		}

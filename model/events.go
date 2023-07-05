@@ -36,26 +36,23 @@ type FileCopied CopyFile
 
 func (FileCopied) event() {}
 
-type ScanProgress struct {
+type Progress struct {
 	Root
 	ProgressState
-	TotalHashed uint64
+	HandledSize uint64
 }
 
-func (ScanProgress) event() {}
+func (Progress) event() {}
 
 type ProgressState int
 
 const (
 	Initial ProgressState = iota
 	FileTreeScanned
-	HashingFileTree
+	HashingFile
 	FileTreeHashed
+	CopyingFile
 )
-
-type FileCopyProgress uint64
-
-func (FileCopyProgress) event() {}
 
 type Error struct {
 	FullName

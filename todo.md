@@ -1,4 +1,4 @@
-* restore scan progress indicatore
+* auto resolve
 * ??? move Screen{} and View() into separate package
 * remove empty folders
 * file copied/deleted/moved events

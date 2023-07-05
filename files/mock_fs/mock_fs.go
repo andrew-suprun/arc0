@@ -51,12 +51,16 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	case m.CopyFile:
 		for _, meta := range metas[cmd.From.Root] {
 			if meta.FullName == cmd.From.FullName().String() {
-				for copyed := uint64(0); ; copyed += 10000 {
-					if copyed > meta.Size {
-						copyed = meta.Size
+				for copied := uint64(0); ; copied += 10000 {
+					if copied > meta.Size {
+						copied = meta.Size
 					}
-					s.events <- m.FileCopyProgress(copyed)
-					if copyed == meta.Size {
+					s.events <- m.Progress{
+						Root:          cmd.To,
+						ProgressState: m.CopyingFile,
+						HandledSize:   copied,
+					}
+					if copied == meta.Size {
 						break
 					}
 					time.Sleep(time.Millisecond)
@@ -96,7 +100,6 @@ func (s *scanner) hashArchive() {
 	for i := range archFiles {
 		scans[i] = Scan && rand.Intn(2) == 0
 	}
-	var totalHashed uint64
 	for i := range archFiles {
 		if !scans[i] {
 			meta := archFiles[i]
@@ -108,12 +111,6 @@ func (s *scanner) hashArchive() {
 				},
 				Hash: meta.Hash,
 			}
-			totalHashed += meta.Size
-			s.events <- m.ScanProgress{
-				Root:          s.root,
-				ProgressState: m.HashingFileTree,
-				TotalHashed:   totalHashed,
-			}
 		}
 	}
 	for i := range archFiles {
@@ -123,17 +120,16 @@ func (s *scanner) hashArchive() {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
-				s.events <- m.ScanProgress{
+				s.events <- m.Progress{
 					Root:          meta.Root,
-					ProgressState: m.HashingFileTree,
-					TotalHashed:   totalHashed + hashed,
+					ProgressState: m.HashingFile,
+					HandledSize:   hashed,
 				}
 				if hashed == meta.Size {
 					break
 				}
 				time.Sleep(time.Millisecond)
 			}
-			totalHashed += meta.Size
 			s.events <- m.FileHashed{
 				FileId: m.FileId{
 					Root: meta.Root,
@@ -144,7 +140,7 @@ func (s *scanner) hashArchive() {
 			}
 		}
 	}
-	s.events <- m.ScanProgress{
+	s.events <- m.Progress{
 		Root:          s.root,
 		ProgressState: m.FileTreeHashed,
 	}

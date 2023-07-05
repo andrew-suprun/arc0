@@ -4,7 +4,6 @@ import (
 	m "arch/model"
 	w "arch/widgets"
 	"log"
-	"path/filepath"
 )
 
 func (c *controller) archiveScanned(tree m.ArchiveScanned) {
@@ -20,6 +19,7 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 		} else {
 			bySize[file] = struct{}{}
 		}
+		archive.totalSize += meta.Size
 	}
 
 	c.archives[tree.Root].progress.ProgressState = m.FileTreeScanned
@@ -34,8 +34,11 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 }
 
 func (c *controller) fileHashed(fileHash m.FileHashed) {
-	file := c.archives[fileHash.Root].infoByName[fileHash.FullName()]
+	archive := c.archives[fileHash.Root]
+	file := archive.infoByName[fileHash.FullName()]
 	file.Hash = fileHash.Hash
+	archive.totalHandled += file.Size
+	archive.progress.HandledSize = 0
 }
 
 func (c *controller) makeSelectedVisible() {
@@ -70,6 +73,11 @@ func (c *controller) fileCopied(copied m.FileCopied) {
 
 	toArchive := c.archives[copied.To]
 	toArchive.infoByName[copied.From.FullName()] = file
+	toArchive.totalHandled += file.Size
+	toArchive.progress.HandledSize = 0
+	if toArchive.totalSize == fromArchive.totalHandled {
+		toArchive.totalSize, fromArchive.totalHandled = 0, 0
+	}
 }
 
 func (c *controller) removeFolderFile(id m.FileId) {
@@ -79,17 +87,19 @@ func (c *controller) removeFolderFile(id m.FileId) {
 	delete(archive.infosBySize[file.Size], file)
 }
 
-func (c *controller) scanProgress(event m.ScanProgress) {
-	c.archives[event.Root].progress = event
+func (c *controller) handleProgress(event m.Progress) {
+	archive := c.archives[event.Root]
+	archive.progress = event
 
 	if event.ProgressState == m.FileTreeHashed {
+		archive.totalSize = 0
 		for _, archive := range c.archives {
 			if archive.progress.ProgressState != m.FileTreeHashed {
 				return
 			}
 		}
-		c.autoResolve()
 	}
+	c.autoResolve()
 }
 
 func (c *controller) autoResolve() {
@@ -99,23 +109,6 @@ func (c *controller) autoResolve() {
 			c.keepFile(file)
 		}
 	}
-}
-
-func (c *controller) fileCopyProgress(event m.FileCopyProgress) {
-	archive := c.archives[c.origin]
-	archive.fileCopied = uint64(event)
-}
-
-func dir(path m.Path) m.Path {
-	path = m.Path(filepath.Dir(path.String()))
-	if path == "." {
-		return ""
-	}
-	return path
-}
-
-func name(path m.Path) m.Name {
-	return m.Name(filepath.Base(path.String()))
 }
 
 func (c *controller) selectedIdx() int {
