@@ -22,7 +22,6 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 		}
 	}
 
-	log.Printf("### archiveScanned.2")
 	c.archives[tree.Root].progress.ProgressState = m.FileTreeScanned
 	for _, archive := range c.archives {
 		if archive.progress.ProgressState != m.FileTreeScanned {
@@ -126,5 +125,6 @@ func (c *controller) selectedIdx() int {
 			return idx
 		}
 	}
+	log.Panicf("selectedIdx filed")
 	return 0
 }

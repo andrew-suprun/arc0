@@ -13,23 +13,18 @@ func (c *controller) handleEvent(event any) {
 	switch event := event.(type) {
 	case m.ArchiveScanned:
 		c.archiveScanned(event)
-		c.buildEntries()
 
 	case m.FileHashed:
 		c.fileHashed(event)
-		c.buildEntries()
 
 	case m.FileDeleted:
 		c.fileDeleted(event)
-		c.buildEntries()
 
 	case m.FileRenamed:
 		c.fileRenamed(event)
-		c.buildEntries()
 
 	case m.FileCopied:
 		c.fileCopied(event)
-		c.buildEntries()
 
 	case m.ScanProgress:
 		c.scanProgress(event)
@@ -42,11 +37,9 @@ func (c *controller) handleEvent(event any) {
 
 	case m.Enter:
 		c.enter()
-		c.buildEntries()
 
 	case m.Esc:
 		c.esc()
-		c.buildEntries()
 
 	case m.RevealInFinder:
 		c.revealInFinder()
@@ -65,7 +58,6 @@ func (c *controller) handleEvent(event any) {
 
 	case m.MouseTarget:
 		c.mouseTarget(event.Command)
-		c.buildEntries()
 
 	case m.PgUp:
 		c.pgUp()
@@ -75,18 +67,15 @@ func (c *controller) handleEvent(event any) {
 
 	case m.Tab:
 		c.tab()
-		c.buildEntries()
 
 	case m.KeepOne:
 		c.keepSelected()
-		c.buildEntries()
 
 	case m.KeepAll:
 		// TODO: Implement, maybe?
 
 	case m.Delete:
 		c.deleteSelected()
-		c.buildEntries()
 
 	case m.Error:
 		c.Errors = append(c.Errors, event)

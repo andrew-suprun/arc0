@@ -1,6 +1,7 @@
 * implement buildScreen()
 * rebuild folder on every event
-* ??? split view in onw package
+* write generic find([]T, func(T) bool) -> (idx, T, bool)
+* ??? move Screen{} and View() into separate package
 * remove empty folders
 * file copied/deleted/moved events
 * file operations

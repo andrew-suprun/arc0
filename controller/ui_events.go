@@ -50,7 +50,10 @@ func (c *controller) selectLast() {
 func (c *controller) enter() {
 	selectedId := c.folders[c.currentPath].selectedId
 	file := c.archives[selectedId.Root].infoByName[selectedId.FullName()]
-	if file != nil && file.FileKind == w.FileFolder {
+	if file == nil {
+		return
+	}
+	if file.FileKind == w.FileFolder {
 		c.currentPath = m.Path(file.FullName().String())
 	} else {
 		exec.Command("open", file.AbsName()).Start()

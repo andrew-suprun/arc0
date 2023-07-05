@@ -19,8 +19,11 @@ type controller struct {
 	screenSize         m.ScreenSize
 	lastMouseEventTime time.Time
 
-	currentPath m.Path
-	entries     []*w.File
+	currentPath    m.Path
+	entries        []w.File
+	pendingFiles   int
+	duplicateFiles int
+	absentFiles    int
 
 	feedback w.Feedback
 
