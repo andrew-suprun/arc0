@@ -7,14 +7,10 @@ import (
 )
 
 type controller struct {
-	fs     m.FS
-	events m.EventChan
-
 	roots    []m.Root
 	origin   m.Root
 	archives map[m.Root]*archive
 	folders  map[m.Path]*folder
-	hashById map[m.FileId]m.Hash
 
 	screenSize         m.ScreenSize
 	lastMouseEventTime time.Time
@@ -48,18 +44,15 @@ type folder struct {
 	sortAscending []bool
 }
 
-func Run(fs m.FS, renderer w.Renderer, ev m.EventChan, roots []m.Root) {
+func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 	rootFolder := &folder{
 		sortAscending: []bool{true, false, false, false},
 	}
 	c := &controller{
-		fs:       fs,
-		events:   ev,
 		roots:    roots,
 		origin:   roots[0],
 		archives: map[m.Root]*archive{},
 		folders:  map[m.Path]*folder{"": rootFolder},
-		hashById: map[m.FileId]m.Hash{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
@@ -72,10 +65,10 @@ func Run(fs m.FS, renderer w.Renderer, ev m.EventChan, roots []m.Root) {
 	}
 
 	for !c.quit {
-		event := <-c.events
+		event := <-events
 		c.handleEvent(event)
 		select {
-		case event = <-c.events:
+		case event = <-events:
 			c.handleEvent(event)
 		default:
 		}
