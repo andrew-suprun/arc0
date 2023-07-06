@@ -15,11 +15,9 @@ type controller struct {
 	screenSize         m.ScreenSize
 	lastMouseEventTime time.Time
 
-	currentPath    m.Path
-	entries        []w.File
-	pendingFiles   int
-	duplicateFiles int
-	absentFiles    int
+	currentPath m.Path
+	entries     []w.File
+	pending     map[m.FileId]struct{}
 
 	feedback w.Feedback
 
@@ -29,11 +27,14 @@ type controller struct {
 }
 
 type archive struct {
-	scanner      m.ArchiveScanner
-	infoByName   map[m.FullName]*w.File
-	progress     m.Progress
-	totalSize    uint64
-	totalHandled uint64
+	scanner       m.ArchiveScanner
+	files         map[m.FullName]*w.File
+	progress      m.Progress
+	progressState m.ProgressState
+	totalSize     uint64
+	totalHashed   uint64
+	copySize      uint64
+	totalCopied   uint64
 }
 
 type folder struct {
@@ -52,12 +53,13 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		origin:   roots[0],
 		archives: map[m.Root]*archive{},
 		folders:  map[m.Path]*folder{"": rootFolder},
+		pending:  map[m.FileId]struct{}{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
-			scanner:    scanner,
-			infoByName: map[m.FullName]*w.File{},
+			scanner: scanner,
+			files:   map[m.FullName]*w.File{},
 		}
 		scanner.Send(m.ScanArchive{})
 	}

@@ -3,37 +3,33 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
+	"log"
 	"strings"
 )
 
 type screenBuilder struct {
 	*controller
-	duplicateCounts map[m.Hash]int
-	copyHashName    map[m.Hash]m.Name
-	absentHashes    map[m.Hash]struct{}
-	originHashed    bool
+	copyNameHash map[m.Name]m.Hash
+	absentHashes map[m.Hash]struct{}
+	originHashed bool
 }
 
 func (c *controller) buildScreen() *w.Screen {
 	builder := &screenBuilder{
-		controller:      c,
-		duplicateCounts: map[m.Hash]int{},
-		copyHashName:    map[m.Hash]m.Name{},
-		absentHashes:    map[m.Hash]struct{}{},
+		controller:   c,
+		copyNameHash: map[m.Name]m.Hash{},
+		absentHashes: map[m.Hash]struct{}{},
 	}
 	builder.buildEntries()
 
 	folder := c.folders[c.currentPath]
 	screen := &w.Screen{
-		CurrentPath:    c.currentPath,
-		Progress:       c.progress(),
-		SelectedId:     folder.selectedId,
-		OffsetIdx:      folder.offsetIdx,
-		SortColumn:     folder.sortColumn,
-		SortAscending:  folder.sortAscending,
-		PendingFiles:   c.pendingFiles,
-		DuplicateFiles: c.duplicateFiles,
-		AbsentFiles:    c.absentFiles,
+		CurrentPath:   c.currentPath,
+		Progress:      c.progress(),
+		SelectedId:    folder.selectedId,
+		OffsetIdx:     folder.offsetIdx,
+		SortColumn:    folder.sortColumn,
+		SortAscending: folder.sortAscending,
 	}
 
 	screen.Entries = make([]w.File, len(c.entries))
@@ -42,12 +38,9 @@ func (c *controller) buildScreen() *w.Screen {
 }
 
 func (b *screenBuilder) buildEntries() {
-	b.controller.pendingFiles, b.controller.duplicateFiles, b.controller.absentFiles = 0, 0, 0
 	b.controller.entries = b.controller.entries[:0]
 
-	b.duplicates(b.controller.archives[b.controller.origin])
 	b.handleOrigin(b.controller.archives[b.controller.origin])
-	b.stats()
 
 	for _, root := range b.controller.roots[1:] {
 		b.handleCopy(b.controller.archives[root])
@@ -56,30 +49,18 @@ func (b *screenBuilder) buildEntries() {
 	b.controller.sort()
 }
 
-func (b *screenBuilder) duplicates(a *archive) {
-	b.originHashed = true
-	for _, file := range a.infoByName {
-		if file.Hash != "" {
-			b.duplicateCounts[file.Hash]++
-		} else {
-			b.originHashed = false
-		}
-	}
-}
-
 func (b *screenBuilder) handleOrigin(archive *archive) {
-	for _, file := range archive.infoByName {
-		if b.duplicateCounts[file.Hash] > 1 {
-			file.Status = w.Duplicate
+	for name, file := range archive.files {
+		if file == nil {
+			log.Printf("### handleOrigin: nil file: name=%q", name)
 		}
 		if file.Path == b.controller.currentPath {
-			entry := w.File{
+			b.controller.entries = append(b.controller.entries, w.File{
 				FileMeta: file.FileMeta,
 				FileKind: w.FileRegular,
 				Hash:     file.Hash,
 				Status:   file.Status,
-			}
-			b.controller.entries = append(b.controller.entries, entry)
+			})
 		} else if strings.HasPrefix(file.Path.String(), b.controller.currentPath.String()) {
 			relPath := file.Path
 			if len(b.controller.currentPath) > 0 {
@@ -93,7 +74,7 @@ func (b *screenBuilder) handleOrigin(archive *archive) {
 				if b.controller.entries[i].ModTime.Before(file.ModTime) {
 					b.controller.entries[i].ModTime = file.ModTime
 				}
-				if b.duplicateCounts[file.Hash] > 1 {
+				if file.Status == w.Duplicate {
 					b.controller.entries[i].Status = w.Duplicate
 				}
 			} else {
@@ -109,7 +90,7 @@ func (b *screenBuilder) handleOrigin(archive *archive) {
 					},
 					FileKind: w.FileFolder,
 				}
-				if b.duplicateCounts[file.Hash] > 1 {
+				if file.Status == w.Duplicate {
 					entry.Status = w.Duplicate
 				}
 				b.controller.entries = append(b.controller.entries, entry)
@@ -118,43 +99,16 @@ func (b *screenBuilder) handleOrigin(archive *archive) {
 	}
 }
 
-func (b *screenBuilder) stats() {
-	pendingHashes := map[m.Hash]struct{}{}
-	duplicateHashes := map[m.Hash]struct{}{}
-	absentHashes := map[m.Hash]struct{}{}
-	for _, archive := range b.controller.archives {
-		for _, file := range archive.infoByName {
-			switch file.Status {
-			case w.Pending:
-				pendingHashes[file.Hash] = struct{}{}
-			case w.Duplicate:
-				duplicateHashes[file.Hash] = struct{}{}
-			case w.Absent:
-				absentHashes[file.Hash] = struct{}{}
-			}
-		}
-	}
-	b.controller.pendingFiles = len(pendingHashes)
-	b.controller.duplicateFiles = len(duplicateHashes)
-	b.controller.absentFiles = len(absentHashes)
-}
-
 func (b screenBuilder) handleCopy(archive *archive) {
 	if !b.originHashed {
 		return
 	}
 
-	for _, file := range archive.infoByName {
-		if file.Hash == "" {
+	for _, file := range archive.files {
+		if file.Status != w.Absent {
 			continue
 		}
-		if _, ok := b.duplicateCounts[file.Hash]; ok {
-			continue
-		}
-		if _, ok := b.absentHashes[file.Hash]; !ok {
-			b.controller.absentFiles++
-		}
-		if name, ok := b.copyHashName[file.Hash]; ok && file.Name == name {
+		if hash, ok := b.copyNameHash[file.Name]; ok && file.Hash == hash {
 			continue
 		}
 		if file.Path == b.controller.currentPath {
@@ -166,7 +120,7 @@ func (b screenBuilder) handleCopy(archive *archive) {
 			}
 
 			b.controller.entries = append(b.controller.entries, entry)
-			b.copyHashName[entry.Hash] = entry.Name
+			b.copyNameHash[entry.Name] = entry.Hash
 		} else if strings.HasPrefix(file.Path.String(), b.controller.currentPath.String()) {
 			relPath := file.Path
 			if len(b.controller.currentPath) > 0 {
@@ -198,21 +152,27 @@ func (b screenBuilder) handleCopy(archive *archive) {
 func (c *controller) progress() []w.ProgressInfo {
 	infos := []w.ProgressInfo{}
 	var tab string
+	var value float64
 	for _, root := range c.roots {
 		archive := c.archives[root]
-		if archive.totalSize == 0 {
+		switch archive.progressState {
+		case m.FileTreeScanned:
+			tab = " Hashing"
+			value = float64(archive.totalHashed+archive.progress.HandledSize) / float64(archive.totalSize)
+		case m.FileTreeHashed:
+			tab = " Copying"
+			value = float64(archive.totalCopied+archive.progress.HandledSize) / float64(archive.copySize)
+		default:
 			continue
 		}
 		switch archive.progress.ProgressState {
 		case m.HashingFile:
-			tab = " Hashing "
 		case m.CopyingFile:
-			tab = " Copying "
 		}
 		infos = append(infos, w.ProgressInfo{
 			Root:  root,
 			Tab:   tab,
-			Value: float64(archive.totalHandled+archive.progress.HandledSize) / float64(archive.totalSize),
+			Value: value,
 		})
 	}
 	return infos

@@ -55,16 +55,13 @@ const (
 )
 
 type Screen struct {
-	CurrentPath    m.Path
-	Entries        []File
-	Progress       []ProgressInfo
-	SelectedId     m.FileId
-	OffsetIdx      int
-	SortColumn     SortColumn
-	SortAscending  []bool
-	PendingFiles   int
-	DuplicateFiles int
-	AbsentFiles    int
+	CurrentPath   m.Path
+	Entries       []File
+	Progress      []ProgressInfo
+	SelectedId    m.FileId
+	OffsetIdx     int
+	SortColumn    SortColumn
+	SortAscending []bool
 }
 
 type Feedback struct {

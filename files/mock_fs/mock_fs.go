@@ -51,7 +51,7 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	case m.CopyFile:
 		for _, meta := range metas[cmd.From.Root] {
 			if meta.FullName == cmd.From.FullName().String() {
-				for copied := uint64(0); ; copied += 10000 {
+				for copied := uint64(0); ; copied += 50000 {
 					if copied > meta.Size {
 						copied = meta.Size
 					}

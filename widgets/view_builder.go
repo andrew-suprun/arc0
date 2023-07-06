@@ -10,7 +10,8 @@ import (
 
 var (
 	styleAppTitle      = Style{FG: 226, BG: 0, Flags: Bold + Italic}
-	styleStatusLine    = Style{FG: 226, BG: 0}
+	styleStatusLine    = Style{FG: 230, BG: 0, Flags: Italic}
+	styleArchive       = Style{FG: 226, BG: 0, Flags: Bold}
 	styleProgressBar   = Style{FG: 231, BG: 19}
 	styleArchiveHeader = Style{FG: 231, BG: 8, Flags: Bold}
 )
@@ -26,7 +27,6 @@ func (s *Screen) View() (Widget, Feedback) {
 		s.title(),
 		s.folderView(&feedback),
 		s.progress(),
-		s.fileStats(),
 	)
 	return widget, feedback
 }
@@ -152,7 +152,8 @@ func (s *Screen) progress() Widget {
 		stats = append(stats,
 			Row(Constraint{Size: Size{Width: 0, Height: 1}, Flex: Flex{X: 1, Y: 0}},
 				Text(progress.Tab).Width(tabWidth),
-				Styled(styleAppTitle, Text(progress.Root.String()).Width(rootWidth)),
+				Text(" "),
+				Styled(styleArchive, Text(progress.Root.String()).Width(rootWidth)),
 				Text(fmt.Sprintf(" %6.2f%%", progress.Value*100)), Text(" "),
 				Styled(styleProgressBar, ProgressBar(progress.Value)),
 				Text(" "),
@@ -162,28 +163,6 @@ func (s *Screen) progress() Widget {
 	return Styled(styleStatusLine,
 		Column(Constraint{Size: Size{Width: 0, Height: len(stats)}, Flex: Flex{X: 1, Y: 0}}, stats...),
 	)
-}
-
-func (c *Screen) fileStats() Widget {
-	if c.DuplicateFiles == 0 && c.AbsentFiles == 0 && c.PendingFiles == 0 {
-		return Text(" All Clear").Flex(1)
-	}
-	stats := []Widget{Text(" Stats:")}
-	if c.DuplicateFiles > 0 {
-		stats = append(stats, Text(fmt.Sprintf(" Duplicates: %d", c.DuplicateFiles)))
-	}
-	if c.AbsentFiles > 0 {
-		stats = append(stats, Text(fmt.Sprintf(" Absent: %d", c.AbsentFiles)))
-	}
-	if c.PendingFiles > 0 {
-		stats = append(stats, Text(fmt.Sprintf(" Pending: %d", c.PendingFiles)))
-	}
-	stats = append(stats, Text("").Flex(1))
-	return Styled(
-		styleAppTitle,
-		Row(Constraint{Size: Size{Width: 0, Height: 1}, Flex: Flex{X: 1, Y: 0}}, stats...),
-	)
-
 }
 
 func formatSize(size uint64) string {

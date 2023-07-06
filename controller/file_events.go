@@ -9,14 +9,13 @@ import (
 func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 	archive := c.archives[tree.Root]
 	for _, meta := range tree.FileMetas {
-		file := &w.File{FileMeta: meta}
-		archive.infoByName[meta.FullName()] = file
+		archive.files[meta.FullName()] = &w.File{FileMeta: meta}
 		archive.totalSize += meta.Size
 	}
 
-	c.archives[tree.Root].progress.ProgressState = m.FileTreeScanned
+	c.archives[tree.Root].progressState = m.FileTreeScanned
 	for _, archive := range c.archives {
-		if archive.progress.ProgressState != m.FileTreeScanned {
+		if archive.progressState != m.FileTreeScanned {
 			return
 		}
 	}
@@ -25,12 +24,43 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 	}
 }
 
-func (c *controller) fileHashed(fileHash m.FileHashed) {
-	archive := c.archives[fileHash.Root]
-	file := archive.infoByName[fileHash.FullName()]
-	file.Hash = fileHash.Hash
-	archive.totalHandled += file.Size
+func (c *controller) fileHashed(hashed m.FileHashed) {
+	archive := c.archives[hashed.Root]
+	file := archive.files[hashed.FullName()]
+	file.Hash = hashed.Hash
+	archive.totalHashed += file.Size
 	archive.progress.HandledSize = 0
+
+	entriesByArchive := map[m.Root][]*w.File{}
+	for root, archive := range c.archives {
+		entries := []*w.File{}
+		for _, entry := range archive.files {
+			if entry.Size != file.Size {
+				continue
+			}
+			if entry.Hash == "" {
+				return
+			}
+			entries = append(entries, entry)
+		}
+		entriesByArchive[root] = entries
+	}
+	originEntries := entriesByArchive[c.origin]
+	if len(originEntries) == 0 {
+		for root, entries := range entriesByArchive {
+			if root != c.origin {
+				for _, entry := range entries {
+					entry.Status = w.Absent
+				}
+			}
+		}
+	} else if len(originEntries) == 1 {
+		c.keepFile(originEntries[0])
+	} else {
+		for _, entry := range originEntries {
+			entry.Status = w.Duplicate
+		}
+	}
 }
 
 func (c *controller) makeSelectedVisible() {
@@ -48,11 +78,11 @@ func (c *controller) makeSelectedVisible() {
 }
 
 func (c *controller) fileRenamed(renamed m.FileRenamed) {
-	c.removeFolderFile(renamed.FileId)
-
 	archive := c.archives[renamed.Root]
-	file := archive.infoByName[renamed.FullName()]
-	archive.infoByName[renamed.NewFullName] = file
+	file := archive.files[renamed.FullName()]
+	archive.files[renamed.NewFullName] = file
+
+	c.removeFolderFile(renamed.FileId)
 }
 
 func (c *controller) fileDeleted(deleted m.FileDeleted) {
@@ -61,43 +91,28 @@ func (c *controller) fileDeleted(deleted m.FileDeleted) {
 
 func (c *controller) fileCopied(copied m.FileCopied) {
 	fromArchive := c.archives[copied.From.Root]
-	file := fromArchive.infoByName[copied.From.FullName()]
+	file := fromArchive.files[copied.From.FullName()]
+	file.Status = w.Resolved
 
 	toArchive := c.archives[copied.To]
-	toArchive.infoByName[copied.From.FullName()] = file
-	toArchive.totalHandled += file.Size
+	toArchive.files[copied.From.FullName()] = file
+	toArchive.totalHashed += file.Size
 	toArchive.progress.HandledSize = 0
-	if toArchive.totalSize == fromArchive.totalHandled {
-		toArchive.totalSize, fromArchive.totalHandled = 0, 0
+	if toArchive.copySize == fromArchive.totalCopied {
+		toArchive.copySize, fromArchive.totalCopied = 0, 0
 	}
 }
 
 func (c *controller) removeFolderFile(id m.FileId) {
 	archive := c.archives[id.Root]
-	delete(archive.infoByName, id.FullName())
+	delete(archive.files, id.FullName())
 }
 
 func (c *controller) handleProgress(event m.Progress) {
 	archive := c.archives[event.Root]
 	archive.progress = event
-
-	if event.ProgressState == m.FileTreeHashed {
-		archive.totalSize = 0
-		for _, archive := range c.archives {
-			if archive.progress.ProgressState != m.FileTreeHashed {
-				return
-			}
-		}
-	}
-	c.autoResolve()
-}
-
-func (c *controller) autoResolve() {
-	archive := c.archives[c.origin]
-	for _, file := range archive.infoByName {
-		if file.Status == w.Pending {
-			c.keepFile(file)
-		}
+	if event.ProgressState == m.FileTreeScanned || event.ProgressState == m.FileTreeHashed {
+		archive.progressState = event.ProgressState
 	}
 }
 

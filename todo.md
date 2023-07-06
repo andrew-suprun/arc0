@@ -1,4 +1,4 @@
-* auto resolve
+* fix a -> b; b -> a renamings
 * ??? move Screen{} and View() into separate package
 * remove empty folders
 * file copied/deleted/moved events
