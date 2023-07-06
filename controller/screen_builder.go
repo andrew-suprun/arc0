@@ -46,8 +46,8 @@ func (b *screenBuilder) buildEntries() {
 	b.controller.entries = b.controller.entries[:0]
 
 	b.duplicates(b.controller.archives[b.controller.origin])
-
 	b.handleOrigin(b.controller.archives[b.controller.origin])
+	b.stats()
 
 	for _, root := range b.controller.roots[1:] {
 		b.handleCopy(b.controller.archives[root])
@@ -65,23 +65,19 @@ func (b *screenBuilder) duplicates(a *archive) {
 			b.originHashed = false
 		}
 	}
-	for _, count := range b.duplicateCounts {
-		if count > 1 {
-			b.controller.duplicateFiles++
-		}
-	}
 }
 
 func (b *screenBuilder) handleOrigin(archive *archive) {
 	for _, file := range archive.infoByName {
+		if b.duplicateCounts[file.Hash] > 1 {
+			file.Status = w.Duplicate
+		}
 		if file.Path == b.controller.currentPath {
 			entry := w.File{
 				FileMeta: file.FileMeta,
 				FileKind: w.FileRegular,
 				Hash:     file.Hash,
-			}
-			if b.duplicateCounts[file.Hash] > 1 {
-				entry.Status = w.Duplicate
+				Status:   file.Status,
 			}
 			b.controller.entries = append(b.controller.entries, entry)
 		} else if strings.HasPrefix(file.Path.String(), b.controller.currentPath.String()) {
@@ -120,6 +116,27 @@ func (b *screenBuilder) handleOrigin(archive *archive) {
 			}
 		}
 	}
+}
+
+func (b *screenBuilder) stats() {
+	pendingHashes := map[m.Hash]struct{}{}
+	duplicateHashes := map[m.Hash]struct{}{}
+	absentHashes := map[m.Hash]struct{}{}
+	for _, archive := range b.controller.archives {
+		for _, file := range archive.infoByName {
+			switch file.Status {
+			case w.Pending:
+				pendingHashes[file.Hash] = struct{}{}
+			case w.Duplicate:
+				duplicateHashes[file.Hash] = struct{}{}
+			case w.Absent:
+				absentHashes[file.Hash] = struct{}{}
+			}
+		}
+	}
+	b.controller.pendingFiles = len(pendingHashes)
+	b.controller.duplicateFiles = len(duplicateHashes)
+	b.controller.absentFiles = len(absentHashes)
 }
 
 func (b screenBuilder) handleCopy(archive *archive) {
