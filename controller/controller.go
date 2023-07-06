@@ -31,7 +31,6 @@ type controller struct {
 type archive struct {
 	scanner      m.ArchiveScanner
 	infoByName   map[m.FullName]*w.File
-	infosBySize  map[uint64]map[*w.File]struct{}
 	progress     m.Progress
 	totalSize    uint64
 	totalHandled uint64
@@ -57,9 +56,8 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
-			scanner:     scanner,
-			infosBySize: map[uint64]map[*w.File]struct{}{},
-			infoByName:  map[m.FullName]*w.File{},
+			scanner:    scanner,
+			infoByName: map[m.FullName]*w.File{},
 		}
 		scanner.Send(m.ScanArchive{})
 	}

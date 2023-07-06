@@ -11,14 +11,6 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 	for _, meta := range tree.FileMetas {
 		file := &w.File{FileMeta: meta}
 		archive.infoByName[meta.FullName()] = file
-
-		bySize := archive.infosBySize[file.Size]
-		if bySize == nil {
-			bySize = map[*w.File]struct{}{file: {}}
-			archive.infosBySize[file.Size] = bySize
-		} else {
-			bySize[file] = struct{}{}
-		}
 		archive.totalSize += meta.Size
 	}
 
@@ -82,9 +74,7 @@ func (c *controller) fileCopied(copied m.FileCopied) {
 
 func (c *controller) removeFolderFile(id m.FileId) {
 	archive := c.archives[id.Root]
-	file := archive.infoByName[id.FullName()]
 	delete(archive.infoByName, id.FullName())
-	delete(archive.infosBySize[file.Size], file)
 }
 
 func (c *controller) handleProgress(event m.Progress) {
