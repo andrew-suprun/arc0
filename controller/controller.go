@@ -7,17 +7,20 @@ import (
 )
 
 type controller struct {
-	roots    []m.Root
-	origin   m.Root
-	archives map[m.Root]*archive
-	folders  map[m.Path]*folder
+	roots  []m.Root
+	origin m.Root
+
+	pendingHashes   map[m.Hash]struct{}
+	duplicateHashes map[m.Hash]struct{}
+	absentHashes    map[m.Hash]struct{}
+	archives        map[m.Root]*archive
+	folders         map[m.Path]*folder
 
 	screenSize         m.ScreenSize
 	lastMouseEventTime time.Time
 
 	currentPath m.Path
 	entries     []w.File
-	pending     map[m.FileId]struct{}
 
 	feedback w.Feedback
 
@@ -29,6 +32,7 @@ type controller struct {
 type archive struct {
 	scanner       m.ArchiveScanner
 	files         map[m.FullName]*w.File
+	pending       map[m.FullName]*w.File
 	progress      m.Progress
 	progressState m.ProgressState
 	totalSize     uint64
@@ -49,18 +53,21 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		sortAscending: []bool{true, false, false, false},
 	}
 	c := &controller{
-		roots:    roots,
-		origin:   roots[0],
-		archives: map[m.Root]*archive{},
-		folders:  map[m.Path]*folder{"": rootFolder},
-		pending:  map[m.FileId]struct{}{},
+		roots:  roots,
+		origin: roots[0],
+
+		archives:        map[m.Root]*archive{},
+		folders:         map[m.Path]*folder{"": rootFolder},
+		pendingHashes:   map[m.Hash]struct{}{},
+		duplicateHashes: map[m.Hash]struct{}{},
+		absentHashes:    map[m.Hash]struct{}{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
 			scanner: scanner,
 			files:   map[m.FullName]*w.File{},
-		}
+			pending: map[m.FullName]*w.File{}}
 		scanner.Send(m.ScanArchive{})
 	}
 

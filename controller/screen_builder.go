@@ -3,7 +3,6 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
-	"log"
 	"strings"
 )
 
@@ -50,10 +49,7 @@ func (b *screenBuilder) buildEntries() {
 }
 
 func (b *screenBuilder) handleOrigin(archive *archive) {
-	for name, file := range archive.files {
-		if file == nil {
-			log.Printf("### handleOrigin: nil file: name=%q", name)
-		}
+	for _, file := range archive.files {
 		if file.Path == b.controller.currentPath {
 			b.controller.entries = append(b.controller.entries, w.File{
 				FileMeta: file.FileMeta,

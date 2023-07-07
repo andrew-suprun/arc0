@@ -151,6 +151,7 @@ func (c *controller) keepFile(file *w.File) {
 				keepFile := keepFiles[root]
 				if entry == keepFile {
 					if keepFile.FullName() != file.FullName() {
+						archive.ensureNameAvailable(m.FileId{Root: keepFile.Root, Path: file.Path, Name: file.Name})
 						archive.scanner.Send(m.RenameFile{FileId: keepFile.FileId, NewFullName: file.FullName()})
 						log.Printf("+++ rename.1 %v", m.RenameFile{FileId: keepFile.FileId, NewFullName: file.FullName()})
 						keepFile.Status = w.Pending
@@ -164,52 +165,12 @@ func (c *controller) keepFile(file *w.File) {
 		}
 	}
 
-	nameByHash := map[m.Hash]m.Name{}
-	for _, entry := range c.entries {
-		if entry.Name == file.Name && entry.Root == c.origin {
-			nameByHash[entry.Hash] = entry.Name
-		}
-	}
-	if len(nameByHash) == 0 {
-		nameByHash[file.Hash] = file.Name
-	}
-
-	for _, entry := range c.entries {
-		if entry.Name == file.Name {
-			if _, ok := nameByHash[entry.Hash]; !ok {
-				nameByHash[entry.Hash] = c.newName(entry.Name)
-			}
-			newName := nameByHash[entry.Hash]
-			if newName != entry.Name {
-				c.archives[entry.Root].scanner.Send(m.RenameFile{
-					FileId: entry.FileId,
-					NewFullName: m.FullName{
-						Path: entry.Path,
-						Name: newName,
-					},
-				})
-				log.Printf("+++ rename.2 %v", m.RenameFile{
-					FileId: entry.FileId,
-					NewFullName: m.FullName{
-						Path: entry.Path,
-						Name: newName,
-					},
-				})
-				entry.Status = w.Pending
-			}
-		}
-	}
-
 	for root, archive := range c.archives {
 		if _, ok := keepFiles[root]; !ok {
-			archive.scanner.Send(m.CopyFile{
-				From: file.FileId,
-				To:   root,
-			})
-			log.Printf("+++ copy %v", m.CopyFile{
-				From: file.FileId,
-				To:   root,
-			})
+			id := m.FileId{Root: root, Path: file.Path, Name: file.Name}
+			archive.ensureNameAvailable(id)
+			archive.scanner.Send(m.CopyFile{From: file.FileId, To: root})
+			log.Printf("+++ copy %v", m.CopyFile{From: file.FileId, To: root})
 			file.Status = w.Pending
 			archive.totalSize += file.Size
 		}
@@ -272,13 +233,24 @@ func (c *controller) deleteFile(file *w.File) {
 
 func (c *controller) deleteRegularFile(file *w.File) {
 	c.archives[file.Root].scanner.Send(m.DeleteFile(file.FileId))
+	file.Status = w.Pending
 }
 
 func (c *controller) deleteFolderFile(file *w.File) {
 	// TODO: need it?
 }
 
-func (c *controller) newName(name m.Name) m.Name {
+func (a *archive) ensureNameAvailable(id m.FileId) {
+	if file, ok := a.files[id.FullName()]; ok {
+		newName := a.newName(id.FullName())
+		a.scanner.Send(m.RenameFile{FileId: id, NewFullName: newName})
+		log.Printf("+++ rename.3 %v", m.RenameFile{FileId: id, NewFullName: newName})
+		file.Status = w.Pending
+		a.pending[newName] = file
+	}
+}
+
+func (a *archive) newName(name m.FullName) m.FullName {
 	parts := strings.Split(name.String(), ".")
 
 	var part string
@@ -296,14 +268,14 @@ func (c *controller) newName(name m.Name) m.Name {
 			newName = strings.Join(parts, ".")
 		}
 		exists := false
-		for _, entity := range c.entries {
-			if newName == entity.Name.String() {
+		for _, entity := range a.files {
+			if name.Path == entity.Path && newName == entity.Name.String() {
 				exists = true
 				break
 			}
 		}
 		if !exists {
-			return m.Name(newName)
+			return m.FullName{Path: name.Path, Name: m.Name(newName)}
 		}
 	}
 }
