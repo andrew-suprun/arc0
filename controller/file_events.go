@@ -42,7 +42,9 @@ func (c *controller) fileHashed(hashed m.FileHashed) {
 			if entry.Hash == "" {
 				return
 			}
-			entries = append(entries, entry)
+			if entry.Hash == hashed.Hash {
+				entries = append(entries, entry)
+			}
 		}
 		entriesByArchive[root] = entries
 	}

@@ -150,6 +150,9 @@ func (c *controller) keepFile(file *w.File) {
 
 	for root, archive := range c.archives {
 		for _, entry := range archive.files {
+			if entry == file {
+				continue
+			}
 			if entry.Hash == file.Hash {
 				keepFile := keepFiles[root]
 				if entry == keepFile {
@@ -161,10 +164,10 @@ func (c *controller) keepFile(file *w.File) {
 						keepFile.Status = w.Pending
 						keepFile.PendingName = fileName
 						archive.pending[fileName] = keepFile
-						log.Printf("+++ pending  old name %#v  new name %#v", keepFile.FileId, fileName)
 					}
 				} else {
-					archive.scanner.Send(m.DeleteFile(entry.FileId))
+					archive.scanner.Send(m.DeleteFile(entry.NewId()))
+					log.Printf("+++ delete.1 %#v", m.DeleteFile(entry.NewId()))
 					entry.Status = w.Pending
 				}
 			}
@@ -172,10 +175,14 @@ func (c *controller) keepFile(file *w.File) {
 	}
 
 	for root, archive := range c.archives {
+		if root == fileId.Root {
+			continue
+		}
 		if _, ok := keepFiles[root]; !ok {
-			archive.ensureNameAvailable(fileId)
-			archive.scanner.Send(m.CopyFile{From: file.FileId, To: root})
-			log.Printf("+++ copy %#v", m.CopyFile{From: file.FileId, To: root})
+			newId := m.FileId{Root: root, Path: fileName.Path, Name: fileName.Name}
+			archive.ensureNameAvailable(newId)
+			archive.scanner.Send(m.CopyFile{From: fileId, To: newId.Root})
+			log.Printf("+++ copy %#v", m.CopyFile{From: fileId, To: newId.Root})
 			file.Status = w.Pending
 			archive.totalSize += file.Size
 		}
@@ -238,6 +245,7 @@ func (c *controller) deleteFile(file *w.File) {
 
 func (c *controller) deleteRegularFile(file *w.File) {
 	c.archives[file.Root].scanner.Send(m.DeleteFile(file.FileId))
+	log.Printf("+++ delete.2 %#v", m.DeleteFile(file.FileId))
 	file.Status = w.Pending
 }
 
@@ -246,7 +254,6 @@ func (c *controller) deleteFolderFile(file *w.File) {
 }
 
 func (a *archive) ensureNameAvailable(id m.FileId) {
-	log.Printf("+++ ensureNameAvailable id %#v", id)
 	file := a.fileByNewName(id.FullName())
 	if file != nil {
 		newName := a.newName(id.FullName())
@@ -259,7 +266,7 @@ func (a *archive) ensureNameAvailable(id m.FileId) {
 }
 
 func (a *archive) newName(name m.FullName) m.FullName {
-	parts := strings.Split(name.String(), ".")
+	parts := strings.Split(name.Name.String(), ".")
 
 	var part string
 	if len(parts) == 1 {
