@@ -23,13 +23,15 @@ func (c *controller) buildScreen() *w.Screen {
 
 	folder := c.folders[c.currentPath]
 	screen := &w.Screen{
-		CurrentPath:   c.currentPath,
-		Progress:      c.progress(),
-		SelectedId:    folder.selectedId,
-		OffsetIdx:     folder.offsetIdx,
-		SortColumn:    folder.sortColumn,
-		SortAscending: folder.sortAscending,
-	}
+		CurrentPath:    c.currentPath,
+		Progress:       c.progress(),
+		SelectedId:     folder.selectedId,
+		OffsetIdx:      folder.offsetIdx,
+		SortColumn:     folder.sortColumn,
+		SortAscending:  folder.sortAscending,
+		PendingFiles:   c.pendingFiles,
+		DuplicateFiles: c.duplicateFiles,
+		AbsentFiles:    c.absentFiles}
 
 	screen.Entries = make([]w.File, len(c.entries))
 	copy(screen.Entries, c.entries)
@@ -40,6 +42,7 @@ func (b *screenBuilder) buildEntries() {
 	b.controller.entries = b.controller.entries[:0]
 
 	b.handleOrigin(b.controller.archives[b.controller.origin])
+	b.stats()
 
 	for _, root := range b.controller.roots[1:] {
 		b.handleCopy(b.controller.archives[root])
@@ -162,4 +165,25 @@ func (c *controller) progress() []w.ProgressInfo {
 		}
 	}
 	return infos
+}
+
+func (b *screenBuilder) stats() {
+	pendingHashes := map[m.Hash]struct{}{}
+	duplicateHashes := map[m.Hash]struct{}{}
+	absentHashes := map[m.Hash]struct{}{}
+	for _, archive := range b.controller.archives {
+		for _, file := range archive.files {
+			switch file.Status {
+			case w.Pending:
+				pendingHashes[file.Hash] = struct{}{}
+			case w.Duplicate:
+				duplicateHashes[file.Hash] = struct{}{}
+			case w.Absent:
+				absentHashes[file.Hash] = struct{}{}
+			}
+		}
+	}
+	b.controller.pendingFiles = len(pendingHashes)
+	b.controller.duplicateFiles = len(duplicateHashes)
+	b.controller.absentFiles = len(absentHashes)
 }

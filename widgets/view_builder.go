@@ -27,6 +27,7 @@ func (s *Screen) View() (Widget, Feedback) {
 		s.title(),
 		s.folderView(&feedback),
 		s.progress(),
+		s.fileStats(),
 	)
 	return widget, feedback
 }
@@ -161,6 +162,28 @@ func (s *Screen) progress() Widget {
 	return Styled(styleStatusLine,
 		Column(Constraint{Size: Size{Width: 0, Height: len(stats)}, Flex: Flex{X: 1, Y: 0}}, stats...),
 	)
+}
+
+func (s *Screen) fileStats() Widget {
+	if s.DuplicateFiles == 0 && s.AbsentFiles == 0 && s.PendingFiles == 0 {
+		return Text(" All Clear").Flex(1)
+	}
+	stats := []Widget{Text(" Stats:")}
+	if s.DuplicateFiles > 0 {
+		stats = append(stats, Text(fmt.Sprintf(" Duplicates: %d", s.DuplicateFiles)))
+	}
+	if s.AbsentFiles > 0 {
+		stats = append(stats, Text(fmt.Sprintf(" Absent: %d", s.AbsentFiles)))
+	}
+	if s.PendingFiles > 0 {
+		stats = append(stats, Text(fmt.Sprintf(" Pending: %d", s.PendingFiles)))
+	}
+	stats = append(stats, Text("").Flex(1))
+	return Styled(
+		styleAppTitle,
+		Row(Constraint{Size: Size{Width: 0, Height: 1}, Flex: Flex{X: 1, Y: 0}}, stats...),
+	)
+
 }
 
 func formatSize(size uint64) string {

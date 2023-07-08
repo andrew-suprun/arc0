@@ -10,17 +10,17 @@ type controller struct {
 	roots  []m.Root
 	origin m.Root
 
-	pendingHashes   map[m.Hash]struct{}
-	duplicateHashes map[m.Hash]struct{}
-	absentHashes    map[m.Hash]struct{}
-	archives        map[m.Root]*archive
-	folders         map[m.Path]*folder
+	archives map[m.Root]*archive
+	folders  map[m.Path]*folder
 
 	screenSize         m.ScreenSize
 	lastMouseEventTime time.Time
 
-	currentPath m.Path
-	entries     []w.File
+	currentPath    m.Path
+	entries        []w.File
+	pendingFiles   int
+	duplicateFiles int
+	absentFiles    int
 
 	feedback w.Feedback
 
@@ -56,11 +56,8 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		roots:  roots,
 		origin: roots[0],
 
-		archives:        map[m.Root]*archive{},
-		folders:         map[m.Path]*folder{"": rootFolder},
-		pendingHashes:   map[m.Hash]struct{}{},
-		duplicateHashes: map[m.Hash]struct{}{},
-		absentHashes:    map[m.Hash]struct{}{},
+		archives: map[m.Root]*archive{},
+		folders:  map[m.Path]*folder{"": rootFolder},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
