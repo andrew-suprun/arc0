@@ -101,8 +101,6 @@ func (s *Screen) statusString(file *File) string {
 		return " Duplicate"
 	case Absent:
 		return " Absent"
-	case Conflict:
-		return " Conflict"
 	}
 	return "UNKNOWN"
 }
@@ -201,7 +199,7 @@ func (c *Screen) statusColor(file *File) byte {
 		return 195
 	case Pending:
 		return 214
-	case Duplicate, Absent, Conflict:
+	case Duplicate, Absent:
 		return 196
 	}
 	return 231

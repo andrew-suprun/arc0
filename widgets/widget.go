@@ -117,7 +117,6 @@ const (
 	Pending
 	Duplicate
 	Absent
-	Conflict
 )
 
 type ProgressInfo struct {
@@ -150,8 +149,6 @@ func (s Status) String() string {
 		return "Duplicate"
 	case Absent:
 		return "Absent"
-	case Conflict:
-		return "Conflict"
 	}
 	return "UNKNOWN FILE STATUS"
 }

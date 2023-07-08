@@ -32,55 +32,56 @@ func (c *controller) fileHashed(hashed m.FileHashed) {
 	archive.totalHashed += file.Size
 	archive.progress.HandledSize = 0
 
-	entriesByArchive := map[m.Root][]*w.File{}
-	for root, archive := range c.archives {
-		entries := []*w.File{}
+	hashes := map[m.Hash]struct{}{}
+	bySize := []*w.File{}
+	for _, archive := range c.archives {
 		for _, entry := range archive.files {
-			if entry.Size != file.Size {
-				continue
-			}
-			if entry.Hash == "" {
-				return
-			}
-			if entry.Hash == hashed.Hash {
-				entries = append(entries, entry)
+			if entry.Size == file.Size {
+				if entry.Hash == "" {
+					return
+				}
+				bySize = append(bySize, entry)
+				hashes[entry.Hash] = struct{}{}
 			}
 		}
-		entriesByArchive[root] = entries
 	}
-	originEntries := entriesByArchive[c.origin]
-	if len(originEntries) == 0 {
-		for root, entries := range entriesByArchive {
-			if root != c.origin {
-				for _, entry := range entries {
-					entry.Status = w.Absent
+
+	for hash := range hashes {
+		byHash := []*w.File{}
+		for _, entry := range bySize {
+			if entry.Hash == hash {
+				byHash = append(byHash, entry)
+			}
+		}
+
+		entriesByArchive := map[m.Root][]*w.File{}
+		for _, entry := range byHash {
+			entriesByArchive[entry.Root] = append(entriesByArchive[entry.Root], entry)
+		}
+		originEntries := entriesByArchive[c.origin]
+
+		if len(originEntries) == 0 {
+			for root, entries := range entriesByArchive {
+				if root != c.origin {
+					for _, entry := range entries {
+						entry.Status = w.Absent
+					}
 				}
 			}
-		}
-	} else if len(originEntries) == 1 {
-		c.keepFile(originEntries[0])
-	} else {
-		for _, entry := range originEntries {
-			entry.Status = w.Duplicate
+		} else if len(originEntries) == 1 {
+			c.keepFile(originEntries[0])
+		} else {
+			for _, entry := range originEntries {
+				entry.Status = w.Duplicate
+				log.Printf("^^^ dup: %s", entry)
+			}
 		}
 	}
 }
 
-var values = map[m.Root]float64{"origin": 0, "copy 1": 0, "copy 2": 0}
-
 func (c *controller) handleProgress(event m.Progress) {
 	archive := c.archives[event.Root]
 	archive.progress = event
-
-	if event.ProgressState == m.CopyingFile {
-		value := float64(archive.totalCopied+event.HandledSize) / float64(archive.copySize)
-		log.Printf("--- handleProgress: root: %q, state: %q, value: %f, handled %d, total size: %d, total hashed: %d, copy size: %d, total copied: %d",
-			event.Root, event.ProgressState, value, event.HandledSize, archive.totalSize, archive.totalHashed, archive.copySize, archive.totalCopied)
-		if value < values[event.Root] {
-			panic("####")
-		}
-		values[event.Root] = value
-	}
 
 	if event.ProgressState == m.FileTreeHashed {
 		archive.progressState = m.FileTreeHashed
