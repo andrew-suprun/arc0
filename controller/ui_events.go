@@ -49,14 +49,14 @@ func (c *controller) selectLast() {
 
 func (c *controller) enter() {
 	selectedId := c.folders[c.currentPath].selectedId
-	file := c.archives[selectedId.Root].files[selectedId.FullName()]
+	file := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 	if file == nil {
 		return
 	}
 	if file.FileKind == w.FileFolder {
 		c.currentPath = m.Path(file.FullName().String())
 	} else {
-		exec.Command("open", file.AbsName()).Start()
+		exec.Command("open", file.String()).Start()
 	}
 }
 
@@ -83,9 +83,9 @@ func (c *controller) esc() {
 
 func (c *controller) revealInFinder() {
 	selectedId := c.folders[c.currentPath].selectedId
-	file := c.archives[selectedId.Root].files[selectedId.FullName()]
+	file := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 	if file != nil {
-		exec.Command("open", "-R", file.AbsName()).Start()
+		exec.Command("open", "-R", file.String()).Start()
 	}
 }
 
@@ -116,7 +116,7 @@ func (c *controller) shiftOffset(lines int) {
 
 func (c *controller) keepSelected() {
 	selectedId := c.folders[c.currentPath].selectedId
-	selectedFile := c.archives[selectedId.Root].files[selectedId.FullName()]
+	selectedFile := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 	c.keepFile(selectedFile)
 }
 
@@ -124,18 +124,21 @@ func (c *controller) keepFile(file *w.File) {
 	if file == nil || file.FileKind != w.FileRegular || file.Hash == "" || file.Status == w.Pending {
 		return
 	}
-	log.Printf("### keep %v", file)
+	fileId := file.NewId()
+	fileName := fileId.FullName()
+	log.Printf("### keep %#v", fileId)
 
 	keepFiles := map[m.Root]*w.File{}
 	for root, archive := range c.archives {
 		for _, entry := range archive.files {
 			if entry.Hash == file.Hash {
+				name := entry.NewName()
 				if prevFile, ok := keepFiles[root]; ok {
-					if entry.FullName() == file.FullName() {
+					if name == fileId.FullName() {
 						keepFiles[root] = entry
-					} else if entry.Path == file.Path && entry.Path != prevFile.Path {
+					} else if name.Path == fileId.Path && name.Path != prevFile.Path {
 						keepFiles[root] = entry
-					} else if entry.Name == file.Name && entry.Name != prevFile.Name {
+					} else if name.Name == fileId.Name && name.Name != prevFile.Name {
 						keepFiles[root] = entry
 					}
 				} else {
@@ -150,15 +153,18 @@ func (c *controller) keepFile(file *w.File) {
 			if entry.Hash == file.Hash {
 				keepFile := keepFiles[root]
 				if entry == keepFile {
-					if keepFile.FullName() != file.FullName() {
-						archive.ensureNameAvailable(m.FileId{Root: keepFile.Root, Path: file.Path, Name: file.Name})
-						archive.scanner.Send(m.RenameFile{FileId: keepFile.FileId, NewFullName: file.FullName()})
-						log.Printf("+++ rename.1 %v", m.RenameFile{FileId: keepFile.FileId, NewFullName: file.FullName()})
+					if fileName != keepFile.FullName() {
+						newId := m.FileId{Root: keepFile.Root, Path: fileId.Path, Name: fileId.Name}
+						archive.ensureNameAvailable(newId)
+						archive.scanner.Send(m.RenameFile{FileId: keepFile.NewId(), NewFullName: fileName})
+						log.Printf("+++ rename.1 %#v", m.RenameFile{FileId: keepFile.NewId(), NewFullName: fileName})
 						keepFile.Status = w.Pending
+						keepFile.PendingName = fileName
+						archive.pending[fileName] = keepFile
+						log.Printf("+++ pending  old name %#v  new name %#v", keepFile.FileId, fileName)
 					}
 				} else {
 					archive.scanner.Send(m.DeleteFile(entry.FileId))
-					log.Printf("+++ delete %v", m.DeleteFile(entry.FileId))
 					entry.Status = w.Pending
 				}
 			}
@@ -167,10 +173,9 @@ func (c *controller) keepFile(file *w.File) {
 
 	for root, archive := range c.archives {
 		if _, ok := keepFiles[root]; !ok {
-			id := m.FileId{Root: root, Path: file.Path, Name: file.Name}
-			archive.ensureNameAvailable(id)
+			archive.ensureNameAvailable(fileId)
 			archive.scanner.Send(m.CopyFile{From: file.FileId, To: root})
-			log.Printf("+++ copy %v", m.CopyFile{From: file.FileId, To: root})
+			log.Printf("+++ copy %#v", m.CopyFile{From: file.FileId, To: root})
 			file.Status = w.Pending
 			archive.totalSize += file.Size
 		}
@@ -179,7 +184,7 @@ func (c *controller) keepFile(file *w.File) {
 
 func (c *controller) tab() {
 	selectedId := c.folders[c.currentPath].selectedId
-	selected := c.archives[selectedId.Root].files[selectedId.FullName()]
+	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 
 	if selected.FileKind != w.FileRegular || selected.Status != w.Duplicate {
 		return
@@ -211,7 +216,7 @@ func (c *controller) tab() {
 
 func (c *controller) deleteSelected() {
 	selectedId := c.folders[c.currentPath].selectedId
-	selected := c.archives[selectedId.Root].files[selectedId.FullName()]
+	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 	c.deleteFile(selected)
 }
 
@@ -241,11 +246,14 @@ func (c *controller) deleteFolderFile(file *w.File) {
 }
 
 func (a *archive) ensureNameAvailable(id m.FileId) {
-	if file, ok := a.files[id.FullName()]; ok {
+	log.Printf("+++ ensureNameAvailable id %#v", id)
+	file := a.fileByNewName(id.FullName())
+	if file != nil {
 		newName := a.newName(id.FullName())
 		a.scanner.Send(m.RenameFile{FileId: id, NewFullName: newName})
-		log.Printf("+++ rename.3 %v", m.RenameFile{FileId: id, NewFullName: newName})
+		log.Printf("+++ rename.2 %#v", m.RenameFile{FileId: id, NewFullName: newName})
 		file.Status = w.Pending
+		file.PendingName = newName
 		a.pending[newName] = file
 	}
 }

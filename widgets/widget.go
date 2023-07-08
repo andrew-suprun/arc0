@@ -82,6 +82,25 @@ type File struct {
 	FileKind
 	m.Hash
 	Status
+	PendingName m.FullName
+}
+
+func (f *File) NewId() m.FileId {
+	if f.Status == Pending {
+		return m.FileId{
+			Root: f.Root,
+			Path: f.PendingName.Path,
+			Name: f.PendingName.Name,
+		}
+	}
+	return f.FileId
+}
+
+func (f *File) NewName() m.FullName {
+	if f.Status == Pending {
+		return f.PendingName
+	}
+	return f.FileId.FullName()
 }
 
 type FileKind int

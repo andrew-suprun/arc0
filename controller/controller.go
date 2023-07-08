@@ -67,7 +67,8 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		c.archives[path] = &archive{
 			scanner: scanner,
 			files:   map[m.FullName]*w.File{},
-			pending: map[m.FullName]*w.File{}}
+			pending: map[m.FullName]*w.File{},
+		}
 		scanner.Send(m.ScanArchive{})
 	}
 
@@ -88,4 +89,19 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		c.feedback = feedback
 		renderer.Show()
 	}
+}
+
+func (a *archive) fileByFullName(name m.FullName) *w.File {
+	return a.files[name]
+}
+
+func (a *archive) fileByNewName(name m.FullName) *w.File {
+	if result, ok := a.pending[name]; ok {
+		return result
+	}
+	result := a.files[name]
+	if result != nil && result.Status != w.Pending {
+		return result
+	}
+	return nil
 }

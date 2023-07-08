@@ -39,7 +39,7 @@ type FileId struct {
 	Name
 }
 
-func (id FileId) AbsName() string {
+func (id FileId) String() string {
 	return filepath.Join(id.Root.String(), id.Path.String(), id.Name.String())
 }
 

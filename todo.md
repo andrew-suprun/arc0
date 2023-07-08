@@ -1,3 +1,4 @@
+* properly handle file events
 * revert back file stats
 * fix a -> b; b -> a renamings
 * ??? move Screen{} and View() into separate package
@@ -5,7 +6,7 @@
 * file copied/deleted/moved events
 * file operations
 * Separate Scroll into Scroll and Sized
-* add descriptors to ScanErrors
+* add descriptions to ScanErrors
 * remove directories that only contain .DS_Store and ._* files
 * ??? store hashes as hex encoded strings
 * ??? handle 'keep all' event 

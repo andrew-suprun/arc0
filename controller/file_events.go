@@ -25,8 +25,9 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 }
 
 func (c *controller) fileHashed(hashed m.FileHashed) {
+	log.Printf("Event %v", hashed)
 	archive := c.archives[hashed.Root]
-	file := archive.files[hashed.FullName()]
+	file := archive.fileByFullName(hashed.FullName())
 	file.Hash = hashed.Hash
 	archive.totalHashed += file.Size
 	archive.progress.HandledSize = 0
@@ -63,6 +64,33 @@ func (c *controller) fileHashed(hashed m.FileHashed) {
 	}
 }
 
+func (c *controller) fileRenamed(renamed m.FileRenamed) {
+	log.Printf("Event %v", renamed)
+	// TODO
+
+	// c.removeFolderFile(renamed.FileId)
+}
+
+func (c *controller) fileDeleted(deleted m.FileDeleted) {
+	log.Printf("Event %v", deleted)
+	c.removeFolderFile(m.FileId(deleted))
+}
+
+func (c *controller) fileCopied(copied m.FileCopied) {
+	log.Printf("Event %v", copied)
+	fromArchive := c.archives[copied.From.Root]
+	file := fromArchive.files[copied.From.FullName()]
+	file.Status = w.Resolved
+
+	toArchive := c.archives[copied.To]
+	// toArchive.pending[copied.From.FullName()] = file
+	toArchive.totalHashed += file.Size
+	toArchive.progress.HandledSize = 0
+	if toArchive.copySize == fromArchive.totalCopied {
+		toArchive.copySize, fromArchive.totalCopied = 0, 0
+	}
+}
+
 func (c *controller) makeSelectedVisible() {
 	selectedIdx := c.selectedIdx()
 	offsetIdx := c.folders[c.currentPath].offsetIdx
@@ -77,35 +105,9 @@ func (c *controller) makeSelectedVisible() {
 	c.folders[c.currentPath].offsetIdx = offsetIdx
 }
 
-func (c *controller) fileRenamed(renamed m.FileRenamed) {
-	archive := c.archives[renamed.Root]
-	file := archive.files[renamed.FullName()]
-	archive.files[renamed.NewFullName] = file
-
-	c.removeFolderFile(renamed.FileId)
-}
-
-func (c *controller) fileDeleted(deleted m.FileDeleted) {
-	c.removeFolderFile(m.FileId(deleted))
-}
-
-func (c *controller) fileCopied(copied m.FileCopied) {
-	fromArchive := c.archives[copied.From.Root]
-	file := fromArchive.files[copied.From.FullName()]
-	file.Status = w.Resolved
-
-	toArchive := c.archives[copied.To]
-	toArchive.files[copied.From.FullName()] = file
-	toArchive.totalHashed += file.Size
-	toArchive.progress.HandledSize = 0
-	if toArchive.copySize == fromArchive.totalCopied {
-		toArchive.copySize, fromArchive.totalCopied = 0, 0
-	}
-}
-
 func (c *controller) removeFolderFile(id m.FileId) {
-	archive := c.archives[id.Root]
-	delete(archive.files, id.FullName())
+	// archive := c.archives[id.Root]
+	// delete(archive.files, id.FullName())
 }
 
 func (c *controller) handleProgress(event m.Progress) {
