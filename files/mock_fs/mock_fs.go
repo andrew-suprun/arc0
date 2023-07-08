@@ -210,6 +210,8 @@ var metaMap = map[m.Root]map[string]m.Hash{
 		"qqq.txt":         "hhhh",
 		"xxx.txt":         "xxxx",
 		"yyy.txt":         "yyyy",
+		"0001.txt":        "0001",
+		"0002.txt":        "0002",
 	},
 	"copy 1": {
 		"xxx.txt":     "xxxx",

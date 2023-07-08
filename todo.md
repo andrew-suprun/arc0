@@ -1,3 +1,4 @@
+* fix problem with flaky dups detection
 * properly handle file events
 * revert back file stats
 * fix a -> b; b -> a renamings

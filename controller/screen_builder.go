@@ -151,25 +151,15 @@ func (c *controller) progress() []w.ProgressInfo {
 	var value float64
 	for _, root := range c.roots {
 		archive := c.archives[root]
-		switch archive.progressState {
-		case m.FileTreeScanned:
+		if archive.progressState == m.FileTreeScanned {
 			tab = " Hashing"
 			value = float64(archive.totalHashed+archive.progress.HandledSize) / float64(archive.totalSize)
-		case m.FileTreeHashed:
+			infos = append(infos, w.ProgressInfo{Root: root, Tab: tab, Value: value})
+		} else if archive.progressState == m.FileTreeHashed && archive.copySize != 0 {
 			tab = " Copying"
 			value = float64(archive.totalCopied+archive.progress.HandledSize) / float64(archive.copySize)
-		default:
-			continue
+			infos = append(infos, w.ProgressInfo{Root: root, Tab: tab, Value: value})
 		}
-		switch archive.progress.ProgressState {
-		case m.HashingFile:
-		case m.CopyingFile:
-		}
-		infos = append(infos, w.ProgressInfo{
-			Root:  root,
-			Tab:   tab,
-			Value: value,
-		})
 	}
 	return infos
 }

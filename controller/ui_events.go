@@ -184,7 +184,7 @@ func (c *controller) keepFile(file *w.File) {
 			archive.scanner.Send(m.CopyFile{From: fileId, To: newId.Root})
 			log.Printf("+++ copy %#v", m.CopyFile{From: fileId, To: newId.Root})
 			file.Status = w.Pending
-			archive.totalSize += file.Size
+			archive.copySize += file.Size
 		}
 	}
 }

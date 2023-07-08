@@ -66,6 +66,27 @@ func (c *controller) fileHashed(hashed m.FileHashed) {
 	}
 }
 
+var values = map[m.Root]float64{"origin": 0, "copy 1": 0, "copy 2": 0}
+
+func (c *controller) handleProgress(event m.Progress) {
+	archive := c.archives[event.Root]
+	archive.progress = event
+
+	if event.ProgressState == m.CopyingFile {
+		value := float64(archive.totalCopied+event.HandledSize) / float64(archive.copySize)
+		log.Printf("--- handleProgress: root: %q, state: %q, value: %f, handled %d, total size: %d, total hashed: %d, copy size: %d, total copied: %d",
+			event.Root, event.ProgressState, value, event.HandledSize, archive.totalSize, archive.totalHashed, archive.copySize, archive.totalCopied)
+		if value < values[event.Root] {
+			panic("####")
+		}
+		values[event.Root] = value
+	}
+
+	if event.ProgressState == m.FileTreeHashed {
+		archive.progressState = m.FileTreeHashed
+	}
+}
+
 func (c *controller) fileRenamed(renamed m.FileRenamed) {
 	log.Printf("Event %v", renamed)
 	// TODO
@@ -85,12 +106,12 @@ func (c *controller) fileCopied(copied m.FileCopied) {
 	file.Status = w.Resolved
 
 	toArchive := c.archives[copied.To]
-	// toArchive.pending[copied.From.FullName()] = file
-	toArchive.totalHashed += file.Size
+	toArchive.totalCopied += file.Size
 	toArchive.progress.HandledSize = 0
-	if toArchive.copySize == fromArchive.totalCopied {
-		toArchive.copySize, fromArchive.totalCopied = 0, 0
+	if toArchive.copySize == toArchive.totalCopied {
+		toArchive.copySize, toArchive.totalCopied = 0, 0
 	}
+	log.Printf("### fileCopied: root: %q, copy size: %d, totalCopied: %d", copied.To, toArchive.copySize, toArchive.totalCopied)
 }
 
 func (c *controller) makeSelectedVisible() {
@@ -110,14 +131,6 @@ func (c *controller) makeSelectedVisible() {
 func (c *controller) removeFolderFile(id m.FileId) {
 	// archive := c.archives[id.Root]
 	// delete(archive.files, id.FullName())
-}
-
-func (c *controller) handleProgress(event m.Progress) {
-	archive := c.archives[event.Root]
-	archive.progress = event
-	if event.ProgressState == m.FileTreeScanned || event.ProgressState == m.FileTreeHashed {
-		archive.progressState = event.ProgressState
-	}
 }
 
 func (c *controller) selectedIdx() int {
