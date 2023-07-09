@@ -13,7 +13,7 @@ import (
 )
 
 func (c *controller) mouseTarget(cmd any) {
-	folder := c.folders[c.currentPath]
+	folder := c.currentFolder()
 	switch cmd := cmd.(type) {
 	case m.SelectFile:
 		if folder.selectedId == m.FileId(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
@@ -36,20 +36,29 @@ func (c *controller) mouseTarget(cmd any) {
 }
 
 func (c *controller) selectFirst() {
-	folder := c.folders[c.currentPath]
+	folder := c.currentFolder()
 	folder.selectedId = c.entries[0].FileId
 	folder.offsetIdx = 0
 }
 
 func (c *controller) selectLast() {
-	folder := c.folders[c.currentPath]
+	folder := c.currentFolder()
 	folder.selectedId = c.entries[len(c.entries)-1].FileId
 	c.makeSelectedVisible()
 }
 
 func (c *controller) enter() {
-	selectedId := c.folders[c.currentPath].selectedId
-	file := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
+	selectedId := c.currentFolder().selectedId
+	log.Printf("### enter: selectedId: %#v", selectedId)
+	var file *w.File
+	for i := range c.entries {
+		if c.entries[i].FileId == selectedId {
+			file = &c.entries[i]
+			break
+		}
+	}
+
+	log.Printf("### enter: file: %q", file)
 	if file == nil {
 		return
 	}
@@ -82,7 +91,7 @@ func (c *controller) esc() {
 }
 
 func (c *controller) revealInFinder() {
-	selectedId := c.folders[c.currentPath].selectedId
+	selectedId := c.currentFolder().selectedId
 	file := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 	if file != nil {
 		exec.Command("open", "-R", file.String()).Start()
@@ -90,7 +99,7 @@ func (c *controller) revealInFinder() {
 }
 
 func (c *controller) moveSelection(lines int) {
-	folder := c.folders[c.currentPath]
+	folder := c.currentFolder()
 
 	selectedIdx, _ := m.Find(c.entries, func(entry w.File) bool { return entry.FileId == folder.selectedId })
 	selectedIdx += lines
@@ -105,7 +114,7 @@ func (c *controller) moveSelection(lines int) {
 }
 
 func (c *controller) shiftOffset(lines int) {
-	folder := c.folders[c.currentPath]
+	folder := c.currentFolder()
 	folder.offsetIdx += lines
 	if folder.offsetIdx < 0 {
 		folder.offsetIdx = 0
@@ -115,7 +124,7 @@ func (c *controller) shiftOffset(lines int) {
 }
 
 func (c *controller) keepSelected() {
-	selectedId := c.folders[c.currentPath].selectedId
+	selectedId := c.currentFolder().selectedId
 	selectedFile := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 	c.keepFile(selectedFile)
 }
@@ -190,7 +199,7 @@ func (c *controller) keepFile(file *w.File) {
 }
 
 func (c *controller) tab() {
-	selectedId := c.folders[c.currentPath].selectedId
+	selectedId := c.currentFolder().selectedId
 	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 
 	if selected.FileKind != w.FileRegular || selected.Status != w.Duplicate {
@@ -216,13 +225,13 @@ func (c *controller) tab() {
 	}
 	id := sameHash[idx]
 	c.currentPath = id.Path
-	c.folders[c.currentPath].selectedId = id
+	c.currentFolder().selectedId = id
 
 	c.makeSelectedVisible()
 }
 
 func (c *controller) deleteSelected() {
-	selectedId := c.folders[c.currentPath].selectedId
+	selectedId := c.currentFolder().selectedId
 	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 	c.deleteFile(selected)
 }

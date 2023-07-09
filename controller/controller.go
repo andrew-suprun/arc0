@@ -49,15 +49,12 @@ type folder struct {
 }
 
 func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
-	rootFolder := &folder{
-		sortAscending: []bool{true, false, false, false},
-	}
 	c := &controller{
 		roots:  roots,
 		origin: roots[0],
 
 		archives: map[m.Root]*archive{},
-		folders:  map[m.Path]*folder{"": rootFolder},
+		folders:  map[m.Path]*folder{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
@@ -86,6 +83,17 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		c.feedback = feedback
 		renderer.Show()
 	}
+}
+
+func (c *controller) currentFolder() *folder {
+	curFolder, ok := c.folders[c.currentPath]
+	if !ok {
+		curFolder = &folder{
+			sortAscending: []bool{true, false, false, false},
+		}
+		c.folders[c.currentPath] = curFolder
+	}
+	return curFolder
 }
 
 func (a *archive) fileByFullName(name m.FullName) *w.File {

@@ -117,7 +117,7 @@ func (c *controller) fileCopied(copied m.FileCopied) {
 
 func (c *controller) makeSelectedVisible() {
 	selectedIdx := c.selectedIdx()
-	offsetIdx := c.folders[c.currentPath].offsetIdx
+	offsetIdx := c.currentFolder().offsetIdx
 
 	if offsetIdx > selectedIdx {
 		offsetIdx = selectedIdx
@@ -126,7 +126,7 @@ func (c *controller) makeSelectedVisible() {
 		offsetIdx = selectedIdx + 1 - c.feedback.FileTreeLines
 	}
 
-	c.folders[c.currentPath].offsetIdx = offsetIdx
+	c.currentFolder().offsetIdx = offsetIdx
 }
 
 func (c *controller) removeFolderFile(id m.FileId) {
@@ -135,7 +135,7 @@ func (c *controller) removeFolderFile(id m.FileId) {
 }
 
 func (c *controller) selectedIdx() int {
-	selectedId := c.folders[c.currentPath].selectedId
+	selectedId := c.currentFolder().selectedId
 	if idx, found := m.Find(c.entries, func(entry w.File) bool { return entry.FileId == selectedId }); found {
 		return idx
 	}

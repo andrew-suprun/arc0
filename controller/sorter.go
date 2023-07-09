@@ -2,16 +2,18 @@ package controller
 
 import (
 	w "arch/widgets"
+	"log"
 	"sort"
 	"strings"
 )
 
 func (c *controller) sort() {
-	if len(c.entries) == 0 {
-		return
+	log.Printf("### sort: currentPath=%q", c.currentPath)
+	for path := range c.folders {
+		log.Printf("### sort: path=%q", path)
 	}
 
-	folder := c.folders[c.currentPath]
+	folder := c.currentFolder()
 	files := sliceBy(c.entries)
 	var slice sort.Interface
 	switch folder.sortColumn {

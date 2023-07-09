@@ -20,8 +20,11 @@ func (c *controller) buildScreen() *w.Screen {
 		absentHashes: map[m.Hash]struct{}{},
 	}
 	builder.buildEntries()
+	if c.currentFolder().selectedId.Name == "" {
+		c.selectFirst()
+	}
 
-	folder := c.folders[c.currentPath]
+	folder := c.currentFolder()
 	screen := &w.Screen{
 		CurrentPath:    c.currentPath,
 		Progress:       c.progress(),
