@@ -37,14 +37,18 @@ func (c *controller) mouseTarget(cmd any) {
 
 func (c *controller) selectFirst() {
 	folder := c.currentFolder()
-	folder.selectedId = c.entries[0].FileId
-	folder.offsetIdx = 0
+	if len(c.entries) > 0 {
+		folder.selectedId = c.entries[0].FileId
+		folder.offsetIdx = 0
+	}
 }
 
 func (c *controller) selectLast() {
 	folder := c.currentFolder()
-	folder.selectedId = c.entries[len(c.entries)-1].FileId
-	c.makeSelectedVisible()
+	if len(c.entries) > 0 {
+		folder.selectedId = c.entries[len(c.entries)-1].FileId
+		c.makeSelectedVisible()
+	}
 }
 
 func (c *controller) enter() {
