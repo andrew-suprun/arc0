@@ -233,7 +233,6 @@ var metaMap = map[m.Root]map[string]m.Hash{
 	},
 	"copy 2": {
 		"xxx.txt":         "xxxx",
-		"a/b/c/f.txt":     "hhhh",
 		"a/b/e/x.txt":     "gggg",
 		"a/b/e/g.txt":     "tttt",
 		"x":               "asdfg",

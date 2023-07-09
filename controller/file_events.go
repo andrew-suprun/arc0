@@ -61,20 +61,11 @@ func (c *controller) fileHashed(hashed m.FileHashed) {
 		originEntries := entriesByArchive[c.origin]
 
 		if len(originEntries) == 0 {
-			for root, entries := range entriesByArchive {
-				if root != c.origin {
-					for _, entry := range entries {
-						entry.Status = w.Absent
-					}
-				}
-			}
+			c.hashStatuses[hash] = w.Absent
 		} else if len(originEntries) == 1 {
 			c.keepFile(originEntries[0])
 		} else {
-			for _, entry := range originEntries {
-				entry.Status = w.Duplicate
-				log.Printf("^^^ dup: %s", entry)
-			}
+			c.hashStatuses[hash] = w.Duplicate
 		}
 	}
 }

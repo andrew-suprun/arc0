@@ -16,11 +16,9 @@ type controller struct {
 	screenSize         m.ScreenSize
 	lastMouseEventTime time.Time
 
-	currentPath    m.Path
-	entries        []w.File
-	pendingFiles   int
-	duplicateFiles int
-	absentFiles    int
+	currentPath  m.Path
+	entries      []w.File
+	hashStatuses map[m.Hash]w.Status
 
 	feedback w.Feedback
 
@@ -53,8 +51,9 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		roots:  roots,
 		origin: roots[0],
 
-		archives: map[m.Root]*archive{},
-		folders:  map[m.Path]*folder{},
+		archives:     map[m.Root]*archive{},
+		folders:      map[m.Path]*folder{},
+		hashStatuses: map[m.Hash]w.Status{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)

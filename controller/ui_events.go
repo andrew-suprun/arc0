@@ -140,6 +140,7 @@ func (c *controller) keepFile(file *w.File) {
 	fileId := file.NewId()
 	fileName := fileId.FullName()
 	log.Printf("### keep %#v", fileId)
+	pending := false
 
 	keepFiles := map[m.Root]*w.File{}
 	for root, archive := range c.archives {
@@ -174,14 +175,21 @@ func (c *controller) keepFile(file *w.File) {
 						archive.ensureNameAvailable(newId)
 						archive.scanner.Send(m.RenameFile{FileId: keepFile.NewId(), NewFullName: fileName})
 						log.Printf("+++ rename.1 %#v", m.RenameFile{FileId: keepFile.NewId(), NewFullName: fileName})
+						pending = true
 						keepFile.Status = w.Pending
 						keepFile.PendingName = fileName
 						archive.pending[fileName] = keepFile
 					}
 				} else {
-					archive.scanner.Send(m.DeleteFile(entry.NewId()))
-					log.Printf("+++ delete.1 %#v", m.DeleteFile(entry.NewId()))
-					entry.Status = w.Pending
+					id := entry.NewId()
+					name := id.FullName()
+					archive.scanner.Send(m.DeleteFile(id))
+					log.Printf("+++ delete.1 %#v", m.DeleteFile(id))
+
+					delete(archive.files, name)
+					delete(archive.pending, name)
+					// pending = true
+					// entry.Status = w.Pending
 				}
 			}
 		}
@@ -196,9 +204,13 @@ func (c *controller) keepFile(file *w.File) {
 			archive.ensureNameAvailable(newId)
 			archive.scanner.Send(m.CopyFile{From: fileId, To: newId.Root})
 			log.Printf("+++ copy %#v", m.CopyFile{From: fileId, To: newId.Root})
+			pending = true
 			file.Status = w.Pending
 			archive.copySize += file.Size
 		}
+	}
+	if pending {
+		c.hashStatuses[file.Hash] = w.Pending
 	}
 }
 
@@ -257,9 +269,16 @@ func (c *controller) deleteFile(file *w.File) {
 }
 
 func (c *controller) deleteRegularFile(file *w.File) {
-	c.archives[file.Root].scanner.Send(m.DeleteFile(file.FileId))
-	log.Printf("+++ delete.2 %#v", m.DeleteFile(file.FileId))
-	file.Status = w.Pending
+	archive := c.archives[file.Root]
+
+	id := file.NewId()
+	name := id.FullName()
+	archive.scanner.Send(m.DeleteFile(id))
+	log.Printf("+++ delete.2 %#v", m.DeleteFile(id))
+
+	delete(archive.files, name)
+	delete(archive.pending, name)
+	// file.Status = w.Pending
 }
 
 func (c *controller) deleteFolderFile(file *w.File) {
