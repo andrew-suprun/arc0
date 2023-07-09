@@ -22,10 +22,10 @@ import (
 )
 
 type scanner struct {
-	root        m.Root
-	events      m.EventChan
-	lc          *lifecycle.Lifecycle
-	infos       map[uint64]*fileInfo
+	root   m.Root
+	events m.EventChan
+	lc     *lifecycle.Lifecycle
+	infos  map[uint64]*fileInfo
 }
 
 type fileInfo struct {
@@ -43,14 +43,9 @@ func (s *scanner) Send(cmd m.FileCommand) {
 	case m.HashArchive:
 		s.hashArchive()
 
-	case m.DeleteFile:
+	case m.HandleFiles:
 		_ = cmd
-
-	case m.RenameFile:
-		_ = cmd
-
-	case m.CopyFile:
-		_ = cmd
+		// TODO
 	}
 }
 

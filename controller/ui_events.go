@@ -133,87 +133,6 @@ func (c *controller) keepSelected() {
 	c.keepFile(selectedFile)
 }
 
-func (c *controller) keepFile(file *w.File) {
-	if file == nil || file.FileKind != w.FileRegular || file.Hash == "" || file.Status == w.Pending {
-		return
-	}
-	fileId := file.NewId()
-	fileName := fileId.FullName()
-	log.Printf("### keep %#v", fileId)
-	pending := false
-
-	keepFiles := map[m.Root]*w.File{}
-	for root, archive := range c.archives {
-		for _, entry := range archive.files {
-			if entry.Hash == file.Hash {
-				name := entry.NewName()
-				if prevFile, ok := keepFiles[root]; ok {
-					if name == fileId.FullName() {
-						keepFiles[root] = entry
-					} else if name.Path == fileId.Path && name.Path != prevFile.Path {
-						keepFiles[root] = entry
-					} else if name.Name == fileId.Name && name.Name != prevFile.Name {
-						keepFiles[root] = entry
-					}
-				} else {
-					keepFiles[root] = entry
-				}
-			}
-		}
-	}
-
-	for root, archive := range c.archives {
-		for _, entry := range archive.files {
-			if entry == file {
-				continue
-			}
-			if entry.Hash == file.Hash {
-				keepFile := keepFiles[root]
-				if entry == keepFile {
-					if fileName != keepFile.FullName() {
-						newId := m.FileId{Root: keepFile.Root, Path: fileId.Path, Name: fileId.Name}
-						archive.ensureNameAvailable(newId)
-						archive.scanner.Send(m.RenameFile{FileId: keepFile.NewId(), NewFullName: fileName})
-						log.Printf("+++ rename.1 %#v", m.RenameFile{FileId: keepFile.NewId(), NewFullName: fileName})
-						pending = true
-						keepFile.Status = w.Pending
-						keepFile.PendingName = fileName
-						archive.pending[fileName] = keepFile
-					}
-				} else {
-					id := entry.NewId()
-					name := id.FullName()
-					archive.scanner.Send(m.DeleteFile(id))
-					log.Printf("+++ delete.1 %#v", m.DeleteFile(id))
-
-					delete(archive.files, name)
-					delete(archive.pending, name)
-					// pending = true
-					// entry.Status = w.Pending
-				}
-			}
-		}
-	}
-
-	for root, archive := range c.archives {
-		if root == fileId.Root {
-			continue
-		}
-		if _, ok := keepFiles[root]; !ok {
-			newId := m.FileId{Root: root, Path: fileName.Path, Name: fileName.Name}
-			archive.ensureNameAvailable(newId)
-			archive.scanner.Send(m.CopyFile{From: fileId, To: newId.Root})
-			log.Printf("+++ copy %#v", m.CopyFile{From: fileId, To: newId.Root})
-			pending = true
-			file.Status = w.Pending
-			archive.copySize += file.Size
-		}
-	}
-	if pending {
-		c.hashStatuses[file.Hash] = w.Pending
-	}
-}
-
 func (c *controller) tab() {
 	selectedId := c.currentFolder().selectedId
 	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
@@ -253,7 +172,7 @@ func (c *controller) deleteSelected() {
 }
 
 func (c *controller) deleteFile(file *w.File) {
-	if file == nil {
+	if file == nil || file.Hash == "" || c.hashStatuses[file.Hash] == w.Pending {
 		return
 	}
 	status := file.Status
@@ -269,32 +188,32 @@ func (c *controller) deleteFile(file *w.File) {
 }
 
 func (c *controller) deleteRegularFile(file *w.File) {
-	archive := c.archives[file.Root]
-
-	id := file.NewId()
-	name := id.FullName()
-	archive.scanner.Send(m.DeleteFile(id))
-	log.Printf("+++ delete.2 %#v", m.DeleteFile(id))
-
-	delete(archive.files, name)
-	delete(archive.pending, name)
-	// file.Status = w.Pending
+	cmd := m.HandleFiles{Hash: file.Hash}
+	for _, root := range c.roots[1:] {
+		archive := c.archives[root]
+		for _, entry := range archive.files {
+			if entry.Hash == file.Hash {
+				cmd.Delete = append(cmd.Delete, entry.NewId())
+			}
+		}
+	}
+	c.hashStatuses[file.Hash] = w.Pending
+	c.archives[c.origin].scanner.Send(cmd)
 }
 
 func (c *controller) deleteFolderFile(file *w.File) {
-	// TODO: need it?
+	// TODO: implement
 }
 
-func (a *archive) ensureNameAvailable(id m.FileId) {
+func (a *archive) ensureNameAvailable(id m.FileId) *m.RenameFile {
 	file := a.fileByNewName(id.FullName())
 	if file != nil {
 		newName := a.newName(id.FullName())
-		a.scanner.Send(m.RenameFile{FileId: id, NewFullName: newName})
-		log.Printf("+++ rename.2 %#v", m.RenameFile{FileId: id, NewFullName: newName})
-		file.Status = w.Pending
 		file.PendingName = newName
 		a.pending[newName] = file
+		return &m.RenameFile{FileId: id, NewFullName: newName}
 	}
+	return nil
 }
 
 func (a *archive) newName(name m.FullName) m.FullName {

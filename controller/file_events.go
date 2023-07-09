@@ -71,7 +71,11 @@ func (c *controller) fileHashed(hashed m.FileHashed) {
 }
 
 func (c *controller) handleProgress(event m.Progress) {
-	archive := c.archives[event.Root]
+	root := c.origin
+	if event.ProgressState != m.CopyingFile {
+		root = event.Root
+	}
+	archive := c.archives[root]
 	archive.progress = event
 
 	if event.ProgressState == m.FileTreeHashed {
@@ -79,31 +83,47 @@ func (c *controller) handleProgress(event m.Progress) {
 	}
 }
 
-func (c *controller) fileRenamed(renamed m.FileRenamed) {
-	log.Printf("Event %v", renamed)
-	// TODO
+func (c *controller) filesHandled(event m.FilesHandled) {
+	log.Printf("Event %v", event)
+	c.hashStatuses[event.Hash] = w.Resolved
 
-	// c.removeFolderFile(renamed.FileId)
-}
-
-func (c *controller) fileDeleted(deleted m.FileDeleted) {
-	log.Printf("Event %v", deleted)
-	c.removeFolderFile(m.FileId(deleted))
-}
-
-func (c *controller) fileCopied(copied m.FileCopied) {
-	log.Printf("Event %v", copied)
-	fromArchive := c.archives[copied.From.Root]
-	file := fromArchive.files[copied.From.FullName()]
-	file.Status = w.Resolved
-
-	toArchive := c.archives[copied.To]
-	toArchive.totalCopied += file.Size
-	toArchive.progress.HandledSize = 0
-	if toArchive.copySize == toArchive.totalCopied {
-		toArchive.copySize, toArchive.totalCopied = 0, 0
+	for _, deleted := range event.Delete {
+		archive := c.archives[deleted.Root]
+		if pending, ok := archive.pending[deleted.FullName()]; ok {
+			delete(archive.files, pending.FullName())
+			delete(archive.pending, pending.PendingName)
+		} else {
+			log.Printf("### filesHandled: not found deleted: %s", deleted)
+		}
 	}
-	log.Printf("### fileCopied: root: %q, copy size: %d, totalCopied: %d", copied.To, toArchive.copySize, toArchive.totalCopied)
+
+	for _, renamed := range event.Rename {
+		archive := c.archives[renamed.Root]
+		if pending, ok := archive.pending[renamed.FullName()]; ok {
+			delete(archive.files, pending.FullName())
+			delete(archive.pending, pending.PendingName)
+
+			pending.Path = renamed.NewFullName.Path
+			pending.Name = renamed.NewFullName.Name
+			pending.PendingName = m.FullName{}
+			archive.files[pending.FullName()] = pending
+		} else {
+			log.Printf("### filesHandled: not found renamed: %s", renamed)
+		}
+	}
+
+	if event.Copy != nil {
+		if pending, ok := c.archives[event.Copy.From.Root].pending[event.Copy.From.FullName()]; ok {
+			origin := c.archives[c.origin]
+			origin.totalCopied += pending.Size
+			origin.progress.HandledSize = 0
+			if origin.copySize == origin.totalCopied {
+				origin.copySize, origin.totalCopied = 0, 0
+			}
+		} else {
+			log.Printf("### filesHandled: not found copied: %s", event.Copy)
+		}
+	}
 }
 
 func (c *controller) makeSelectedVisible() {
@@ -118,11 +138,6 @@ func (c *controller) makeSelectedVisible() {
 	}
 
 	c.currentFolder().offsetIdx = offsetIdx
-}
-
-func (c *controller) removeFolderFile(id m.FileId) {
-	// archive := c.archives[id.Root]
-	// delete(archive.files, id.FullName())
 }
 
 func (c *controller) selectedIdx() int {

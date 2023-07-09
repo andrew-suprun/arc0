@@ -68,6 +68,7 @@ type Screen struct {
 }
 
 type Feedback struct {
+	Entries       int // TODO Remove entries from controller
 	FileTreeLines int
 }
 

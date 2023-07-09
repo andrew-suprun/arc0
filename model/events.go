@@ -28,28 +28,12 @@ func (h FileHashed) String() string {
 	return fmt.Sprintf("Hashed Id: %q, Hash: %q", h.FileId.String(), h.Hash)
 }
 
-type FileDeleted DeleteFile
+type FilesHandled HandleFiles
 
-func (FileDeleted) event() {}
+func (FilesHandled) event() {}
 
-func (d FileDeleted) String() string {
-	return fmt.Sprintf("Deleted Id: %q", FileId(d).String())
-}
-
-type FileRenamed RenameFile
-
-func (FileRenamed) event() {}
-
-func (r FileRenamed) String() string {
-	return fmt.Sprintf("Renamed Id: %q, NewName: %q", r.FileId.String(), r.NewFullName.String())
-}
-
-type FileCopied CopyFile
-
-func (FileCopied) event() {}
-
-func (c FileCopied) String() string {
-	return fmt.Sprintf("Copied From: %q, To: %q", c.From.String(), c.To.String())
+func (h FilesHandled) String() string {
+	return HandleFiles(h).String()
 }
 
 type Progress struct {

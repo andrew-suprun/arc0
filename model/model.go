@@ -33,11 +33,19 @@ func (name FullName) String() string {
 	return filepath.Join(name.Path.String(), name.Name.String())
 }
 
+// TODO: rename FileId to Id
 type FileId struct {
 	Root
 	Path
 	Name
 }
+
+// TODO: convert FileId into:
+//
+// type FileId struct {
+// 	   Root
+// 	   FullName
+// }
 
 func (id FileId) String() string {
 	return filepath.Join(id.Root.String(), id.Path.String(), id.Name.String())

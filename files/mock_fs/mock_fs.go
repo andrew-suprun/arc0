@@ -42,21 +42,19 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	case m.HashArchive:
 		s.hashArchive()
 
-	case m.DeleteFile:
-		s.events <- m.FileDeleted(cmd)
-
-	case m.RenameFile:
-		s.events <- m.FileRenamed(cmd)
-
-	case m.CopyFile:
-		for _, meta := range metas[cmd.From.Root] {
-			if meta.FullName == cmd.From.FullName().String() {
+	case m.HandleFiles:
+		if cmd.Copy == nil {
+			s.events <- m.FilesHandled(cmd)
+			return true
+		}
+		for _, meta := range metas[cmd.Copy.From.Root] {
+			if meta.FullName == cmd.Copy.From.FullName().String() {
 				for copied := uint64(0); ; copied += 50000 {
 					if copied > meta.Size {
 						copied = meta.Size
 					}
 					s.events <- m.Progress{
-						Root:          cmd.To,
+						Root:          "origin",
 						ProgressState: m.CopyingFile,
 						HandledSize:   copied,
 					}
@@ -68,7 +66,7 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 				break
 			}
 		}
-		s.events <- m.FileCopied(cmd)
+		s.events <- m.FilesHandled(cmd)
 	}
 	return true
 }
@@ -116,7 +114,7 @@ func (s *scanner) hashArchive() {
 	for i := range archFiles {
 		if scans[i] {
 			meta := archFiles[i]
-			for hashed := uint64(0); ; hashed += 50000 {
+			for hashed := uint64(0); ; hashed += 10000 {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
