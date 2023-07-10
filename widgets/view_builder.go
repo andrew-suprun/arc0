@@ -3,6 +3,7 @@ package widgets
 import (
 	m "arch/model"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ func (s *Screen) folderView(feedback *Feedback) Widget {
 		s.breadcrumbs(),
 		Styled(styleArchiveHeader,
 			Row(rowConstraint,
-				MouseTarget(SortByStatus, Text(" Status"+s.sortIndicator(SortByStatus)).Width(13)),
+				Text(" Status").Width(13),
 				MouseTarget(SortByName, Text(" Document"+s.sortIndicator(SortByName)).Width(20).Flex(1)),
 				MouseTarget(SortByTime, Text("  Date Modified"+s.sortIndicator(SortByTime)).Width(19)),
 				MouseTarget(SortBySize, Text(fmt.Sprintf("%22s", "Size"+s.sortIndicator(SortBySize)+" "))),
@@ -65,7 +66,7 @@ func (s *Screen) folderView(feedback *Feedback) Widget {
 					}
 					rows = append(rows, Styled(s.styleFile(&file, s.SelectedId == file.FileId),
 						MouseTarget(m.SelectFile(file.FileId), Row(rowConstraint,
-							s.fileStatus(&file)...,
+							s.fileRow(&file)...,
 						)),
 					))
 				}
@@ -76,8 +77,9 @@ func (s *Screen) folderView(feedback *Feedback) Widget {
 	)
 }
 
-func (s *Screen) fileStatus(file *File) []Widget {
-	result := []Widget{Text(s.statusString(file)).Width(11)} // todo conflict status
+func (s *Screen) fileRow(file *File) []Widget {
+	log.Printf("fileRow: file: %s", file)
+	result := []Widget{Text(statusString(file)).Width(11)}
 
 	if file.FileKind == FileRegular {
 		result = append(result, Text("   "))
@@ -92,12 +94,13 @@ func (s *Screen) fileStatus(file *File) []Widget {
 	return result
 }
 
-func (s *Screen) statusString(file *File) string {
-	switch file.Status {
+func statusString(file *File) string {
+	if file.Pending {
+		return " Pending"
+	}
+	switch file.Presence {
 	case Resolved:
 		return ""
-	case Pending:
-		return " Pending"
 	case Duplicate:
 		return " Duplicate"
 	case Absent:
@@ -217,11 +220,12 @@ func (c *Screen) styleFile(file *File, selected bool) Style {
 var styleBreadcrumbs = Style{FG: 250, BG: 17, Flags: Bold + Italic}
 
 func (c *Screen) statusColor(file *File) byte {
-	switch file.Status {
+	if file.Pending {
+		return 214
+	}
+	switch file.Presence {
 	case Resolved:
 		return 195
-	case Pending:
-		return 214
 	case Duplicate, Absent:
 		return 196
 	}

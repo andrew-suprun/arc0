@@ -3,6 +3,7 @@ package mock_fs
 import (
 	"arch/actor"
 	m "arch/model"
+	"log"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -35,6 +36,7 @@ func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 }
 
 func (s *scanner) handleFiles(cmd m.FileCommand) bool {
+	log.Printf("mock.handleFiles: cmd: %s", cmd)
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
 		s.scanArchive()
@@ -114,7 +116,7 @@ func (s *scanner) hashArchive() {
 	for i := range archFiles {
 		if scans[i] {
 			meta := archFiles[i]
-			for hashed := uint64(0); ; hashed += 10000 {
+			for hashed := uint64(0); ; hashed += 50000 {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}

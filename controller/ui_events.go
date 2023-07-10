@@ -3,7 +3,6 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
-	"fmt"
 	"log"
 	"os/exec"
 	"path/filepath"
@@ -137,7 +136,7 @@ func (c *controller) tab() {
 	selectedId := c.currentFolder().selectedId
 	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 
-	if selected.FileKind != w.FileRegular || selected.Status != w.Duplicate {
+	if selected.FileKind != w.FileRegular || c.presence[selected.Hash] != w.Duplicate {
 		return
 	}
 	name := selected.FullName().String()
@@ -169,110 +168,4 @@ func (c *controller) deleteSelected() {
 	selectedId := c.currentFolder().selectedId
 	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
 	c.deleteFile(selected)
-}
-
-func (c *controller) deleteFile(file *w.File) {
-	if file == nil || file.Hash == "" || c.hashStatuses[file.Hash] == w.Pending {
-		return
-	}
-	status := file.Status
-	if status != w.Absent {
-		return
-	}
-
-	if file.FileKind == w.FileFolder {
-		c.deleteFolderFile(file)
-	} else {
-		c.deleteRegularFile(file)
-	}
-}
-
-func (c *controller) deleteRegularFile(file *w.File) {
-	cmd := m.HandleFiles{Hash: file.Hash}
-	for _, root := range c.roots[1:] {
-		archive := c.archives[root]
-		for _, entry := range archive.files {
-			if entry.Hash == file.Hash {
-				cmd.Delete = append(cmd.Delete, entry.NewId())
-			}
-		}
-	}
-	c.hashStatuses[file.Hash] = w.Pending
-	c.archives[c.origin].scanner.Send(cmd)
-}
-
-func (c *controller) deleteFolderFile(file *w.File) {
-	// TODO: implement
-}
-
-func (a *archive) ensureNameAvailable(id m.FileId) *m.RenameFile {
-	file := a.fileByNewName(id.FullName())
-	if file != nil {
-		newName := a.newName(id.FullName())
-		file.PendingName = newName
-		a.pending[newName] = file
-		return &m.RenameFile{FileId: id, NewFullName: newName}
-	}
-	return nil
-}
-
-func (a *archive) newName(name m.FullName) m.FullName {
-	parts := strings.Split(name.Name.String(), ".")
-
-	var part string
-	if len(parts) == 1 {
-		part = stripIdx(parts[0])
-	} else {
-		part = stripIdx(parts[len(parts)-2])
-	}
-	for idx := 1; ; idx++ {
-		var newName string
-		if len(parts) == 1 {
-			newName = fmt.Sprintf("%s [%d]", part, idx)
-		} else {
-			parts[len(parts)-2] = fmt.Sprintf("%s [%d]", part, idx)
-			newName = strings.Join(parts, ".")
-		}
-		exists := false
-		for _, entity := range a.files {
-			if name.Path == entity.Path && newName == entity.Name.String() {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			return m.FullName{Path: name.Path, Name: m.Name(newName)}
-		}
-	}
-}
-
-type stripIdxState int
-
-const (
-	expectCloseBracket stripIdxState = iota
-	expectDigit
-	expectDigitOrOpenBracket
-	expectOpenBracket
-	expectSpace
-	done
-)
-
-func stripIdx(name string) string {
-	state := expectCloseBracket
-	i := len(name) - 1
-	for ; i >= 0; i-- {
-		ch := name[i]
-		if ch == ']' && state == expectCloseBracket {
-			state = expectDigit
-		} else if ch >= '0' && ch <= '9' && (state == expectDigit || state == expectDigitOrOpenBracket) {
-			state = expectDigitOrOpenBracket
-		} else if ch == '[' && state == expectDigitOrOpenBracket {
-			state = expectSpace
-		} else if ch == ' ' && state == expectSpace {
-			break
-		} else {
-			return name
-		}
-	}
-	return name[:i]
 }

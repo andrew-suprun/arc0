@@ -16,7 +16,7 @@ func (c *controller) buildScreen() *w.Screen {
 	builder := &screenBuilder{
 		copyNameHash: map[m.Name]m.Hash{},
 	}
-	c.assignStatuses()
+	c.assignPresence()
 	c.buildEntries(builder)
 	if c.currentFolder().selectedId.Name == "" {
 		c.selectFirst()
@@ -38,16 +38,17 @@ func (c *controller) buildScreen() *w.Screen {
 	return screen
 }
 
-func (c *controller) assignStatuses() {
-	for _, archive := range c.archives {
-		for _, file := range archive.files {
-			if status, ok := c.hashStatuses[file.Hash]; ok {
-				file.Status = status
-			} else {
-				file.Status = w.Resolved
-			}
+func (c *controller) assignPresence() {
+	c.update(func(file *w.File) {
+		if presence, ok := c.presence[file.Hash]; ok {
+			file.Presence = presence
+		} else {
+			file.Presence = w.Resolved
 		}
-	}
+	})
+	c.update(func(file *w.File) {
+		log.Printf("assignPresence: file %s", file)
+	})
 }
 
 func (c *controller) buildEntries(builder *screenBuilder) {
@@ -69,7 +70,8 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 				FileMeta: file.FileMeta,
 				FileKind: w.FileRegular,
 				Hash:     file.Hash,
-				Status:   file.Status,
+				Pending:  file.Pending,
+				Presence: file.Presence,
 			})
 		} else if strings.HasPrefix(file.Path.String(), c.currentPath.String()) {
 			relPath := file.Path
@@ -96,6 +98,8 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 						ModTime: file.ModTime,
 					},
 					FileKind: w.FileFolder,
+					Pending:  file.Pending,
+					Presence: file.Presence,
 				}
 				c.entries = append(c.entries, entry)
 			}
@@ -110,7 +114,7 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 	}
 
 	for _, file := range archive.files {
-		if file.Status != w.Absent {
+		if c.presence[file.Hash] != w.Absent {
 			continue
 		}
 		if hash, ok := builder.copyNameHash[file.Name]; ok && file.Hash == hash {
@@ -121,7 +125,8 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 				FileMeta: file.FileMeta,
 				FileKind: w.FileRegular,
 				Hash:     file.Hash,
-				Status:   w.Absent,
+				Pending:  file.Pending,
+				Presence: file.Presence,
 			}
 
 			c.entries = append(c.entries, entry)
@@ -146,7 +151,8 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 					},
 				},
 				FileKind: w.FileFolder,
-				Status:   w.Absent,
+				Pending:  file.Pending,
+				Presence: file.Presence,
 			}
 			c.entries = append(c.entries, entry)
 
@@ -176,11 +182,14 @@ func (c *controller) progress() []w.ProgressInfo {
 func (c *controller) stats(screen *w.Screen) {
 	screen.PendingFiles, screen.DuplicateFiles, screen.AbsentFiles = 0, 0, 0
 
-	for hash, status := range c.hashStatuses {
-		log.Printf("stats: hash: %q, status: %s", hash, status)
-		switch status {
-		case w.Pending:
+	c.update(func(file *w.File) {
+		if file.Pending {
 			screen.PendingFiles++
+		}
+	})
+
+	for _, presence := range c.presence {
+		switch presence {
 		case w.Duplicate:
 			screen.DuplicateFiles++
 		case w.Absent:

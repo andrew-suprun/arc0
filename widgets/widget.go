@@ -76,7 +76,6 @@ type SortColumn int
 
 const (
 	SortByName SortColumn = iota
-	SortByStatus
 	SortByTime
 	SortBySize
 )
@@ -85,12 +84,13 @@ type File struct {
 	m.FileMeta
 	FileKind
 	m.Hash
-	Status
+	Presence    Presence
+	Pending     bool
 	PendingName m.FullName
 }
 
 func (f *File) NewId() m.FileId {
-	if f.Status == Pending {
+	if f.Pending {
 		return m.FileId{
 			Root: f.Root,
 			Path: f.PendingName.Path,
@@ -101,7 +101,7 @@ func (f *File) NewId() m.FileId {
 }
 
 func (f *File) NewName() m.FullName {
-	if f.Status == Pending {
+	if f.Pending {
 		return f.PendingName
 	}
 	return f.FileId.FullName()
@@ -114,11 +114,10 @@ const (
 	FileFolder
 )
 
-type Status int
+type Presence int
 
 const (
-	Resolved Status = iota
-	Pending
+	Resolved Presence = iota
 	Duplicate
 	Absent
 )
@@ -130,7 +129,8 @@ type ProgressInfo struct {
 }
 
 func (f *File) String() string {
-	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Status: %q, Hash: %q, PendingName: %q}", f.FileId, f.FileKind, f.Size, f.Status, f.Hash, f.PendingName)
+	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q, Pending: %v, PendingName: %q, Presence: %v}",
+		f.FileId, f.FileKind, f.Size, f.Hash, f.Pending, f.PendingName, f.Presence)
 }
 
 func (k FileKind) String() string {
@@ -143,38 +143,16 @@ func (k FileKind) String() string {
 	return "UNKNOWN FILE KIND"
 }
 
-func (s Status) String() string {
-	switch s {
+func (p Presence) String() string {
+	switch p {
 	case Resolved:
 		return "Resolved"
-	case Pending:
-		return "Pending"
 	case Duplicate:
 		return "Duplicate"
 	case Absent:
 		return "Absent"
 	}
 	return "UNKNOWN FILE STATUS"
-}
-
-func (f *File) StatusString() string {
-	switch f.Status {
-	case Resolved:
-		return ""
-	case Pending:
-		return " Pending"
-	case Duplicate:
-		return " Duplicate"
-	case Absent:
-		return " Absent"
-	}
-	return "UNKNOWN FILE STATUS"
-}
-
-func (f *File) MergeStatus(other *File) {
-	if f.Status < other.Status {
-		f.Status = other.Status
-	}
 }
 
 func (s Style) String() string {

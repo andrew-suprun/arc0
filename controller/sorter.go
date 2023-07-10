@@ -2,25 +2,17 @@ package controller
 
 import (
 	w "arch/widgets"
-	"log"
 	"sort"
 	"strings"
 )
 
 func (c *controller) sort() {
-	log.Printf("### sort: currentPath=%q", c.currentPath)
-	for path := range c.folders {
-		log.Printf("### sort: path=%q", path)
-	}
-
 	folder := c.currentFolder()
 	files := sliceBy(c.entries)
 	var slice sort.Interface
 	switch folder.sortColumn {
 	case w.SortByName:
 		slice = sliceByName{sliceBy: files}
-	case w.SortByStatus:
-		slice = sliceByStatus{sliceBy: files}
 	case w.SortByTime:
 		slice = sliceByTime{sliceBy: files}
 	case w.SortBySize:
@@ -49,44 +41,17 @@ type sliceByName struct {
 func (s sliceByName) Less(i, j int) bool {
 	iName := strings.ToLower(s.sliceBy[i].Name.String())
 	jName := strings.ToLower(s.sliceBy[j].Name.String())
-	if iName < jName {
-		return true
-	} else if iName > jName {
-		return false
+	if iName != jName {
+		return iName < jName
 	}
-	iStatus := s.sliceBy[i].Status
-	jStatus := s.sliceBy[j].Status
-	if iStatus < jStatus {
-		return true
-	} else if iStatus > jStatus {
-		return false
+
+	iSize := s.sliceBy[i].Size
+	jSize := s.sliceBy[j].Size
+	if iSize != jSize {
+		return iSize < jSize
 	}
 
 	return s.sliceBy[i].ModTime.Before(s.sliceBy[j].ModTime)
-}
-
-type sliceByStatus struct {
-	sliceBy
-}
-
-func (s sliceByStatus) Less(i, j int) bool {
-	iStatus := s.sliceBy[i].Status
-	jStatus := s.sliceBy[j].Status
-	if iStatus < jStatus {
-		return true
-	} else if iStatus > jStatus {
-		return false
-	}
-
-	iName := strings.ToLower(s.sliceBy[i].Name.String())
-	jName := strings.ToLower(s.sliceBy[j].Name.String())
-	if iName < jName {
-		return true
-	} else if iName > jName {
-		return false
-	}
-
-	return s.sliceBy[i].Size < s.sliceBy[j].Size
 }
 
 type sliceByTime struct {
@@ -102,7 +67,13 @@ func (s sliceByTime) Less(i, j int) bool {
 		return false
 	}
 
-	return strings.ToLower(s.sliceBy[i].Name.String()) < strings.ToLower(s.sliceBy[j].Name.String())
+	iName := strings.ToLower(s.sliceBy[i].Name.String())
+	jName := strings.ToLower(s.sliceBy[j].Name.String())
+	if iName != jName {
+		return iName < jName
+	}
+
+	return s.sliceBy[i].Size < s.sliceBy[j].Size
 }
 
 type sliceBySize struct {
@@ -112,11 +83,15 @@ type sliceBySize struct {
 func (s sliceBySize) Less(i, j int) bool {
 	iSize := s.sliceBy[i].Size
 	jSize := s.sliceBy[j].Size
-	if iSize < jSize {
-		return true
-	} else if iSize > jSize {
-		return false
+	if iSize != jSize {
+		return iSize < jSize
 	}
 
-	return strings.ToLower(s.sliceBy[i].Name.String()) < strings.ToLower(s.sliceBy[j].Name.String())
+	iName := strings.ToLower(s.sliceBy[i].Name.String())
+	jName := strings.ToLower(s.sliceBy[j].Name.String())
+	if iName != jName {
+		return iName < jName
+	}
+
+	return s.sliceBy[i].ModTime.Before(s.sliceBy[j].ModTime)
 }

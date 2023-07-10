@@ -12,13 +12,13 @@ type controller struct {
 
 	archives map[m.Root]*archive
 	folders  map[m.Path]*folder
+	presence map[m.Hash]w.Presence
 
 	screenSize         m.ScreenSize
 	lastMouseEventTime time.Time
 
-	currentPath  m.Path
-	entries      []w.File
-	hashStatuses map[m.Hash]w.Status
+	currentPath m.Path
+	entries     []w.File
 
 	feedback w.Feedback
 
@@ -27,16 +27,10 @@ type controller struct {
 	quit bool
 }
 
-type archive struct {
-	scanner       m.ArchiveScanner
-	files         map[m.FullName]*w.File
-	pending       map[m.FullName]*w.File
-	progress      m.Progress
-	progressState m.ProgressState
-	totalSize     uint64
-	totalHashed   uint64
-	copySize      uint64
-	totalCopied   uint64
+func (c *controller) update(proc func(file *w.File)) {
+	for _, archive := range c.archives {
+		archive.update(proc)
+	}
 }
 
 type folder struct {
@@ -51,9 +45,9 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		roots:  roots,
 		origin: roots[0],
 
-		archives:     map[m.Root]*archive{},
-		folders:      map[m.Path]*folder{},
-		hashStatuses: map[m.Hash]w.Status{},
+		archives: map[m.Root]*archive{},
+		folders:  map[m.Path]*folder{},
+		presence: map[m.Hash]w.Presence{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
@@ -93,19 +87,4 @@ func (c *controller) currentFolder() *folder {
 		c.folders[c.currentPath] = curFolder
 	}
 	return curFolder
-}
-
-func (a *archive) fileByFullName(name m.FullName) *w.File {
-	return a.files[name]
-}
-
-func (a *archive) fileByNewName(name m.FullName) *w.File {
-	if result, ok := a.pending[name]; ok {
-		return result
-	}
-	result := a.files[name]
-	if result != nil && result.Status != w.Pending {
-		return result
-	}
-	return nil
 }

@@ -1,3 +1,4 @@
+* use controlled.update() and archive.update() where possible
 * properly handle file events
 * fix a -> b; b -> a renamings
 * ??? move Screen{} and View() into separate package
