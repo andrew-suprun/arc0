@@ -86,6 +86,7 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 				if c.entries[i].ModTime.Before(file.ModTime) {
 					c.entries[i].ModTime = file.ModTime
 				}
+				c.mergeStatus(&c.entries[i], file)
 			} else {
 				entry := w.File{
 					FileMeta: m.FileMeta{
@@ -106,6 +107,15 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 		}
 	}
 	builder.originHashed = true
+}
+
+func (c *controller) mergeStatus(folder, file *w.File) {
+	if folder.Presence < file.Presence {
+		folder.Presence = file.Presence
+	}
+	if file.Pending {
+		folder.Pending = true
+	}
 }
 
 func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
@@ -154,6 +164,7 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 				Pending:  file.Pending,
 				Presence: file.Presence,
 			}
+
 			c.entries = append(c.entries, entry)
 
 		}
