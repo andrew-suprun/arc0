@@ -18,51 +18,49 @@ func (c *controller) keepFile(file *w.File) {
 	log.Printf("### keep %#v", fileId)
 
 	keepFiles := map[m.Root]*w.File{}
-	for root, archive := range c.archives {
-		for _, entry := range archive.files {
-			if entry.Hash == file.Hash {
-				name := entry.NewName()
-				if prevFile, ok := keepFiles[root]; ok {
-					if name == fileName {
-						keepFiles[root] = entry
-					} else if name.Path == fileId.Path && name.Path != prevFile.Path {
-						keepFiles[root] = entry
-					} else if name.Base == fileId.Base && name.Base != prevFile.Base {
-						keepFiles[root] = entry
-					}
-				} else {
+	for _, entry := range c.files {
+		if entry.Hash == file.Hash {
+			root := entry.Root
+			name := entry.NewId().Name
+			if prevFile, ok := keepFiles[root]; ok {
+				if name == fileName {
+					keepFiles[root] = entry
+				} else if name.Path == fileId.Path && name.Path != prevFile.Path {
+					keepFiles[root] = entry
+				} else if name.Base == fileId.Base && name.Base != prevFile.Base {
 					keepFiles[root] = entry
 				}
+			} else {
+				keepFiles[root] = entry
 			}
 		}
 	}
 
-	for root, archive := range c.archives {
-		for _, entry := range archive.files {
-			if entry == file {
-				continue
-			}
-			if entry.Hash == file.Hash {
-				keepFile := keepFiles[root]
-				if entry == keepFile {
-					if fileName != keepFile.Name {
-						newId := m.Id{Root: keepFile.Root, Name: fileName}
-						rename := archive.ensureNameAvailable(newId)
-						if rename != nil {
-							cmd.Rename = append(cmd.Rename, *rename)
-						}
-						cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.NewId(), NewFullName: fileName})
-						log.Printf("+++ rename.1 %#v", m.RenameFile{Id: keepFile.NewId(), NewFullName: fileName})
-						entry.Pending = true
-						keepFile.PendingName = fileName
-						archive.pending[fileName] = keepFile
+	for _, entry := range c.files {
+		if entry == file {
+			continue
+		}
+		if entry.Hash == file.Hash {
+			root := entry.Root
+			keepFile := keepFiles[root]
+			if entry == keepFile {
+				if fileName != keepFile.Name {
+					newId := m.Id{Root: keepFile.Root, Name: fileName}
+					rename := c.ensureNameAvailable(newId)
+					if rename != nil {
+						cmd.Rename = append(cmd.Rename, *rename)
 					}
-				} else {
-					cmd.Delete = append(cmd.Delete, entry.NewId())
-					log.Printf("+++ delete.1 %#v", entry.NewId())
+					cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.NewId(), NewName: fileName})
+					log.Printf("+++ rename.1 %#v", m.RenameFile{Id: keepFile.NewId(), NewName: fileName})
 					entry.Pending = true
-					entry.PendingName = m.Name{}
+					keepFile.PendingId = fileId
+					c.pending[fileId] = keepFile
 				}
+			} else {
+				cmd.Delete = append(cmd.Delete, entry.NewId())
+				log.Printf("+++ delete.1 %#v", entry.NewId())
+				entry.Pending = true
+				entry.PendingId = m.Id{}
 			}
 		}
 	}
@@ -74,7 +72,7 @@ func (c *controller) keepFile(file *w.File) {
 		}
 		if _, ok := keepFiles[root]; !ok {
 			newId := m.Id{Root: root, Name: fileName}
-			rename := archive.ensureNameAvailable(newId)
+			rename := c.ensureNameAvailable(newId)
 			if rename != nil {
 				cmd.Rename = append(cmd.Rename, *rename)
 			}
@@ -106,12 +104,9 @@ func (c *controller) deleteFile(file *w.File) {
 
 func (c *controller) deleteRegularFile(file *w.File) {
 	cmd := m.HandleFiles{Hash: file.Hash}
-	for _, root := range c.roots[1:] {
-		archive := c.archives[root]
-		for _, entry := range archive.files {
-			if entry.Hash == file.Hash {
-				cmd.Delete = append(cmd.Delete, entry.NewId())
-			}
+	for _, entry := range c.files {
+		if entry.Hash == file.Hash && entry.Root != c.origin {
+			cmd.Delete = append(cmd.Delete, entry.NewId())
 		}
 	}
 	file.Pending = true

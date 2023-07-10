@@ -84,29 +84,16 @@ type File struct {
 	m.FileMeta
 	FileKind
 	m.Hash
-	Presence    Presence
-	Pending     bool
-	PendingName m.Name
+	Presence  Presence
+	Pending   bool
+	PendingId m.Id
 }
 
 func (f *File) NewId() m.Id {
 	if f.Pending {
-		return m.Id{
-			Root: f.Root,
-			Name: m.Name{
-				Path: f.PendingName.Path,
-				Base: f.PendingName.Base,
-			},
-		}
+		return f.PendingId
 	}
 	return f.Id
-}
-
-func (f *File) NewName() m.Name {
-	if f.Pending {
-		return f.PendingName
-	}
-	return f.Id.Name
 }
 
 type FileKind int
@@ -132,7 +119,7 @@ type ProgressInfo struct {
 
 func (f *File) String() string {
 	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q, Pending: %v, PendingName: %q, Presence: %v}",
-		f.Id, f.FileKind, f.Size, f.Hash, f.Pending, f.PendingName, f.Presence)
+		f.Id, f.FileKind, f.Size, f.Hash, f.Pending, f.PendingId, f.Presence)
 }
 
 func (k FileKind) String() string {

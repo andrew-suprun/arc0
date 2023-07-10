@@ -3,6 +3,8 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -12,6 +14,8 @@ type controller struct {
 
 	archives map[m.Root]*archive
 	folders  map[m.Path]*folder
+	files    map[m.Id]*w.File
+	pending  map[m.Id]*w.File
 	presence map[m.Hash]w.Presence
 
 	screenSize         m.ScreenSize
@@ -27,10 +31,14 @@ type controller struct {
 	quit bool
 }
 
-func (c *controller) update(proc func(file *w.File)) {
-	for _, archive := range c.archives {
-		archive.update(proc)
-	}
+type archive struct {
+	scanner       m.ArchiveScanner
+	progress      m.Progress
+	progressState m.ProgressState
+	totalSize     uint64
+	totalHashed   uint64
+	copySize      uint64
+	totalCopied   uint64
 }
 
 type folder struct {
@@ -48,13 +56,13 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		archives: map[m.Root]*archive{},
 		folders:  map[m.Path]*folder{},
 		presence: map[m.Hash]w.Presence{},
+		files:    map[m.Id]*w.File{},
+		pending:  map[m.Id]*w.File{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
 			scanner: scanner,
-			files:   map[m.Name]*w.File{},
-			pending: map[m.Name]*w.File{},
 		}
 		scanner.Send(m.ScanArchive{})
 	}
@@ -87,4 +95,94 @@ func (c *controller) currentFolder() *folder {
 		c.folders[c.currentPath] = curFolder
 	}
 	return curFolder
+}
+
+func (c *controller) fileById(id m.Id) *w.File {
+	return c.files[id]
+}
+
+func (c *controller) fileByNewId(id m.Id) *w.File {
+	if result, ok := c.pending[id]; ok {
+		return result
+	}
+	result := c.files[id]
+	if result != nil && !result.Pending {
+		return result
+	}
+	return nil
+}
+
+func (c *controller) ensureNameAvailable(id m.Id) *m.RenameFile {
+	file := c.fileByNewId(id)
+	if file != nil {
+		newName := c.newName(id)
+		file.PendingId = newName
+		c.pending[newName] = file
+		return &m.RenameFile{Id: id, NewName: newName.Name}
+	}
+	return nil
+}
+
+func (a *controller) newName(id m.Id) m.Id {
+	parts := strings.Split(id.Base.String(), ".")
+
+	var part string
+	if len(parts) == 1 {
+		part = stripIdx(parts[0])
+	} else {
+		part = stripIdx(parts[len(parts)-2])
+	}
+	for idx := 1; ; idx++ {
+		var newName string
+		if len(parts) == 1 {
+			newName = fmt.Sprintf("%s [%d]", part, idx)
+		} else {
+			parts[len(parts)-2] = fmt.Sprintf("%s [%d]", part, idx)
+			newName = strings.Join(parts, ".")
+		}
+		exists := false
+		for _, entity := range a.files {
+			if id.Path == entity.Path && newName == entity.Base.String() {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			return m.Id{
+				Root: id.Root,
+				Name: m.Name{Path: id.Path, Base: m.Base(newName)},
+			}
+		}
+	}
+}
+
+type stripIdxState int
+
+const (
+	expectCloseBracket stripIdxState = iota
+	expectDigit
+	expectDigitOrOpenBracket
+	expectOpenBracket
+	expectSpace
+	done
+)
+
+func stripIdx(name string) string {
+	state := expectCloseBracket
+	i := len(name) - 1
+	for ; i >= 0; i-- {
+		ch := name[i]
+		if ch == ']' && state == expectCloseBracket {
+			state = expectDigit
+		} else if ch >= '0' && ch <= '9' && (state == expectDigit || state == expectDigitOrOpenBracket) {
+			state = expectDigitOrOpenBracket
+		} else if ch == '[' && state == expectDigitOrOpenBracket {
+			state = expectSpace
+		} else if ch == ' ' && state == expectSpace {
+			break
+		} else {
+			return name
+		}
+	}
+	return name[:i]
 }

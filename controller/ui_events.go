@@ -95,7 +95,7 @@ func (c *controller) esc() {
 
 func (c *controller) revealInFinder() {
 	selectedId := c.currentFolder().selectedId
-	file := c.archives[selectedId.Root].fileByNewName(selectedId.Name)
+	file := c.fileByNewId(selectedId)
 	if file != nil {
 		exec.Command("open", "-R", file.String()).Start()
 	}
@@ -128,13 +128,13 @@ func (c *controller) shiftOffset(lines int) {
 
 func (c *controller) keepSelected() {
 	selectedId := c.currentFolder().selectedId
-	selectedFile := c.archives[selectedId.Root].fileByNewName(selectedId.Name)
+	selectedFile := c.fileByNewId(selectedId)
 	c.keepFile(selectedFile)
 }
 
 func (c *controller) tab() {
 	selectedId := c.currentFolder().selectedId
-	selected := c.archives[selectedId.Root].fileByNewName(selectedId.Name)
+	selected := c.fileByNewId(selectedId)
 
 	if selected.FileKind != w.FileRegular || c.presence[selected.Hash] != w.Duplicate {
 		return
@@ -143,8 +143,8 @@ func (c *controller) tab() {
 	hash := selected.Hash
 	log.Printf("### tab: name=%q hash=%q", name, hash)
 	sameHash := []m.Id{}
-	for _, file := range c.archives[c.origin].files {
-		if file.Hash == selected.Hash {
+	for _, file := range c.files {
+		if file.Hash == selected.Hash && file.Root == c.origin {
 			sameHash = append(sameHash, file.Id)
 		}
 	}
@@ -166,6 +166,6 @@ func (c *controller) tab() {
 
 func (c *controller) deleteSelected() {
 	selectedId := c.currentFolder().selectedId
-	selected := c.archives[selectedId.Root].fileByNewName(selectedId.Name)
+	selected := c.fileByNewId(selectedId)
 	c.deleteFile(selected)
 }

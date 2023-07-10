@@ -43,7 +43,7 @@ func (h HandleFiles) String() string {
 	}
 
 	for _, r := range h.Rename {
-		fmt.Fprintf(buf, "    rename: id %q: new name %q\n", r.Id, r.NewFullName)
+		fmt.Fprintf(buf, "    rename: id %q: new name %q\n", r.Id, r.NewName)
 	}
 	if h.Copy != nil {
 		fmt.Fprintf(buf, "    copy: from %q\n", h.Copy.From)
@@ -56,7 +56,7 @@ func (h HandleFiles) String() string {
 
 type RenameFile struct {
 	Id
-	NewFullName Name
+	NewName Name
 }
 
 type CopyFile struct {

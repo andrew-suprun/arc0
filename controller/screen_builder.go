@@ -3,7 +3,6 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
-	"log"
 	"strings"
 )
 
@@ -39,16 +38,13 @@ func (c *controller) buildScreen() *w.Screen {
 }
 
 func (c *controller) assignPresence() {
-	c.update(func(file *w.File) {
+	for _, file := range c.files {
 		if presence, ok := c.presence[file.Hash]; ok {
 			file.Presence = presence
 		} else {
 			file.Presence = w.Resolved
 		}
-	})
-	c.update(func(file *w.File) {
-		log.Printf("assignPresence: file %s", file)
-	})
+	}
 }
 
 func (c *controller) buildEntries(builder *screenBuilder) {
@@ -64,7 +60,10 @@ func (c *controller) buildEntries(builder *screenBuilder) {
 }
 
 func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
-	for _, file := range archive.files {
+	for _, file := range c.files {
+		if file.Root != c.origin {
+			continue
+		}
 		if file.Path == c.currentPath {
 			c.entries = append(c.entries, w.File{
 				FileMeta: file.FileMeta,
@@ -125,7 +124,10 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 		return
 	}
 
-	for _, file := range archive.files {
+	for _, file := range c.files {
+		if file.Root == c.origin {
+			continue
+		}
 		if c.presence[file.Hash] != w.Absent {
 			continue
 		}
@@ -197,11 +199,12 @@ func (c *controller) progress() []w.ProgressInfo {
 func (c *controller) stats(screen *w.Screen) {
 	screen.PendingFiles, screen.DuplicateFiles, screen.AbsentFiles = 0, 0, 0
 
-	c.update(func(file *w.File) {
+	// TODO Change to c.pending
+	for _, file := range c.files {
 		if file.Pending {
 			screen.PendingFiles++
 		}
-	})
+	}
 
 	for _, presence := range c.presence {
 		switch presence {

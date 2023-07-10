@@ -1,4 +1,5 @@
-* move archive.files, archive.pending to controller
+* remove controller.update
+* remove w.File.Pending
 * use controller.pending map to track pending status
 * ??? change archive.files from *w.File to m.Meta
 * use controlled.update() and archive.update() where possible
