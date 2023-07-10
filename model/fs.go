@@ -28,7 +28,7 @@ func (HashArchive) cmd() {}
 
 type HandleFiles struct {
 	Hash
-	Delete []FileId
+	Delete []Id
 	Rename []RenameFile
 	Copy   *CopyFile
 }
@@ -39,11 +39,11 @@ func (h HandleFiles) String() string {
 	buf := &strings.Builder{}
 	fmt.Fprintf(buf, "hash: %q\n", h.Hash)
 	for _, d := range h.Delete {
-		fmt.Fprintf(buf, "    delete: %q/%q\n", d.Root, d.Name)
+		fmt.Fprintf(buf, "    delete: %q/%q\n", d.Root, d.Base)
 	}
 
 	for _, r := range h.Rename {
-		fmt.Fprintf(buf, "    rename: id %q: new name %q\n", r.FileId, r.NewFullName)
+		fmt.Fprintf(buf, "    rename: id %q: new name %q\n", r.Id, r.NewFullName)
 	}
 	if h.Copy != nil {
 		fmt.Fprintf(buf, "    copy: from %q\n", h.Copy.From)
@@ -55,11 +55,11 @@ func (h HandleFiles) String() string {
 }
 
 type RenameFile struct {
-	FileId
-	NewFullName FullName
+	Id
+	NewFullName Name
 }
 
 type CopyFile struct {
-	From FileId
+	From Id
 	To   []Root
 }

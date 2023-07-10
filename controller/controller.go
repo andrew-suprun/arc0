@@ -34,7 +34,7 @@ func (c *controller) update(proc func(file *w.File)) {
 }
 
 type folder struct {
-	selectedId    m.FileId
+	selectedId    m.Id
 	offsetIdx     int
 	sortColumn    w.SortColumn
 	sortAscending []bool
@@ -53,8 +53,8 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
 			scanner: scanner,
-			files:   map[m.FullName]*w.File{},
-			pending: map[m.FullName]*w.File{},
+			files:   map[m.Name]*w.File{},
+			pending: map[m.Name]*w.File{},
 		}
 		scanner.Send(m.ScanArchive{})
 	}

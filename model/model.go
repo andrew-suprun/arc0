@@ -18,41 +18,28 @@ func (path Path) String() string {
 	return string(path)
 }
 
-type Name string
+type Base string
 
-func (name Name) String() string {
+func (name Base) String() string {
 	return string(name)
 }
 
-type FullName struct {
+type Name struct {
 	Path
-	Name
+	Base
 }
 
-func (name FullName) String() string {
-	return filepath.Join(name.Path.String(), name.Name.String())
+func (name Name) String() string {
+	return filepath.Join(name.Path.String(), name.Base.String())
 }
 
-// TODO: rename FileId to Id
-type FileId struct {
+type Id struct {
 	Root
-	Path
-	Name
+	Name // TODO Rename Name
 }
 
-// TODO: convert FileId into:
-//
-// type FileId struct {
-// 	   Root
-// 	   FullName
-// }
-
-func (id FileId) String() string {
-	return filepath.Join(id.Root.String(), id.Path.String(), id.Name.String())
-}
-
-func (id FileId) FullName() FullName {
-	return FullName{Path: id.Path, Name: id.Name}
+func (id Id) String() string {
+	return filepath.Join(id.Root.String(), id.Path.String(), id.Base.String())
 }
 
 type Hash string
@@ -62,14 +49,14 @@ func (hash Hash) String() string {
 }
 
 type FileMeta struct {
-	FileId
+	Id
 	Size    uint64
 	ModTime time.Time
 }
 
 func (m *FileMeta) String() string {
 	return fmt.Sprintf("Meta{Root: %q, Path: %q Name: %q, Size: %d, ModTime: %s}",
-		m.Root, m.Path, m.Name, m.Size, m.ModTime.Format(time.DateTime))
+		m.Root, m.Path, m.Base, m.Size, m.ModTime.Format(time.DateTime))
 }
 
 type FileMetas []FileMeta

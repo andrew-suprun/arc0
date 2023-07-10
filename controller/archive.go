@@ -9,8 +9,8 @@ import (
 
 type archive struct {
 	scanner       m.ArchiveScanner
-	files         map[m.FullName]*w.File
-	pending       map[m.FullName]*w.File
+	files         map[m.Name]*w.File
+	pending       map[m.Name]*w.File
 	progress      m.Progress
 	progressState m.ProgressState
 	totalSize     uint64
@@ -25,11 +25,11 @@ func (a *archive) update(proc func(file *w.File)) {
 	}
 }
 
-func (a *archive) fileByFullName(name m.FullName) *w.File {
+func (a *archive) fileByFullName(name m.Name) *w.File {
 	return a.files[name]
 }
 
-func (a *archive) fileByNewName(name m.FullName) *w.File {
+func (a *archive) fileByNewName(name m.Name) *w.File {
 	if result, ok := a.pending[name]; ok {
 		return result
 	}
@@ -40,19 +40,19 @@ func (a *archive) fileByNewName(name m.FullName) *w.File {
 	return nil
 }
 
-func (a *archive) ensureNameAvailable(id m.FileId) *m.RenameFile {
-	file := a.fileByNewName(id.FullName())
+func (a *archive) ensureNameAvailable(id m.Id) *m.RenameFile {
+	file := a.fileByNewName(id.Name)
 	if file != nil {
-		newName := a.newName(id.FullName())
+		newName := a.newName(id.Name)
 		file.PendingName = newName
 		a.pending[newName] = file
-		return &m.RenameFile{FileId: id, NewFullName: newName}
+		return &m.RenameFile{Id: id, NewFullName: newName}
 	}
 	return nil
 }
 
-func (a *archive) newName(name m.FullName) m.FullName {
-	parts := strings.Split(name.Name.String(), ".")
+func (a *archive) newName(name m.Name) m.Name {
+	parts := strings.Split(name.Base.String(), ".")
 
 	var part string
 	if len(parts) == 1 {
@@ -70,13 +70,13 @@ func (a *archive) newName(name m.FullName) m.FullName {
 		}
 		exists := false
 		for _, entity := range a.files {
-			if name.Path == entity.Path && newName == entity.Name.String() {
+			if name.Path == entity.Path && newName == entity.Base.String() {
 				exists = true
 				break
 			}
 		}
 		if !exists {
-			return m.FullName{Path: name.Path, Name: m.Name(newName)}
+			return m.Name{Path: name.Path, Base: m.Base(newName)}
 		}
 	}
 }

@@ -14,7 +14,7 @@ func (c *controller) keepFile(file *w.File) {
 	cmd := m.HandleFiles{Hash: file.Hash}
 
 	fileId := file.NewId()
-	fileName := fileId.FullName()
+	fileName := fileId.Name
 	log.Printf("### keep %#v", fileId)
 
 	keepFiles := map[m.Root]*w.File{}
@@ -23,11 +23,11 @@ func (c *controller) keepFile(file *w.File) {
 			if entry.Hash == file.Hash {
 				name := entry.NewName()
 				if prevFile, ok := keepFiles[root]; ok {
-					if name == fileId.FullName() {
+					if name == fileName {
 						keepFiles[root] = entry
 					} else if name.Path == fileId.Path && name.Path != prevFile.Path {
 						keepFiles[root] = entry
-					} else if name.Name == fileId.Name && name.Name != prevFile.Name {
+					} else if name.Base == fileId.Base && name.Base != prevFile.Base {
 						keepFiles[root] = entry
 					}
 				} else {
@@ -45,14 +45,14 @@ func (c *controller) keepFile(file *w.File) {
 			if entry.Hash == file.Hash {
 				keepFile := keepFiles[root]
 				if entry == keepFile {
-					if fileName != keepFile.FullName() {
-						newId := m.FileId{Root: keepFile.Root, Path: fileId.Path, Name: fileId.Name}
+					if fileName != keepFile.Name {
+						newId := m.Id{Root: keepFile.Root, Name: fileName}
 						rename := archive.ensureNameAvailable(newId)
 						if rename != nil {
 							cmd.Rename = append(cmd.Rename, *rename)
 						}
-						cmd.Rename = append(cmd.Rename, m.RenameFile{FileId: keepFile.NewId(), NewFullName: fileName})
-						log.Printf("+++ rename.1 %#v", m.RenameFile{FileId: keepFile.NewId(), NewFullName: fileName})
+						cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.NewId(), NewFullName: fileName})
+						log.Printf("+++ rename.1 %#v", m.RenameFile{Id: keepFile.NewId(), NewFullName: fileName})
 						entry.Pending = true
 						keepFile.PendingName = fileName
 						archive.pending[fileName] = keepFile
@@ -61,7 +61,7 @@ func (c *controller) keepFile(file *w.File) {
 					cmd.Delete = append(cmd.Delete, entry.NewId())
 					log.Printf("+++ delete.1 %#v", entry.NewId())
 					entry.Pending = true
-					entry.PendingName = m.FullName{}
+					entry.PendingName = m.Name{}
 				}
 			}
 		}
@@ -73,7 +73,7 @@ func (c *controller) keepFile(file *w.File) {
 			continue
 		}
 		if _, ok := keepFiles[root]; !ok {
-			newId := m.FileId{Root: root, Path: fileName.Path, Name: fileName.Name}
+			newId := m.Id{Root: root, Name: fileName}
 			rename := archive.ensureNameAvailable(newId)
 			if rename != nil {
 				cmd.Rename = append(cmd.Rename, *rename)

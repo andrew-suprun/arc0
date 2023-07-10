@@ -8,17 +8,17 @@ import (
 )
 
 type screenBuilder struct {
-	copyNameHash map[m.Name]m.Hash
+	copyNameHash map[m.Base]m.Hash
 	originHashed bool
 }
 
 func (c *controller) buildScreen() *w.Screen {
 	builder := &screenBuilder{
-		copyNameHash: map[m.Name]m.Hash{},
+		copyNameHash: map[m.Base]m.Hash{},
 	}
 	c.assignPresence()
 	c.buildEntries(builder)
-	if c.currentFolder().selectedId.Name == "" {
+	if c.currentFolder().selectedId.Base == "" {
 		c.selectFirst()
 	}
 
@@ -78,9 +78,9 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 			if len(c.currentPath) > 0 {
 				relPath = file.Path[len(c.currentPath)+1:]
 			}
-			name := m.Name(strings.SplitN(relPath.String(), "/", 2)[0])
+			name := m.Base(strings.SplitN(relPath.String(), "/", 2)[0])
 
-			i, found := m.Find(c.entries, func(entry w.File) bool { return name == entry.Name })
+			i, found := m.Find(c.entries, func(entry w.File) bool { return name == entry.Base })
 			if found {
 				c.entries[i].Size += file.Size
 				if c.entries[i].ModTime.Before(file.ModTime) {
@@ -90,10 +90,12 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 			} else {
 				entry := w.File{
 					FileMeta: m.FileMeta{
-						FileId: m.FileId{
+						Id: m.Id{
 							Root: file.Root,
-							Path: c.currentPath,
-							Name: name,
+							Name: m.Name{
+								Path: c.currentPath,
+								Base: name,
+							},
 						},
 						Size:    file.Size,
 						ModTime: file.ModTime,
@@ -127,7 +129,7 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 		if c.presence[file.Hash] != w.Absent {
 			continue
 		}
-		if hash, ok := builder.copyNameHash[file.Name]; ok && file.Hash == hash {
+		if hash, ok := builder.copyNameHash[file.Base]; ok && file.Hash == hash {
 			continue
 		}
 		if file.Path == c.currentPath {
@@ -140,24 +142,26 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 			}
 
 			c.entries = append(c.entries, entry)
-			builder.copyNameHash[entry.Name] = entry.Hash
+			builder.copyNameHash[entry.Base] = entry.Hash
 		} else if strings.HasPrefix(file.Path.String(), c.currentPath.String()) {
 			relPath := file.Path
 			if len(c.currentPath) > 0 {
 				relPath = file.Path[len(c.currentPath)+1:]
 			}
-			name := m.Name(strings.SplitN(relPath.String(), "/", 2)[0])
+			name := m.Base(strings.SplitN(relPath.String(), "/", 2)[0])
 
-			_, found := m.Find(c.entries, func(entry w.File) bool { return name == entry.Name })
+			_, found := m.Find(c.entries, func(entry w.File) bool { return name == entry.Base })
 			if found {
 				continue
 			}
 			entry := w.File{
 				FileMeta: m.FileMeta{
-					FileId: m.FileId{
+					Id: m.Id{
 						Root: file.Root,
-						Path: c.currentPath,
-						Name: name,
+						Name: m.Name{
+							Path: c.currentPath,
+							Base: name,
+						},
 					},
 				},
 				FileKind: w.FileFolder,

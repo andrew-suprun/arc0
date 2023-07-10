@@ -50,7 +50,7 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 			return true
 		}
 		for _, meta := range metas[cmd.Copy.From.Root] {
-			if meta.FullName == cmd.Copy.From.FullName().String() {
+			if meta.FullName == cmd.Copy.From.Name.String() {
 				for copied := uint64(0); ; copied += 50000 {
 					if copied > meta.Size {
 						copied = meta.Size
@@ -78,10 +78,12 @@ func (s *scanner) scanArchive() {
 	var archiveMetas m.FileMetas
 	for _, meta := range archFiles {
 		archiveMetas = append(archiveMetas, m.FileMeta{
-			FileId: m.FileId{
+			Id: m.Id{
 				Root: s.root,
-				Path: dir(meta.FullName),
-				Name: name(meta.FullName),
+				Name: m.Name{
+					Path: dir(meta.FullName),
+					Base: name(meta.FullName),
+				},
 			},
 			Size:    meta.Size,
 			ModTime: meta.ModTime,
@@ -104,10 +106,12 @@ func (s *scanner) hashArchive() {
 		if !scans[i] {
 			meta := archFiles[i]
 			s.events <- m.FileHashed{
-				FileId: m.FileId{
+				Id: m.Id{
 					Root: meta.Root,
-					Path: dir(meta.FullName),
-					Name: name(meta.FullName),
+					Name: m.Name{
+						Path: dir(meta.FullName),
+						Base: name(meta.FullName),
+					},
 				},
 				Hash: meta.Hash,
 			}
@@ -131,10 +135,12 @@ func (s *scanner) hashArchive() {
 				time.Sleep(time.Millisecond)
 			}
 			s.events <- m.FileHashed{
-				FileId: m.FileId{
+				Id: m.Id{
 					Root: meta.Root,
-					Path: dir(meta.FullName),
-					Name: name(meta.FullName),
+					Name: m.Name{
+						Path: dir(meta.FullName),
+						Base: name(meta.FullName),
+					},
 				},
 				Hash: meta.Hash,
 			}
@@ -255,6 +261,6 @@ func dir(path string) m.Path {
 	return m.Path(path)
 }
 
-func name(path string) m.Name {
-	return m.Name(filepath.Base(path))
+func name(path string) m.Base {
+	return m.Base(filepath.Base(path))
 }

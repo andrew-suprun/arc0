@@ -1,5 +1,5 @@
 package model
 
-type SelectFile FileId
+type SelectFile Id
 
 type SelectFolder Path

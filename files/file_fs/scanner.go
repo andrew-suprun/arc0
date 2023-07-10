@@ -58,16 +58,16 @@ func (s *scanner) scanArchive() {
 
 		if err != nil {
 			s.events <- m.Error{
-				FullName: m.FullName{Path: m.Path(dir(path)), Name: m.Name(name(path))},
-				Error:    err}
+				Name:  m.Name{Path: m.Path(dir(path)), Base: m.Base(name(path))},
+				Error: err}
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
 			s.events <- m.Error{
-				FullName: m.FullName{Path: m.Path(dir(path)), Name: m.Name(name(path))},
-				Error:    err}
+				Name:  m.Name{Path: m.Path(dir(path)), Base: m.Base(name(path))},
+				Error: err}
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
@@ -75,10 +75,12 @@ func (s *scanner) scanArchive() {
 		modTime = modTime.UTC().Round(time.Second)
 
 		fileMeta := m.FileMeta{
-			FileId: m.FileId{
+			Id: m.Id{
 				Root: s.root,
-				Path: m.Path(dir(path)),
-				Name: m.Name(name(path)),
+				Name: m.Name{
+					Path: m.Path(dir(path)),
+					Base: m.Base(name(path)),
+				},
 			},
 			ModTime: modTime,
 			Size:    uint64(meta.Size()),
@@ -131,8 +133,8 @@ func (s *scanner) hashArchive() {
 			s.hashFile(fileInfos[i])
 
 			s.events <- m.FileHashed{
-				FileId: info.meta.FileId,
-				Hash:   info.hash,
+				Id:   info.meta.Id,
+				Hash: info.hash,
 			}
 		}
 	}
@@ -144,9 +146,9 @@ func (s *scanner) hashFile(info *fileInfo) {
 	var hashed uint64
 
 	fsys := os.DirFS(info.meta.Root.String())
-	file, err := fsys.Open(info.meta.FullName().String())
+	file, err := fsys.Open(info.meta.Name.String())
 	if err != nil {
-		s.events <- m.Error{FullName: info.meta.FullName(), Error: err}
+		s.events <- m.Error{Name: info.meta.Name, Error: err}
 		return
 	}
 	defer file.Close()
@@ -161,12 +163,12 @@ func (s *scanner) hashFile(info *fileInfo) {
 			nw, ew := hash.Write(buf[0:nr])
 			if ew != nil {
 				if err != nil {
-					s.events <- m.Error{FullName: info.meta.FullName(), Error: err}
+					s.events <- m.Error{Name: info.meta.Name, Error: err}
 					return
 				}
 			}
 			if nr != nw {
-				s.events <- m.Error{FullName: info.meta.FullName(), Error: err}
+				s.events <- m.Error{Name: info.meta.Name, Error: err}
 				return
 			}
 		}
@@ -175,7 +177,7 @@ func (s *scanner) hashFile(info *fileInfo) {
 			break
 		}
 		if er != nil {
-			s.events <- m.Error{FullName: info.meta.FullName(), Error: er}
+			s.events <- m.Error{Name: info.meta.Name, Error: er}
 			return
 		}
 
@@ -217,10 +219,12 @@ func (s *scanner) readMeta() {
 			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
 				info.hash = m.Hash(hash)
 				s.events <- m.FileHashed{
-					FileId: m.FileId{
+					Id: m.Id{
 						Root: s.root,
-						Path: info.meta.Path,
-						Name: info.meta.Name,
+						Name: m.Name{
+							Path: info.meta.Path,
+							Base: info.meta.Base,
+						},
 					},
 					Hash: m.Hash(hash),
 				}
@@ -236,7 +240,7 @@ func (s *scanner) storeMeta() error {
 	for iNode, info := range s.infos {
 		result = append(result, []string{
 			fmt.Sprint(iNode),
-			norm.NFC.String(info.meta.FullName().String()),
+			norm.NFC.String(info.meta.Name.String()),
 			fmt.Sprint(info.meta.Size),
 			info.meta.ModTime.UTC().Format(time.RFC3339Nano),
 			info.hash.String(),

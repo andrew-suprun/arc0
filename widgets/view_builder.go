@@ -64,8 +64,8 @@ func (s *Screen) folderView(feedback *Feedback) Widget {
 					if i >= size.Height {
 						break
 					}
-					rows = append(rows, Styled(s.styleFile(&file, s.SelectedId == file.FileId),
-						MouseTarget(m.SelectFile(file.FileId), Row(rowConstraint,
+					rows = append(rows, Styled(s.styleFile(&file, s.SelectedId == file.Id),
+						MouseTarget(m.SelectFile(file.Id), Row(rowConstraint,
 							s.fileRow(&file)...,
 						)),
 					))
@@ -86,7 +86,7 @@ func (s *Screen) fileRow(file *File) []Widget {
 	} else {
 		result = append(result, Text(" ▶ "))
 	}
-	result = append(result, Text(file.Name.String()).Width(20).Flex(1))
+	result = append(result, Text(file.Base.String()).Width(20).Flex(1))
 	result = append(result, Text("  "))
 	result = append(result, Text(file.ModTime.Format(time.DateTime)))
 	result = append(result, Text("  "))

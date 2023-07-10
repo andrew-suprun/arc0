@@ -18,14 +18,14 @@ type ArchiveScanned struct {
 func (ArchiveScanned) event() {}
 
 type FileHashed struct {
-	FileId
+	Id
 	Hash
 }
 
 func (FileHashed) event() {}
 
 func (h FileHashed) String() string {
-	return fmt.Sprintf("Hashed Id: %q, Hash: %q", h.FileId.String(), h.Hash)
+	return fmt.Sprintf("Hashed Id: %q, Hash: %q", h.Id.String(), h.Hash)
 }
 
 type FilesHandled HandleFiles
@@ -55,7 +55,7 @@ const (
 )
 
 type Error struct {
-	FullName
+	Name
 	Error error
 }
 

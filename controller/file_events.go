@@ -9,7 +9,7 @@ import (
 func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 	archive := c.archives[tree.Root]
 	for _, meta := range tree.FileMetas {
-		archive.files[meta.FullName()] = &w.File{FileMeta: meta}
+		archive.files[meta.Name] = &w.File{FileMeta: meta}
 		archive.totalSize += meta.Size
 	}
 
@@ -27,7 +27,7 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 func (c *controller) fileHashed(hashed m.FileHashed) {
 	log.Printf("Event %v", hashed)
 	archive := c.archives[hashed.Root]
-	file := archive.fileByFullName(hashed.FullName())
+	file := archive.fileByFullName(hashed.Name)
 	file.Hash = hashed.Hash
 	archive.totalHashed += file.Size
 	archive.progress.HandledSize = 0
@@ -89,8 +89,8 @@ func (c *controller) filesHandled(event m.FilesHandled) {
 
 	for _, deleted := range event.Delete {
 		archive := c.archives[deleted.Root]
-		if pending, ok := archive.pending[deleted.FullName()]; ok {
-			delete(archive.files, pending.FullName())
+		if pending, ok := archive.pending[deleted.Name]; ok {
+			delete(archive.files, pending.Name)
 			delete(archive.pending, pending.PendingName)
 		} else {
 			log.Printf("### filesHandled: not found deleted: %s", deleted)
@@ -99,15 +99,15 @@ func (c *controller) filesHandled(event m.FilesHandled) {
 
 	for _, renamed := range event.Rename {
 		archive := c.archives[renamed.Root]
-		if pending, ok := archive.pending[renamed.FullName()]; ok {
-			delete(archive.files, pending.FullName())
+		if pending, ok := archive.pending[renamed.Name]; ok {
+			delete(archive.files, pending.Name)
 			delete(archive.pending, pending.PendingName)
 
 			pending.Path = renamed.NewFullName.Path
-			pending.Name = renamed.NewFullName.Name
-			pending.PendingName = m.FullName{}
+			pending.Base = renamed.NewFullName.Base
+			pending.PendingName = m.Name{}
 			pending.Pending = false
-			archive.files[pending.FullName()] = pending
+			archive.files[pending.Name] = pending
 		} else {
 			log.Printf("### filesHandled: not found renamed: %s", renamed)
 		}
@@ -115,7 +115,7 @@ func (c *controller) filesHandled(event m.FilesHandled) {
 
 	if event.Copy != nil {
 		copy := event.Copy
-		if pending, ok := c.archives[copy.From.Root].pending[copy.From.FullName()]; ok {
+		if pending, ok := c.archives[copy.From.Root].pending[copy.From.Name]; ok {
 			origin := c.archives[c.origin]
 			origin.totalCopied += pending.Size
 			origin.progress.HandledSize = 0
@@ -123,7 +123,7 @@ func (c *controller) filesHandled(event m.FilesHandled) {
 				origin.copySize, origin.totalCopied = 0, 0
 			}
 			pending.Pending = false
-			pending.PendingName = m.FullName{}
+			pending.PendingName = m.Name{}
 			for _, root := range copy.To {
 				archive := c.archives[root]
 				newFile := &w.File{
@@ -131,7 +131,7 @@ func (c *controller) filesHandled(event m.FilesHandled) {
 					FileKind: pending.FileKind,
 					Hash:     pending.Hash,
 				}
-				archive.files[copy.From.FullName()] = newFile
+				archive.files[copy.From.Name] = newFile
 			}
 		} else {
 			log.Printf("### filesHandled: not found copied: %s", event.Copy)
@@ -155,7 +155,7 @@ func (c *controller) makeSelectedVisible() {
 
 func (c *controller) selectedIdx() int {
 	selectedId := c.currentFolder().selectedId
-	if idx, found := m.Find(c.entries, func(entry w.File) bool { return entry.FileId == selectedId }); found {
+	if idx, found := m.Find(c.entries, func(entry w.File) bool { return entry.Id == selectedId }); found {
 		return idx
 	}
 

@@ -58,7 +58,7 @@ type Screen struct {
 	CurrentPath    m.Path
 	Entries        []File
 	Progress       []ProgressInfo
-	SelectedId     m.FileId
+	SelectedId     m.Id
 	OffsetIdx      int
 	SortColumn     SortColumn
 	SortAscending  []bool
@@ -86,25 +86,27 @@ type File struct {
 	m.Hash
 	Presence    Presence
 	Pending     bool
-	PendingName m.FullName
+	PendingName m.Name
 }
 
-func (f *File) NewId() m.FileId {
+func (f *File) NewId() m.Id {
 	if f.Pending {
-		return m.FileId{
+		return m.Id{
 			Root: f.Root,
-			Path: f.PendingName.Path,
-			Name: f.PendingName.Name,
+			Name: m.Name{
+				Path: f.PendingName.Path,
+				Base: f.PendingName.Base,
+			},
 		}
 	}
-	return f.FileId
+	return f.Id
 }
 
-func (f *File) NewName() m.FullName {
+func (f *File) NewName() m.Name {
 	if f.Pending {
 		return f.PendingName
 	}
-	return f.FileId.FullName()
+	return f.Id.Name
 }
 
 type FileKind int
@@ -130,7 +132,7 @@ type ProgressInfo struct {
 
 func (f *File) String() string {
 	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q, Pending: %v, PendingName: %q, Presence: %v}",
-		f.FileId, f.FileKind, f.Size, f.Hash, f.Pending, f.PendingName, f.Presence)
+		f.Id, f.FileKind, f.Size, f.Hash, f.Pending, f.PendingName, f.Presence)
 }
 
 func (k FileKind) String() string {

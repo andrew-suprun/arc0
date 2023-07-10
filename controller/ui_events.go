@@ -15,10 +15,10 @@ func (c *controller) mouseTarget(cmd any) {
 	folder := c.currentFolder()
 	switch cmd := cmd.(type) {
 	case m.SelectFile:
-		if folder.selectedId == m.FileId(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
+		if folder.selectedId == m.Id(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
 			c.enter()
 		} else {
-			folder.selectedId = m.FileId(cmd)
+			folder.selectedId = m.Id(cmd)
 		}
 		c.lastMouseEventTime = time.Now()
 
@@ -37,7 +37,7 @@ func (c *controller) mouseTarget(cmd any) {
 func (c *controller) selectFirst() {
 	folder := c.currentFolder()
 	if len(c.entries) > 0 {
-		folder.selectedId = c.entries[0].FileId
+		folder.selectedId = c.entries[0].Id
 		folder.offsetIdx = 0
 	}
 }
@@ -45,7 +45,7 @@ func (c *controller) selectFirst() {
 func (c *controller) selectLast() {
 	folder := c.currentFolder()
 	if len(c.entries) > 0 {
-		folder.selectedId = c.entries[len(c.entries)-1].FileId
+		folder.selectedId = c.entries[len(c.entries)-1].Id
 		c.makeSelectedVisible()
 	}
 }
@@ -55,7 +55,7 @@ func (c *controller) enter() {
 	log.Printf("### enter: selectedId: %#v", selectedId)
 	var file *w.File
 	for i := range c.entries {
-		if c.entries[i].FileId == selectedId {
+		if c.entries[i].Id == selectedId {
 			file = &c.entries[i]
 			break
 		}
@@ -66,7 +66,7 @@ func (c *controller) enter() {
 		return
 	}
 	if file.FileKind == w.FileFolder {
-		c.currentPath = m.Path(file.FullName().String())
+		c.currentPath = m.Path(file.Name.String())
 	} else {
 		exec.Command("open", file.String()).Start()
 	}
@@ -95,7 +95,7 @@ func (c *controller) esc() {
 
 func (c *controller) revealInFinder() {
 	selectedId := c.currentFolder().selectedId
-	file := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
+	file := c.archives[selectedId.Root].fileByNewName(selectedId.Name)
 	if file != nil {
 		exec.Command("open", "-R", file.String()).Start()
 	}
@@ -104,7 +104,7 @@ func (c *controller) revealInFinder() {
 func (c *controller) moveSelection(lines int) {
 	folder := c.currentFolder()
 
-	selectedIdx, _ := m.Find(c.entries, func(entry w.File) bool { return entry.FileId == folder.selectedId })
+	selectedIdx, _ := m.Find(c.entries, func(entry w.File) bool { return entry.Id == folder.selectedId })
 	selectedIdx += lines
 	if selectedIdx < 0 {
 		selectedIdx = 0
@@ -112,7 +112,7 @@ func (c *controller) moveSelection(lines int) {
 	if selectedIdx >= len(c.entries) {
 		selectedIdx = len(c.entries) - 1
 	}
-	folder.selectedId = c.entries[selectedIdx].FileId
+	folder.selectedId = c.entries[selectedIdx].Id
 	c.makeSelectedVisible()
 }
 
@@ -128,31 +128,31 @@ func (c *controller) shiftOffset(lines int) {
 
 func (c *controller) keepSelected() {
 	selectedId := c.currentFolder().selectedId
-	selectedFile := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
+	selectedFile := c.archives[selectedId.Root].fileByNewName(selectedId.Name)
 	c.keepFile(selectedFile)
 }
 
 func (c *controller) tab() {
 	selectedId := c.currentFolder().selectedId
-	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
+	selected := c.archives[selectedId.Root].fileByNewName(selectedId.Name)
 
 	if selected.FileKind != w.FileRegular || c.presence[selected.Hash] != w.Duplicate {
 		return
 	}
-	name := selected.FullName().String()
+	name := selected.Name.String()
 	hash := selected.Hash
 	log.Printf("### tab: name=%q hash=%q", name, hash)
-	sameHash := []m.FileId{}
+	sameHash := []m.Id{}
 	for _, file := range c.archives[c.origin].files {
 		if file.Hash == selected.Hash {
-			sameHash = append(sameHash, file.FileId)
+			sameHash = append(sameHash, file.Id)
 		}
 	}
 	sort.Slice(sameHash, func(i, j int) bool {
-		return strings.ToLower(sameHash[i].FullName().String()) < strings.ToLower(sameHash[j].FullName().String())
+		return strings.ToLower(sameHash[i].Name.String()) < strings.ToLower(sameHash[j].Name.String())
 	})
 
-	idx, _ := m.Find(sameHash, func(id m.FileId) bool { return id == selected.FileId })
+	idx, _ := m.Find(sameHash, func(id m.Id) bool { return id == selected.Id })
 	idx++
 	if idx == len(sameHash) {
 		idx = 0
@@ -166,6 +166,6 @@ func (c *controller) tab() {
 
 func (c *controller) deleteSelected() {
 	selectedId := c.currentFolder().selectedId
-	selected := c.archives[selectedId.Root].fileByNewName(selectedId.FullName())
+	selected := c.archives[selectedId.Root].fileByNewName(selectedId.Name)
 	c.deleteFile(selected)
 }
