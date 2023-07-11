@@ -78,7 +78,7 @@ func (c *controller) handleEvent(event any) {
 		c.Errors = append(c.Errors, event)
 
 	case m.Quit:
-		for hash, presence := range c.presence {
+		for hash, presence := range c.state {
 			log.Printf("presence: hash: %q, presence: %v", hash, presence)
 		}
 

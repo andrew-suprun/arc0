@@ -95,7 +95,7 @@ func (c *controller) esc() {
 
 func (c *controller) revealInFinder() {
 	selectedId := c.currentFolder().selectedId
-	file := c.fileByNewId(selectedId)
+	file := c.files[selectedId]
 	if file != nil {
 		exec.Command("open", "-R", file.String()).Start()
 	}
@@ -128,15 +128,15 @@ func (c *controller) shiftOffset(lines int) {
 
 func (c *controller) keepSelected() {
 	selectedId := c.currentFolder().selectedId
-	selectedFile := c.fileByNewId(selectedId)
+	selectedFile := c.files[selectedId]
 	c.keepFile(selectedFile)
 }
 
 func (c *controller) tab() {
 	selectedId := c.currentFolder().selectedId
-	selected := c.fileByNewId(selectedId)
+	selected := c.files[selectedId]
 
-	if selected.FileKind != w.FileRegular || c.presence[selected.Hash] != w.Duplicate {
+	if selected.FileKind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
 		return
 	}
 	name := selected.Name.String()
@@ -166,6 +166,6 @@ func (c *controller) tab() {
 
 func (c *controller) deleteSelected() {
 	selectedId := c.currentFolder().selectedId
-	selected := c.fileByNewId(selectedId)
+	selected := c.files[selectedId]
 	c.deleteFile(selected)
 }

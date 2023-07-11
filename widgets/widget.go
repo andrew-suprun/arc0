@@ -84,16 +84,7 @@ type File struct {
 	m.FileMeta
 	FileKind
 	m.Hash
-	Presence  Presence
-	Pending   bool
-	PendingId m.Id
-}
-
-func (f *File) NewId() m.Id {
-	if f.Pending {
-		return f.PendingId
-	}
-	return f.Id
+	State
 }
 
 type FileKind int
@@ -103,10 +94,11 @@ const (
 	FileFolder
 )
 
-type Presence int
+type State int
 
 const (
-	Resolved Presence = iota
+	Resolved State = iota
+	Pending
 	Duplicate
 	Absent
 )
@@ -118,8 +110,7 @@ type ProgressInfo struct {
 }
 
 func (f *File) String() string {
-	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q, Pending: %v, PendingName: %q, Presence: %v}",
-		f.Id, f.FileKind, f.Size, f.Hash, f.Pending, f.PendingId, f.Presence)
+	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q}", f.Id, f.FileKind, f.Size, f.Hash)
 }
 
 func (k FileKind) String() string {
@@ -132,16 +123,18 @@ func (k FileKind) String() string {
 	return "UNKNOWN FILE KIND"
 }
 
-func (p Presence) String() string {
+func (p State) String() string {
 	switch p {
 	case Resolved:
 		return "Resolved"
+	case Pending:
+		return "Pending"
 	case Duplicate:
 		return "Duplicate"
 	case Absent:
 		return "Absent"
 	}
-	return "UNKNOWN FILE STATUS"
+	return "UNKNOWN FILE STATE"
 }
 
 func (s Style) String() string {

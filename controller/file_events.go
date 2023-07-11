@@ -28,12 +28,28 @@ func (c *controller) archiveHashed(tree m.ArchiveHashed) {
 	archive := c.archives[tree.Root]
 	archive.progressState = m.Hashed
 	archive.totalSize, archive.totalSize = 0, 0
+	for _, archive := range c.archives {
+		if archive.progressState != m.Hashed {
+			return
+		}
+	}
+
+	files := map[m.Hash][]*w.File{}
+	for _, file := range c.files {
+		if file.Root == c.origin {
+			files[file.Hash] = append(files[file.Hash], file)
+		}
+	}
+	for _, entries := range files {
+		if len(entries) == 1 {
+			c.keepFile(entries[0])
+		}
+	}
 }
 
 func (c *controller) fileHashed(hashed m.FileHashed) {
-	log.Printf("Event %v", hashed)
 	archive := c.archives[hashed.Root]
-	file := c.fileById(hashed.Id)
+	file := c.files[hashed.Id]
 	file.Hash = hashed.Hash
 	archive.totalHashed += file.Size
 	archive.hashingProgress.Hashed = 0
@@ -66,11 +82,9 @@ func (c *controller) fileHashed(hashed m.FileHashed) {
 		originEntries := entriesByArchive[c.origin]
 
 		if len(originEntries) == 0 {
-			c.presence[hash] = w.Absent
-		} else if len(originEntries) == 1 {
-			c.keepFile(originEntries[0])
-		} else {
-			c.presence[hash] = w.Duplicate
+			c.state[hash] = w.Absent
+		} else if len(originEntries) > 1 {
+			c.state[hash] = w.Duplicate
 		}
 	}
 }
@@ -80,58 +94,25 @@ func (c *controller) handleHashingProgress(event m.HashingProgress) {
 }
 
 func (c *controller) handleCopyingProgress(event m.CopyingProgress) {
-	c.archives[c.origin].copyingProgress = event
+	c.copyingProgress = event
+	log.Printf("handleCopyingProgress: copied: %d", event.Copied)
 }
 
 func (c *controller) filesHandled(event m.FilesHandled) {
-	log.Printf("Event %v", event)
-	c.presence[event.Hash] = w.Resolved
-
-	for _, deleted := range event.Delete {
-		if pending, ok := c.pending[deleted]; ok {
-			delete(c.files, pending.Id)
-			delete(c.pending, pending.PendingId)
-		} else {
-			log.Printf("### filesHandled: not found deleted: %s", deleted)
-		}
-	}
-
-	for _, renamed := range event.Rename {
-		if pending, ok := c.pending[renamed.Id]; ok {
-			delete(c.files, pending.Id)
-			delete(c.pending, pending.NewId())
-
-			pending.Id = m.Id{Root: renamed.Root, Name: renamed.NewName}
-			pending.PendingId = m.Id{}
-			pending.Pending = false
-			c.files[pending.Id] = pending
-		} else {
-			log.Printf("### filesHandled: not found renamed: %s", renamed)
-		}
-	}
+	log.Printf("filesHandled: %v", event)
+	delete(c.state, event.Hash)
 
 	if event.Copy != nil {
 		copy := event.Copy
-		if pending, ok := c.pending[copy.From]; ok {
-			origin := c.archives[c.origin]
-			origin.totalCopied += pending.Size
-			origin.copyingProgress.Copied = 0
-			if origin.copySize == origin.totalCopied {
-				origin.copySize, origin.totalCopied = 0, 0
+		if entry, ok := c.files[copy.From]; ok {
+			c.totalCopied += entry.Size
+			c.copyingProgress.Copied = 0
+			if c.copySize == c.totalCopied {
+				c.copySize, c.totalCopied = 0, 0
 			}
-			pending.Pending = false
-			pending.PendingId = m.Id{}
-			for _, root := range copy.To {
-				newFile := &w.File{
-					FileMeta: pending.FileMeta,
-					FileKind: pending.FileKind,
-					Hash:     pending.Hash,
-				}
-				to := m.Id{Root: root, Name: newFile.Name}
-				c.files[to] = newFile
-			}
+			log.Printf("filesHandled: c.copySize: %d, c.totalCopied: %d", c.copySize, c.totalCopied)
 		} else {
-			log.Printf("### filesHandled: not found copied: %s", event.Copy)
+			log.Printf("### filesHandled: not found copied: %#v", event.Copy)
 		}
 	}
 }

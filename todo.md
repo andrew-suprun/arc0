@@ -1,3 +1,4 @@
+* add selectedIdx
 * fix copy stats
 * properly handle file events
 * remove empty folders

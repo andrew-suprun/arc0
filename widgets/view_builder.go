@@ -93,12 +93,11 @@ func (s *Screen) fileRow(file *File) []Widget {
 }
 
 func statusString(file *File) string {
-	if file.Pending {
-		return " Pending"
-	}
-	switch file.Presence {
+	switch file.State {
 	case Resolved:
 		return ""
+	case Pending:
+		return " Pending"
 	case Duplicate:
 		return " Duplicate"
 	case Absent:
@@ -218,12 +217,11 @@ func (c *Screen) styleFile(file *File, selected bool) Style {
 var styleBreadcrumbs = Style{FG: 250, BG: 17, Flags: Bold + Italic}
 
 func (c *Screen) statusColor(file *File) byte {
-	if file.Pending {
-		return 214
-	}
-	switch file.Presence {
+	switch file.State {
 	case Resolved:
 		return 195
+	case Pending:
+		return 214
 	case Duplicate, Absent:
 		return 196
 	}
