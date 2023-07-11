@@ -1,6 +1,7 @@
 package file_fs
 
 import (
+	"arch/actor"
 	"arch/lifecycle"
 	m "arch/model"
 	"crypto/sha256"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,6 +28,7 @@ type scanner struct {
 	events m.EventChan
 	lc     *lifecycle.Lifecycle
 	infos  map[uint64]*fileInfo
+	actor.Actor[m.FileCommand]
 }
 
 type fileInfo struct {
@@ -35,7 +38,8 @@ type fileInfo struct {
 
 const hashFileName = ".meta.csv"
 
-func (s *scanner) Send(cmd m.FileCommand) {
+func (s *scanner) handleCommand(cmd m.FileCommand) bool {
+	log.Printf("### handleFiles: cmd=%v", cmd)
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
 		s.scanArchive()
@@ -44,9 +48,9 @@ func (s *scanner) Send(cmd m.FileCommand) {
 		s.hashArchive()
 
 	case m.HandleFiles:
-		_ = cmd
-		// TODO
+		s.handleFiles(cmd)
 	}
+	return true
 }
 
 func (s *scanner) scanArchive() {
@@ -266,4 +270,7 @@ func dir(path string) string {
 
 func name(path string) string {
 	return filepath.Base(path)
+}
+
+func (s *scanner) handleFiles(cmd m.HandleFiles) {
 }
