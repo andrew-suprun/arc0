@@ -7,13 +7,18 @@ import (
 )
 
 type screenBuilder struct {
-	copyNameHash map[m.Base]m.Hash
+	copyNameHash map[nameHash]struct{}
 	originHashed bool
+}
+
+type nameHash struct {
+	m.Base
+	m.Hash
 }
 
 func (c *controller) buildScreen() *w.Screen {
 	builder := &screenBuilder{
-		copyNameHash: map[m.Base]m.Hash{},
+		copyNameHash: map[nameHash]struct{}{},
 	}
 	c.assignPresence()
 	c.buildEntries(builder)
@@ -131,7 +136,8 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 		if c.presence[file.Hash] != w.Absent {
 			continue
 		}
-		if hash, ok := builder.copyNameHash[file.Base]; ok && file.Hash == hash {
+		nh := nameHash{Base: file.Base, Hash: file.Hash}
+		if _, ok := builder.copyNameHash[nh]; ok {
 			continue
 		}
 		if file.Path == c.currentPath {
@@ -144,7 +150,7 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 			}
 
 			c.entries = append(c.entries, entry)
-			builder.copyNameHash[entry.Base] = entry.Hash
+			builder.copyNameHash[nh] = struct{}{}
 		} else if strings.HasPrefix(file.Path.String(), c.currentPath.String()) {
 			relPath := file.Path
 			if len(c.currentPath) > 0 {
