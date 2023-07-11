@@ -110,9 +110,8 @@ func (s *scanner) hashArchive() {
 	}()
 
 	defer func() {
-		s.events <- m.Progress{
-			Root:          s.root,
-			ProgressState: m.FileTreeHashed,
+		s.events <- m.ArchiveHashed{
+			Root: s.root,
 		}
 	}()
 
@@ -182,10 +181,9 @@ func (s *scanner) hashFile(info *fileInfo) {
 		}
 
 		hashed += uint64(nr)
-		s.events <- m.Progress{
-			Root:          info.meta.Root,
-			ProgressState: m.HashingFile,
-			HandledSize:   hashed,
+		s.events <- m.HashingProgress{
+			Root:   info.meta.Root,
+			Hashed: hashed,
 		}
 	}
 	info.hash = m.Hash(base64.RawURLEncoding.EncodeToString(hash.Sum(nil)))

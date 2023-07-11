@@ -13,9 +13,9 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 		archive.totalSize += meta.Size
 	}
 
-	c.archives[tree.Root].progressState = m.FileTreeScanned
+	c.archives[tree.Root].progressState = m.Scanned
 	for _, archive := range c.archives {
-		if archive.progressState != m.FileTreeScanned {
+		if archive.progressState != m.Scanned {
 			return
 		}
 	}
@@ -24,13 +24,19 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 	}
 }
 
+func (c *controller) archiveHashed(tree m.ArchiveHashed) {
+	archive := c.archives[tree.Root]
+	archive.progressState = m.Hashed
+	archive.totalSize, archive.totalSize = 0, 0
+}
+
 func (c *controller) fileHashed(hashed m.FileHashed) {
 	log.Printf("Event %v", hashed)
 	archive := c.archives[hashed.Root]
 	file := c.fileById(hashed.Id)
 	file.Hash = hashed.Hash
 	archive.totalHashed += file.Size
-	archive.progress.HandledSize = 0
+	archive.hashingProgress.Hashed = 0
 
 	hashes := map[m.Hash]struct{}{}
 	bySize := []*w.File{}
@@ -69,17 +75,12 @@ func (c *controller) fileHashed(hashed m.FileHashed) {
 	}
 }
 
-func (c *controller) handleProgress(event m.Progress) {
-	root := c.origin
-	if event.ProgressState != m.CopyingFile {
-		root = event.Root
-	}
-	archive := c.archives[root]
-	archive.progress = event
+func (c *controller) handleHashingProgress(event m.HashingProgress) {
+	c.archives[event.Root].hashingProgress = event
+}
 
-	if event.ProgressState == m.FileTreeHashed {
-		archive.progressState = m.FileTreeHashed
-	}
+func (c *controller) handleCopyingProgress(event m.CopyingProgress) {
+	c.archives[c.origin].copyingProgress = event
 }
 
 func (c *controller) filesHandled(event m.FilesHandled) {
@@ -114,7 +115,7 @@ func (c *controller) filesHandled(event m.FilesHandled) {
 		if pending, ok := c.pending[copy.From]; ok {
 			origin := c.archives[c.origin]
 			origin.totalCopied += pending.Size
-			origin.progress.HandledSize = 0
+			origin.copyingProgress.Copied = 0
 			if origin.copySize == origin.totalCopied {
 				origin.copySize, origin.totalCopied = 0, 0
 			}

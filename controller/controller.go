@@ -32,13 +32,14 @@ type controller struct {
 }
 
 type archive struct {
-	scanner       m.ArchiveScanner
-	progress      m.Progress
-	progressState m.ProgressState
-	totalSize     uint64
-	totalHashed   uint64
-	copySize      uint64
-	totalCopied   uint64
+	scanner         m.ArchiveScanner
+	hashingProgress m.HashingProgress
+	copyingProgress m.CopyingProgress
+	progressState   m.ProgressState
+	totalSize       uint64
+	totalHashed     uint64
+	copySize        uint64
+	totalCopied     uint64
 }
 
 type folder struct {

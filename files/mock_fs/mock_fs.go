@@ -55,10 +55,8 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 					if copied > meta.Size {
 						copied = meta.Size
 					}
-					s.events <- m.Progress{
-						Root:          "origin",
-						ProgressState: m.CopyingFile,
-						HandledSize:   copied,
+					s.events <- m.CopyingProgress{
+						Copied: copied,
 					}
 					if copied == meta.Size {
 						break
@@ -124,10 +122,9 @@ func (s *scanner) hashArchive() {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
-				s.events <- m.Progress{
-					Root:          meta.Root,
-					ProgressState: m.HashingFile,
-					HandledSize:   hashed,
+				s.events <- m.HashingProgress{
+					Root:   meta.Root,
+					Hashed: hashed,
 				}
 				if hashed == meta.Size {
 					break
@@ -146,9 +143,8 @@ func (s *scanner) hashArchive() {
 			}
 		}
 	}
-	s.events <- m.Progress{
-		Root:          s.root,
-		ProgressState: m.FileTreeHashed,
+	s.events <- m.ArchiveHashed{
+		Root: s.root,
 	}
 }
 

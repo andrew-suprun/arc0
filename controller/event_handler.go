@@ -14,14 +14,20 @@ func (c *controller) handleEvent(event any) {
 	case m.ArchiveScanned:
 		c.archiveScanned(event)
 
+	case m.ArchiveHashed:
+		c.archiveHashed(event)
+
 	case m.FileHashed:
 		c.fileHashed(event)
 
 	case m.FilesHandled:
 		c.filesHandled(event)
 
-	case m.Progress:
-		c.handleProgress(event)
+	case m.HashingProgress:
+		c.handleHashingProgress(event)
+
+	case m.CopyingProgress:
+		c.handleCopyingProgress(event)
 
 	case m.ScreenSize:
 		c.screenSize = m.ScreenSize{Width: event.Width, Height: event.Height}

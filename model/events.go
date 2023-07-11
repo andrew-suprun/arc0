@@ -17,6 +17,12 @@ type ArchiveScanned struct {
 
 func (ArchiveScanned) event() {}
 
+type ArchiveHashed struct {
+	Root
+}
+
+func (ArchiveHashed) event() {}
+
 type FileHashed struct {
 	Id
 	Hash
@@ -36,23 +42,26 @@ func (h FilesHandled) String() string {
 	return HandleFiles(h).String()
 }
 
-type Progress struct {
-	Root
-	ProgressState
-	HandledSize uint64
-}
-
-func (Progress) event() {}
-
 type ProgressState int
 
 const (
 	Initial ProgressState = iota
-	FileTreeScanned
-	HashingFile
-	FileTreeHashed
-	CopyingFile
+	Scanned
+	Hashed
 )
+
+type HashingProgress struct {
+	Root
+	Hashed uint64
+}
+
+func (HashingProgress) event() {}
+
+type CopyingProgress struct {
+	Copied uint64
+}
+
+func (CopyingProgress) event() {}
 
 type Error struct {
 	Name

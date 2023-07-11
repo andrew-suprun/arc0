@@ -3,7 +3,6 @@ package widgets
 import (
 	m "arch/model"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -78,7 +77,6 @@ func (s *Screen) folderView(feedback *Feedback) Widget {
 }
 
 func (s *Screen) fileRow(file *File) []Widget {
-	log.Printf("fileRow: file: %s", file)
 	result := []Widget{Text(statusString(file)).Width(11)}
 
 	if file.FileKind == FileRegular {

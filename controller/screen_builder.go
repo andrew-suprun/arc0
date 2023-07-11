@@ -7,18 +7,18 @@ import (
 )
 
 type screenBuilder struct {
-	copyNameHash map[nameHash]struct{}
+	copyNameHash map[nameAndHash]struct{}
 	originHashed bool
 }
 
-type nameHash struct {
+type nameAndHash struct {
 	m.Base
 	m.Hash
 }
 
 func (c *controller) buildScreen() *w.Screen {
 	builder := &screenBuilder{
-		copyNameHash: map[nameHash]struct{}{},
+		copyNameHash: map[nameAndHash]struct{}{},
 	}
 	c.assignPresence()
 	c.buildEntries(builder)
@@ -136,8 +136,8 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 		if c.presence[file.Hash] != w.Absent {
 			continue
 		}
-		nh := nameHash{Base: file.Base, Hash: file.Hash}
-		if _, ok := builder.copyNameHash[nh]; ok {
+		nameHash := nameAndHash{Base: file.Base, Hash: file.Hash}
+		if _, ok := builder.copyNameHash[nameHash]; ok {
 			continue
 		}
 		if file.Path == c.currentPath {
@@ -150,7 +150,7 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 			}
 
 			c.entries = append(c.entries, entry)
-			builder.copyNameHash[nh] = struct{}{}
+			builder.copyNameHash[nameHash] = struct{}{}
 		} else if strings.HasPrefix(file.Path.String(), c.currentPath.String()) {
 			relPath := file.Path
 			if len(c.currentPath) > 0 {
@@ -185,19 +185,24 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 
 func (c *controller) progress() []w.ProgressInfo {
 	infos := []w.ProgressInfo{}
+	archive := c.archives[c.origin]
+	if archive.progressState == m.Hashed {
+		infos = append(infos, w.ProgressInfo{
+			Root:  c.origin,
+			Tab:   " Copying",
+			Value: float64(archive.totalCopied+archive.copyingProgress.Copied) / float64(archive.copySize),
+		})
+	}
 	var tab string
 	var value float64
 	for _, root := range c.roots {
 		archive := c.archives[root]
-		if archive.progressState == m.FileTreeScanned {
-			tab = " Hashing"
-			value = float64(archive.totalHashed+archive.progress.HandledSize) / float64(archive.totalSize)
-			infos = append(infos, w.ProgressInfo{Root: root, Tab: tab, Value: value})
-		} else if archive.progressState == m.FileTreeHashed && archive.copySize != 0 {
-			tab = " Copying"
-			value = float64(archive.totalCopied+archive.progress.HandledSize) / float64(archive.copySize)
-			infos = append(infos, w.ProgressInfo{Root: root, Tab: tab, Value: value})
+		if archive.progressState != m.Scanned {
+			continue
 		}
+		tab = " Hashing"
+		value = float64(archive.totalHashed+archive.hashingProgress.Hashed) / float64(archive.totalSize)
+		infos = append(infos, w.ProgressInfo{Root: root, Tab: tab, Value: value})
 	}
 	return infos
 }
