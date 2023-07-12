@@ -118,7 +118,7 @@ func (c *controller) filesHandled(event m.FilesHandled) {
 }
 
 func (c *controller) makeSelectedVisible() {
-	selectedIdx := c.selectedIdx()
+	selectedIdx := c.getSelectedIdx()
 	offsetIdx := c.currentFolder().offsetIdx
 
 	if offsetIdx > selectedIdx {
@@ -129,14 +129,4 @@ func (c *controller) makeSelectedVisible() {
 	}
 
 	c.currentFolder().offsetIdx = offsetIdx
-}
-
-func (c *controller) selectedIdx() int {
-	selectedId := c.getSelectedId()
-	if idx, found := m.Find(c.entries, func(entry w.File) bool { return entry.Id == selectedId }); found {
-		return idx
-	}
-
-	log.Panicf("selectedIdx filed")
-	return 0
 }
