@@ -11,7 +11,6 @@ func (c *controller) keepFile(file *w.File) {
 	if file == nil || file.FileKind != w.FileRegular || file.Hash == "" || c.state[file.Hash] == w.Pending {
 		return
 	}
-	c.state[file.Hash] = w.Pending
 
 	cmd := m.HandleFiles{Hash: file.Hash}
 
@@ -88,6 +87,7 @@ func (c *controller) keepFile(file *w.File) {
 	}
 	if len(cmd.Delete) > 0 || len(cmd.Rename) > 0 || cmd.Copy != nil {
 		c.archives[c.origin].scanner.Send(cmd)
+		c.state[file.Hash] = w.Pending
 	}
 }
 

@@ -123,6 +123,7 @@ func (c *controller) keepSelected() {
 
 func (c *controller) tab() {
 	selectedId := c.getSelectedId()
+	log.Printf("tab: selectedId: %q", selectedId)
 	selected := c.files[selectedId]
 
 	if selected.FileKind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
