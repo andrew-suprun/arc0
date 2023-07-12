@@ -1,5 +1,6 @@
-* Delete of folder marhed as Absent
 * properly handle file events
+* fix jumping selection
+* fix stats
 * remove directories that only contain .DS_Store and ._* files
 * handle 'keep all' event 
 * add descriptions to ScanErrors

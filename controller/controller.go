@@ -23,7 +23,7 @@ type controller struct {
 	lastMouseEventTime time.Time
 
 	currentPath m.Path
-	entries     []w.File
+	entries     []*w.File
 
 	feedback w.Feedback
 
@@ -95,25 +95,33 @@ func (c *controller) currentFolder() *folder {
 	return curFolder
 }
 
-func (c *controller) getSelectedId() (result m.Id) {
+func (c *controller) getSelectedFile() *w.File {
 	if len(c.entries) == 0 {
-		return m.Id{}
+		return nil
 	}
 	folder := c.currentFolder()
 	idx := 0
 	for idx = range c.entries {
 		if c.entries[idx].Id == folder.selectedId {
-			return folder.selectedId
+			return c.entries[idx]
 		}
 	}
-	if folder.selectedIdx >= len(c.entries) {
-		folder.selectedIdx = len(c.entries) - 1
+	if idx >= len(c.entries) {
+		idx = len(c.entries) - 1
 	}
-	if folder.selectedIdx < 0 {
-		folder.selectedIdx = 0
+	if idx < 0 {
+		idx = 0
 	}
+	folder.selectedIdx = idx
 	folder.selectedId = c.entries[folder.selectedIdx].Id
-	return folder.selectedId
+	return c.entries[idx]
+}
+
+func (c *controller) getSelectedId() m.Id {
+	if file := c.getSelectedFile(); file != nil {
+		return file.Id
+	}
+	return m.Id{}
 }
 
 func (c *controller) setSelectedId(id m.Id) {

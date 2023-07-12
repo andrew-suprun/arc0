@@ -75,7 +75,7 @@ func (c *controller) handleEvent(event any) {
 		// TODO: Implement, maybe?
 
 	case m.Delete:
-		c.deleteSelected()
+		c.deleteFile(c.getSelectedFile())
 
 	case m.Error:
 		c.Errors = append(c.Errors, event)

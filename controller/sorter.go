@@ -24,7 +24,7 @@ func (c *controller) sort() {
 	sort.Sort(slice)
 }
 
-type sliceBy []w.File
+type sliceBy []*w.File
 
 func (s sliceBy) Len() int {
 	return len(s)

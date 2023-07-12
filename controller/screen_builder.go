@@ -33,7 +33,7 @@ func (c *controller) buildScreen() *w.Screen {
 		SortAscending: folder.sortAscending,
 	}
 
-	screen.Entries = make([]w.File, len(c.entries))
+	screen.Entries = make([]*w.File, len(c.entries))
 	c.stats(screen)
 	copy(screen.Entries, c.entries)
 	return screen
@@ -67,7 +67,7 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 			continue
 		}
 		if file.Path == c.currentPath {
-			c.entries = append(c.entries, w.File{
+			c.entries = append(c.entries, &w.File{
 				FileMeta: file.FileMeta,
 				FileKind: w.FileRegular,
 				Hash:     file.Hash,
@@ -80,15 +80,15 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 			}
 			name := m.Base(strings.SplitN(relPath.String(), "/", 2)[0])
 
-			i, found := m.Find(c.entries, func(entry w.File) bool { return name == entry.Base })
+			i, found := m.Find(c.entries, func(entry *w.File) bool { return name == entry.Base })
 			if found {
 				c.entries[i].Size += file.Size
 				if c.entries[i].ModTime.Before(file.ModTime) {
 					c.entries[i].ModTime = file.ModTime
 				}
-				c.mergeStatus(&c.entries[i], file)
+				c.mergeStatus(c.entries[i], file)
 			} else {
-				entry := w.File{
+				entry := &w.File{
 					FileMeta: m.FileMeta{
 						Id: m.Id{
 							Root: file.Root,
@@ -131,7 +131,7 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 			continue
 		}
 		if file.Path == c.currentPath {
-			entry := w.File{
+			entry := &w.File{
 				FileMeta: file.FileMeta,
 				FileKind: w.FileRegular,
 				Hash:     file.Hash,
@@ -147,11 +147,11 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 			}
 			name := m.Base(strings.SplitN(relPath.String(), "/", 2)[0])
 
-			_, found := m.Find(c.entries, func(entry w.File) bool { return name == entry.Base })
+			_, found := m.Find(c.entries, func(entry *w.File) bool { return name == entry.Base })
 			if found {
 				continue
 			}
-			entry := w.File{
+			entry := &w.File{
 				FileMeta: m.FileMeta{
 					Id: m.Id{
 						Root: file.Root,

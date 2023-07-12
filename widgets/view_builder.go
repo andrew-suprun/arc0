@@ -61,9 +61,9 @@ func (s *Screen) folderView(feedback *Feedback) Widget {
 					if i >= size.Height {
 						break
 					}
-					rows = append(rows, Styled(s.styleFile(&file, s.SelectedId == file.Id),
+					rows = append(rows, Styled(s.styleFile(file, s.SelectedId == file.Id),
 						MouseTarget(m.SelectFile(file.Id), Row(rowConstraint,
-							s.fileRow(&file)...,
+							s.fileRow(file)...,
 						)),
 					))
 				}

@@ -56,7 +56,7 @@ const (
 
 type Screen struct {
 	CurrentPath    m.Path
-	Entries        []File
+	Entries        []*File
 	Progress       []ProgressInfo
 	SelectedId     m.Id
 	OffsetIdx      int

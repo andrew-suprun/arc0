@@ -3,7 +3,6 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
-	"log"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -62,7 +61,7 @@ func (c *controller) enter() {
 	var file *w.File
 	for i := range c.entries {
 		if c.entries[i].Id == selectedId {
-			file = &c.entries[i]
+			file = c.entries[i]
 			break
 		}
 	}
@@ -123,16 +122,11 @@ func (c *controller) keepSelected() {
 }
 
 func (c *controller) tab() {
-	selectedId := c.getSelectedId()
-	log.Printf("tab: selectedId: %q", selectedId)
-	selected := c.files[selectedId]
+	selected := c.getSelectedFile()
 
-	if selected.FileKind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
+	if selected == nil || selected.FileKind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
 		return
 	}
-	name := selected.Name.String()
-	hash := selected.Hash
-	log.Printf("### tab: name=%q hash=%q", name, hash)
 	sameHash := []m.Id{}
 	for _, file := range c.files {
 		if file.Hash == selected.Hash && file.Root == c.origin {
@@ -153,10 +147,4 @@ func (c *controller) tab() {
 	c.setSelectedId(id)
 
 	c.makeSelectedVisible()
-}
-
-func (c *controller) deleteSelected() {
-	selectedId := c.getSelectedId()
-	selected := c.files[selectedId]
-	c.deleteFile(selected)
 }

@@ -92,21 +92,21 @@ func (c *controller) keepFile(file *w.File) {
 }
 
 func (c *controller) deleteFile(file *w.File) {
-	if file == nil || file.Hash == "" || c.state[file.Hash] != w.Absent {
+	if file == nil {
 		return
 	}
 
 	if file.FileKind == w.FileFolder {
 		c.deleteFolderFile(file)
-	} else {
-		c.deleteRegularFile(file)
+	} else if c.state[file.Hash] == w.Absent {
+		c.deleteRegularFile(file.Hash)
 	}
 }
 
-func (c *controller) deleteRegularFile(file *w.File) {
-	cmd := m.HandleFiles{Hash: file.Hash}
+func (c *controller) deleteRegularFile(hash m.Hash) {
+	cmd := m.HandleFiles{Hash: hash}
 	for _, entry := range c.files {
-		if entry.Hash == file.Hash && entry.Root != c.origin {
+		if entry.Hash == hash && c.state[entry.Hash] != w.Absent {
 			cmd.Delete = append(cmd.Delete, entry.Id)
 			delete(c.files, entry.Id)
 		}
@@ -115,7 +115,17 @@ func (c *controller) deleteRegularFile(file *w.File) {
 }
 
 func (c *controller) deleteFolderFile(file *w.File) {
-	// TODO: implement
+	path := file.Name.String()
+	hashes := map[m.Hash]struct{}{}
+	for id, entry := range c.files {
+		if c.state[entry.Hash] == w.Absent && strings.HasPrefix(id.Path.String(), path) {
+			hashes[entry.Hash] = struct{}{}
+		}
+	}
+
+	for hash := range hashes {
+		c.deleteRegularFile(hash)
+	}
 }
 
 func (c *controller) ensureNameAvailable(id m.Id) *m.RenameFile {
