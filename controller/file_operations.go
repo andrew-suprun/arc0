@@ -4,7 +4,6 @@ import (
 	m "arch/model"
 	w "arch/widgets"
 	"fmt"
-	"log"
 	"strings"
 )
 
@@ -86,7 +85,6 @@ func (c *controller) keepFile(file *w.File) {
 	if len(copy.To) > 0 {
 		cmd.Copy = &copy
 		c.copySize += file.Size
-		log.Printf("keepFile: copySize: %d", c.copySize)
 	}
 	if len(cmd.Delete) > 0 || len(cmd.Rename) > 0 || cmd.Copy != nil {
 		c.archives[c.origin].scanner.Send(cmd)

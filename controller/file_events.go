@@ -45,6 +45,7 @@ func (c *controller) archiveHashed(tree m.ArchiveHashed) {
 			c.keepFile(entries[0])
 		}
 	}
+	c.setSelectedIdx(0)
 }
 
 func (c *controller) fileHashed(hashed m.FileHashed) {
@@ -95,7 +96,6 @@ func (c *controller) handleHashingProgress(event m.HashingProgress) {
 
 func (c *controller) handleCopyingProgress(event m.CopyingProgress) {
 	c.copyingProgress = event
-	log.Printf("handleCopyingProgress: copied: %d", event.Copied)
 }
 
 func (c *controller) filesHandled(event m.FilesHandled) {
@@ -132,7 +132,7 @@ func (c *controller) makeSelectedVisible() {
 }
 
 func (c *controller) selectedIdx() int {
-	selectedId := c.currentFolder().selectedId
+	selectedId := c.getSelectedId()
 	if idx, found := m.Find(c.entries, func(entry w.File) bool { return entry.Id == selectedId }); found {
 		return idx
 	}

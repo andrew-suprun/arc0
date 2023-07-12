@@ -15,10 +15,10 @@ func (c *controller) mouseTarget(cmd any) {
 	folder := c.currentFolder()
 	switch cmd := cmd.(type) {
 	case m.SelectFile:
-		if folder.selectedId == m.Id(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
+		if c.getSelectedId() == m.Id(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
 			c.enter()
 		} else {
-			folder.selectedId = m.Id(cmd)
+			c.setSelectedId(m.Id(cmd))
 		}
 		c.lastMouseEventTime = time.Now()
 
@@ -35,23 +35,21 @@ func (c *controller) mouseTarget(cmd any) {
 }
 
 func (c *controller) selectFirst() {
-	folder := c.currentFolder()
 	if len(c.entries) > 0 {
-		folder.selectedId = c.entries[0].Id
-		folder.offsetIdx = 0
+		c.setSelectedIdx(0)
+		c.currentFolder().offsetIdx = 0
 	}
 }
 
 func (c *controller) selectLast() {
-	folder := c.currentFolder()
 	if len(c.entries) > 0 {
-		folder.selectedId = c.entries[len(c.entries)-1].Id
+		c.setSelectedIdx(len(c.entries) - 1)
 		c.makeSelectedVisible()
 	}
 }
 
 func (c *controller) enter() {
-	selectedId := c.currentFolder().selectedId
+	selectedId := c.getSelectedId()
 	log.Printf("### enter: selectedId: %#v", selectedId)
 	var file *w.File
 	for i := range c.entries {
@@ -94,7 +92,7 @@ func (c *controller) esc() {
 }
 
 func (c *controller) revealInFinder() {
-	selectedId := c.currentFolder().selectedId
+	selectedId := c.getSelectedId()
 	file := c.files[selectedId]
 	if file != nil {
 		exec.Command("open", "-R", file.String()).Start()
@@ -102,9 +100,7 @@ func (c *controller) revealInFinder() {
 }
 
 func (c *controller) moveSelection(lines int) {
-	folder := c.currentFolder()
-
-	selectedIdx, _ := m.Find(c.entries, func(entry w.File) bool { return entry.Id == folder.selectedId })
+	selectedIdx, _ := m.Find(c.entries, func(entry w.File) bool { return entry.Id == c.getSelectedId() })
 	selectedIdx += lines
 	if selectedIdx < 0 {
 		selectedIdx = 0
@@ -112,7 +108,7 @@ func (c *controller) moveSelection(lines int) {
 	if selectedIdx >= len(c.entries) {
 		selectedIdx = len(c.entries) - 1
 	}
-	folder.selectedId = c.entries[selectedIdx].Id
+	c.setSelectedIdx(c.getSelectedIdx() + lines)
 	c.makeSelectedVisible()
 }
 
@@ -127,13 +123,13 @@ func (c *controller) shiftOffset(lines int) {
 }
 
 func (c *controller) keepSelected() {
-	selectedId := c.currentFolder().selectedId
+	selectedId := c.getSelectedId()
 	selectedFile := c.files[selectedId]
 	c.keepFile(selectedFile)
 }
 
 func (c *controller) tab() {
-	selectedId := c.currentFolder().selectedId
+	selectedId := c.getSelectedId()
 	selected := c.files[selectedId]
 
 	if selected.FileKind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
@@ -159,13 +155,13 @@ func (c *controller) tab() {
 	}
 	id := sameHash[idx]
 	c.currentPath = id.Path
-	c.currentFolder().selectedId = id
+	c.setSelectedId(id)
 
 	c.makeSelectedVisible()
 }
 
 func (c *controller) deleteSelected() {
-	selectedId := c.currentFolder().selectedId
+	selectedId := c.getSelectedId()
 	selected := c.files[selectedId]
 	c.deleteFile(selected)
 }

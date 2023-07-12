@@ -1,5 +1,3 @@
-* add selectedIdx
-* fix copy stats
 * properly handle file events
 * remove empty folders
 * remove directories that only contain .DS_Store and ._* files

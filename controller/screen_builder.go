@@ -22,15 +22,12 @@ func (c *controller) buildScreen() *w.Screen {
 	}
 	c.assignState()
 	c.buildEntries(builder)
-	if c.currentFolder().selectedId.Base == "" {
-		c.selectFirst()
-	}
 
 	folder := c.currentFolder()
 	screen := &w.Screen{
 		CurrentPath:   c.currentPath,
 		Progress:      c.progress(),
-		SelectedId:    folder.selectedId,
+		SelectedId:    c.getSelectedId(),
 		OffsetIdx:     folder.offsetIdx,
 		SortColumn:    folder.sortColumn,
 		SortAscending: folder.sortAscending,
