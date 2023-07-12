@@ -105,10 +105,9 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 		device.events <- model.Quit{}
 
 	case "Enter":
-		device.events <- model.Enter{}
+		device.events <- model.Open{}
 
-	case "Esc":
-		device.events <- model.Esc{}
+	// case "Esc":
 
 	case "Ctrl+R":
 		device.events <- model.RevealInFinder{}
@@ -130,6 +129,12 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 
 	case "Down":
 		device.events <- model.MoveSelection{Lines: 1}
+
+	case "Left":
+		device.events <- model.Exit{}
+
+	case "Right":
+		device.events <- model.Enter{}
 
 	case "Ctrl+K":
 		device.events <- model.KeepOne{}

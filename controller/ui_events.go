@@ -16,7 +16,7 @@ func (c *controller) mouseTarget(cmd any) {
 	switch cmd := cmd.(type) {
 	case m.SelectFile:
 		if c.getSelectedId() == m.Id(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
-			c.enter()
+			c.open()
 		} else {
 			c.setSelectedId(m.Id(cmd))
 		}
@@ -48,9 +48,17 @@ func (c *controller) selectLast() {
 	}
 }
 
+func (c *controller) open() {
+	selectedId := c.getSelectedId()
+	file := c.files[selectedId]
+
+	if file != nil {
+		exec.Command("open", file.String()).Start()
+	}
+}
+
 func (c *controller) enter() {
 	selectedId := c.getSelectedId()
-	log.Printf("### enter: selectedId: %#v", selectedId)
 	var file *w.File
 	for i := range c.entries {
 		if c.entries[i].Id == selectedId {
@@ -59,14 +67,8 @@ func (c *controller) enter() {
 		}
 	}
 
-	log.Printf("### enter: file: %q", file)
-	if file == nil {
-		return
-	}
-	if file.FileKind == w.FileFolder {
+	if file != nil && file.FileKind == w.FileFolder {
 		c.currentPath = m.Path(file.Name.String())
-	} else {
-		exec.Command("open", file.String()).Start()
 	}
 }
 
@@ -80,7 +82,7 @@ func (c *controller) pgDn() {
 	c.moveSelection(c.feedback.FileTreeLines)
 }
 
-func (c *controller) esc() {
+func (c *controller) exit() {
 	if c.currentPath == "" {
 		return
 	}
@@ -100,7 +102,6 @@ func (c *controller) revealInFinder() {
 }
 
 func (c *controller) moveSelection(lines int) {
-	log.Printf("moveSelection: %d", lines)
 	c.setSelectedIdx(c.getSelectedIdx() + lines)
 	c.makeSelectedVisible()
 }

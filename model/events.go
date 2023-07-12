@@ -76,13 +76,17 @@ type ScreenSize struct {
 
 func (ScreenSize) event() {}
 
+type Open struct{}
+
+func (Open) event() {}
+
 type Enter struct{}
 
 func (Enter) event() {}
 
-type Esc struct{}
+type Exit struct{}
 
-func (Esc) event() {}
+func (Exit) event() {}
 
 type RevealInFinder struct{}
 

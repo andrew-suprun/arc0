@@ -1,4 +1,3 @@
-* Left/Right keys to switch folders
 * Delete of folder marhed as Absent
 * properly handle file events
 * remove directories that only contain .DS_Store and ._* files

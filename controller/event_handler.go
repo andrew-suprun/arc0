@@ -35,8 +35,11 @@ func (c *controller) handleEvent(event any) {
 	case m.Enter:
 		c.enter()
 
-	case m.Esc:
-		c.esc()
+	case m.Open:
+		c.open()
+
+	case m.Exit:
+		c.exit()
 
 	case m.RevealInFinder:
 		c.revealInFinder()
