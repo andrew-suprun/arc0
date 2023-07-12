@@ -1,5 +1,6 @@
+* Left/Right keys to switch folders
+* Delete of folder
 * properly handle file events
-* remove empty folders
 * remove directories that only contain .DS_Store and ._* files
 * handle 'keep all' event 
 * add descriptions to ScanErrors

@@ -100,14 +100,7 @@ func (c *controller) revealInFinder() {
 }
 
 func (c *controller) moveSelection(lines int) {
-	selectedIdx, _ := m.Find(c.entries, func(entry w.File) bool { return entry.Id == c.getSelectedId() })
-	selectedIdx += lines
-	if selectedIdx < 0 {
-		selectedIdx = 0
-	}
-	if selectedIdx >= len(c.entries) {
-		selectedIdx = len(c.entries) - 1
-	}
+	log.Printf("moveSelection: %d", lines)
 	c.setSelectedIdx(c.getSelectedIdx() + lines)
 	c.makeSelectedVisible()
 }

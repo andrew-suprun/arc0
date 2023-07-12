@@ -21,15 +21,13 @@ var (
 	colConstraint = Constraint{Size: Size{Width: 0, Height: 0}, Flex: Flex{X: 1, Y: 1}}
 )
 
-func (s *Screen) View() (Widget, Feedback) {
-	feedback := Feedback{}
-	widget := Column(colConstraint,
+func (s *Screen) View(feedback *Feedback) Widget {
+	return Column(colConstraint,
 		s.title(),
-		s.folderView(&feedback),
+		s.folderView(feedback),
 		s.progress(),
 		s.fileStats(),
 	)
-	return widget, feedback
 }
 
 func (c *Screen) title() Widget {
