@@ -5,4 +5,4 @@ to
 from
 *.log
 *.csv
-data
+data*

@@ -48,12 +48,7 @@ func (c *controller) selectLast() {
 }
 
 func (c *controller) open() {
-	selectedId := c.getSelectedId()
-	file := c.files[selectedId]
-
-	if file != nil {
-		exec.Command("open", file.String()).Start()
-	}
+	exec.Command("open", c.getSelectedId().String()).Start()
 }
 
 func (c *controller) enter() {
@@ -93,11 +88,7 @@ func (c *controller) exit() {
 }
 
 func (c *controller) revealInFinder() {
-	selectedId := c.getSelectedId()
-	file := c.files[selectedId]
-	if file != nil {
-		exec.Command("open", "-R", file.String()).Start()
-	}
+	exec.Command("open", "-R", c.getSelectedId().String()).Start()
 }
 
 func (c *controller) moveSelection(lines int) {

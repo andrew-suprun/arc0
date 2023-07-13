@@ -1,5 +1,6 @@
 * properly handle file events
 * fix jumping selection
+* fix ghost folders
 * fix stats
 * remove directories that only contain .DS_Store and ._* files
 * handle 'keep all' event 
