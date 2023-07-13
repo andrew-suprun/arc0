@@ -106,7 +106,7 @@ func (c *controller) deleteFile(file *w.File) {
 func (c *controller) deleteRegularFile(hash m.Hash) {
 	cmd := m.HandleFiles{Hash: hash}
 	for _, entry := range c.files {
-		if entry.Hash == hash && c.state[entry.Hash] != w.Absent {
+		if entry.Hash == hash && c.state[entry.Hash] == w.Absent {
 			cmd.Delete = append(cmd.Delete, entry.Id)
 			delete(c.files, entry.Id)
 		}
