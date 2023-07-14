@@ -110,7 +110,7 @@ type ProgressInfo struct {
 }
 
 func (f *File) String() string {
-	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q}", f.Id, f.FileKind, f.Size, f.Hash)
+	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q, State: %s}", f.Id, f.FileKind, f.Size, f.Hash, f.State)
 }
 
 func (k FileKind) String() string {

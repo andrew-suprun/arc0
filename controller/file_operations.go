@@ -48,7 +48,7 @@ func (c *controller) keepFile(file *w.File) {
 					if rename != nil {
 						cmd.Rename = append(cmd.Rename, *rename)
 					}
-					cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.Id, NewName: fileName})
+					cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.Id, NewId: newId})
 					c.files[newId] = keepFile
 					delete(c.files, keepFile.Id)
 					keepFile.Id = newId
@@ -135,7 +135,7 @@ func (c *controller) ensureNameAvailable(id m.Id) *m.RenameFile {
 		c.files[newId] = file
 		delete(c.files, id)
 		file.Id = newId
-		return &m.RenameFile{Id: id, NewName: newId.Name}
+		return &m.RenameFile{Id: id, NewId: newId}
 	}
 	return nil
 }

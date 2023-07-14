@@ -35,7 +35,7 @@ func (name Name) String() string {
 
 type Id struct {
 	Root
-	Name // TODO Rename Name
+	Name
 }
 
 func (id Id) String() string {

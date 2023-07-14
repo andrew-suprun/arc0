@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -39,7 +38,6 @@ type fileInfo struct {
 const hashFileName = ".meta.csv"
 
 func (s *scanner) handleCommand(cmd m.FileCommand) bool {
-	log.Printf("### handleFiles: cmd=%v", cmd)
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
 		s.scanArchive()
@@ -270,7 +268,4 @@ func dir(path string) string {
 
 func name(path string) string {
 	return filepath.Base(path)
-}
-
-func (s *scanner) handleFiles(cmd m.HandleFiles) {
 }

@@ -57,9 +57,7 @@ type HashingProgress struct {
 
 func (HashingProgress) event() {}
 
-type CopyingProgress struct {
-	Copied uint64
-}
+type CopyingProgress uint64
 
 func (CopyingProgress) event() {}
 

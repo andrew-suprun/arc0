@@ -53,9 +53,7 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 					if copied > meta.Size {
 						copied = meta.Size
 					}
-					s.events <- m.CopyingProgress{
-						Copied: copied,
-					}
+					s.events <- m.CopyingProgress(copied)
 					if copied == meta.Size {
 						break
 					}

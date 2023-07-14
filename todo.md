@@ -1,7 +1,7 @@
-* properly handle file events
 * fix jumping selection
 * fix ghost folders
-* fix stats
+* make logging optional triggered by '-log' command line flag
+* change m.Error.Name to m.Error.Id
 * remove directories that only contain .DS_Store and ._* files
 * handle 'keep all' event 
 * add descriptions to ScanErrors

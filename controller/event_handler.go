@@ -78,6 +78,7 @@ func (c *controller) handleEvent(event any) {
 		c.deleteFile(c.getSelectedFile())
 
 	case m.Error:
+		log.Printf("### Error: %s", event)
 		c.Errors = append(c.Errors, event)
 
 	case m.Quit:

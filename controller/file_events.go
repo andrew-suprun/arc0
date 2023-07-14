@@ -99,18 +99,16 @@ func (c *controller) handleCopyingProgress(event m.CopyingProgress) {
 }
 
 func (c *controller) filesHandled(event m.FilesHandled) {
-	log.Printf("filesHandled: %v", event)
 	delete(c.state, event.Hash)
 
 	if event.Copy != nil {
 		copy := event.Copy
 		if entry, ok := c.files[copy.From]; ok {
 			c.totalCopied += entry.Size
-			c.copyingProgress.Copied = 0
+			c.copyingProgress = 0
 			if c.copySize == c.totalCopied {
 				c.copySize, c.totalCopied = 0, 0
 			}
-			log.Printf("filesHandled: c.copySize: %d, c.totalCopied: %d", c.copySize, c.totalCopied)
 		} else {
 			log.Printf("### filesHandled: not found copied: %#v", event.Copy)
 		}

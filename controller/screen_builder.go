@@ -86,7 +86,7 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 				if c.entries[i].ModTime.Before(file.ModTime) {
 					c.entries[i].ModTime = file.ModTime
 				}
-				c.mergeStatus(c.entries[i], file)
+				c.mergeState(c.entries[i], file)
 			} else {
 				entry := &w.File{
 					FileMeta: m.FileMeta{
@@ -110,8 +110,8 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 	builder.originHashed = true
 }
 
-func (c *controller) mergeStatus(folder, file *w.File) {
-	state := c.state[file.Hash]
+func (c *controller) mergeState(folder, file *w.File) {
+	state := file.State
 	if folder.State < state {
 		folder.State = state
 	}
@@ -147,8 +147,9 @@ func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
 			}
 			name := m.Base(strings.SplitN(relPath.String(), "/", 2)[0])
 
-			_, found := m.Find(c.entries, func(entry *w.File) bool { return name == entry.Base })
+			i, found := m.Find(c.entries, func(entry *w.File) bool { return name == entry.Base })
 			if found {
+				c.mergeState(c.entries[i], file)
 				continue
 			}
 			entry := &w.File{
@@ -178,7 +179,7 @@ func (c *controller) progress() []w.ProgressInfo {
 		infos = append(infos, w.ProgressInfo{
 			Root:  c.origin,
 			Tab:   " Copying",
-			Value: float64(c.totalCopied+c.copyingProgress.Copied) / float64(c.copySize),
+			Value: float64(c.totalCopied+uint64(c.copyingProgress)) / float64(c.copySize),
 		})
 	}
 	var tab string

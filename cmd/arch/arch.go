@@ -13,6 +13,11 @@ import (
 
 func main() {
 	log.SetFlags(0)
+	logFile, err := os.Create("log.log")
+	if err == nil {
+		log.SetOutput(logFile)
+		defer logFile.Close()
+	}
 
 	var paths []m.Root
 	if len(os.Args) >= 1 && (os.Args[1] == "-sim" || os.Args[1] == "-sim2") {

@@ -39,28 +39,25 @@ func (h HandleFiles) String() string {
 	buf := &strings.Builder{}
 	fmt.Fprintf(buf, "HandleFiles: hash: %q\n", h.Hash)
 	for _, d := range h.Delete {
-		fmt.Fprintf(buf, "    delete: %q/%q\n", d.Root, d.Base)
+		fmt.Fprintf(buf, "    delete: %s\n", d)
 	}
 
 	for _, r := range h.Rename {
-		fmt.Fprintf(buf, "    rename: id %q: new name %q\n", r.Id, r.NewName)
+		fmt.Fprintf(buf, "    %s\n", r)
 	}
 	if h.Copy != nil {
-		fmt.Fprintf(buf, "    copy: from %q\n", h.Copy.From)
-		for _, t := range h.Copy.To {
-			fmt.Fprintf(buf, "          -> %q\n", t)
-		}
+		fmt.Fprintf(buf, "    %s\n", h.Copy)
 	}
 	return buf.String()
 }
 
 type RenameFile struct {
 	Id
-	NewName Name
+	NewId Id
 }
 
 func (r RenameFile) String() string {
-	return fmt.Sprintf("RenameFile: Id=%q, NewName=%q", r.Id, r.NewName)
+	return fmt.Sprintf("RenameFile: Id=%q, NewId=%q", r.Id, r.NewId)
 }
 
 type CopyFile struct {
