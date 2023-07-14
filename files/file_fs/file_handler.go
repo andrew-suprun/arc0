@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func (s *scanner) handleFiles(cmd m.HandleFiles) {
@@ -60,7 +61,10 @@ type command interface {
 	cmd()
 }
 
-type createFile m.Id
+type createFile struct {
+	m.Id
+	modTime time.Time
+}
 
 func (createFile) cmd() {}
 
@@ -132,13 +136,22 @@ func (s *scanner) reader(source m.Id, targets []m.Root, eventChans []chan event)
 		}
 	}()
 
+	info, err := os.Stat(source.String())
+	if err != nil {
+		s.events <- m.Error{Name: source.Name, Error: err}
+		return
+	}
+
 	for i := range targets {
 		commands[i] = make(chan command)
 		go s.writer(commands[i], eventChans[i])
 	}
 
 	for i, root := range targets {
-		commands[i] <- createFile(m.Id{Root: root, Name: source.Name})
+		commands[i] <- createFile{
+			Id:      m.Id{Root: root, Name: source.Name},
+			modTime: info.ModTime(),
+		}
 	}
 
 	sourceFile, err := os.Open(source.String())
@@ -148,7 +161,7 @@ func (s *scanner) reader(source m.Id, targets []m.Root, eventChans []chan event)
 	}
 
 	var n int
-	for err != io.EOF {
+	for err != io.EOF && !s.lc.ShoudStop() {
 		buf := make([]byte, 1024*1024)
 		n, err = sourceFile.Read(buf)
 		if err != nil && err != io.EOF {
@@ -163,6 +176,8 @@ func (s *scanner) reader(source m.Id, targets []m.Root, eventChans []chan event)
 
 func (s *scanner) writer(cmdChan chan command, eventChan chan event) {
 	var id m.Id
+	var fileName string
+	var modTime time.Time
 	var file *os.File
 	var err error
 	var copied copyProgress
@@ -170,15 +185,25 @@ func (s *scanner) writer(cmdChan chan command, eventChan chan event) {
 	defer func() {
 		if file != nil {
 			file.Close()
+			if s.lc.ShoudStop() {
+				os.Remove(fileName)
+			}
+			os.Chtimes(fileName, time.Now(), modTime)
+
 		}
 		close(eventChan)
 	}()
 
 	for cmd := range cmdChan {
+		if s.lc.ShoudStop() {
+			return
+		}
 		switch cmd := cmd.(type) {
 		case createFile:
-			os.MkdirAll(filepath.Join(cmd.Root.String(), cmd.Path.String()), 0755)
-			id = m.Id(cmd)
+			fileName = filepath.Join(cmd.Root.String(), cmd.Path.String())
+			os.MkdirAll(fileName, 0755)
+			id = cmd.Id
+			modTime = cmd.modTime
 			file, err = os.Create(id.String())
 
 		case writeBuffer:

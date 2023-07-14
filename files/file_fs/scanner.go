@@ -48,7 +48,7 @@ func (s *scanner) handleCommand(cmd m.FileCommand) bool {
 	case m.HandleFiles:
 		s.handleFiles(cmd)
 	}
-	return true
+	return !s.lc.ShoudStop()
 }
 
 func (s *scanner) scanArchive() {

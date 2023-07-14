@@ -1,7 +1,5 @@
 * add FilesHashed event for stored hashes
-* make copying aware of lifecycle
 * remove partially copied files due to interruption
-* reset modTime for new copies
 * fix jumping selection
 * fix ghost folders
 * make logging optional triggered by '-log' command line flag
