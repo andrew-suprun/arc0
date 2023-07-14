@@ -1,5 +1,3 @@
-* add FilesHashed event for stored hashes
-* remove partially copied files due to interruption
 * fix jumping selection
 * fix ghost folders
 * make logging optional triggered by '-log' command line flag
