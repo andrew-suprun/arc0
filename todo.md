@@ -1,8 +1,11 @@
+* make copying aware of lifecycle
+* issue copying progress events
+* remove partially copied files due to interruption
+* reset modTime for new copies
 * fix jumping selection
 * fix ghost folders
 * make logging optional triggered by '-log' command line flag
 * change m.Error.Name to m.Error.Id
-* remove directories that only contain .DS_Store and ._* files
 * handle 'keep all' event 
 * add descriptions to ScanErrors
 * ??? move Screen{} and View() into separate package
