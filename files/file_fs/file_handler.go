@@ -12,7 +12,6 @@ import (
 )
 
 func (s *scanner) handleFiles(cmd m.HandleFiles) {
-
 	for _, delete := range cmd.Delete {
 		log.Printf("delete: %s", delete)
 		err := os.Remove(delete.String())
@@ -56,21 +55,6 @@ func (s *scanner) handleFiles(cmd m.HandleFiles) {
 	}
 	s.events <- m.FilesHandled(cmd)
 }
-
-type command interface {
-	cmd()
-}
-
-type createFile struct {
-	m.Id
-	modTime time.Time
-}
-
-func (createFile) cmd() {}
-
-type writeBuffer []byte
-
-func (writeBuffer) cmd() {}
 
 type event interface {
 	event()
@@ -129,7 +113,7 @@ func (s *scanner) copyFiles(source m.Id, targets []m.Root) error {
 }
 
 func (s *scanner) reader(source m.Id, targets []m.Root, eventChans []chan event) {
-	commands := make([]chan command, len(targets))
+	commands := make([]chan []byte, len(targets))
 	defer func() {
 		for _, cmdChan := range commands {
 			close(cmdChan)
@@ -143,15 +127,8 @@ func (s *scanner) reader(source m.Id, targets []m.Root, eventChans []chan event)
 	}
 
 	for i := range targets {
-		commands[i] = make(chan command)
-		go s.writer(commands[i], eventChans[i])
-	}
-
-	for i, root := range targets {
-		commands[i] <- createFile{
-			Id:      m.Id{Root: root, Name: source.Name},
-			modTime: info.ModTime(),
-		}
+		commands[i] = make(chan []byte)
+		go s.writer(m.Id{Root: targets[i], Name: source.Name}, info.ModTime(), commands[i], eventChans[i])
 	}
 
 	sourceFile, err := os.Open(source.String())
@@ -169,18 +146,21 @@ func (s *scanner) reader(source m.Id, targets []m.Root, eventChans []chan event)
 			return
 		}
 		for _, cmd := range commands {
-			cmd <- writeBuffer(buf[:n])
+			cmd <- buf[:n]
 		}
 	}
 }
 
-func (s *scanner) writer(cmdChan chan command, eventChan chan event) {
-	var id m.Id
-	var fileName string
-	var modTime time.Time
-	var file *os.File
-	var err error
+func (s *scanner) writer(id m.Id, modTime time.Time, cmdChan chan []byte, eventChan chan event) {
 	var copied copyProgress
+
+	fileName := filepath.Join(id.Root.String(), id.Path.String())
+	os.MkdirAll(fileName, 0755)
+	file, err := os.Create(id.String())
+	if err != nil {
+		s.events <- m.Error{Name: id.Name, Error: err}
+		return
+	}
 
 	defer func() {
 		if file != nil {
@@ -198,26 +178,13 @@ func (s *scanner) writer(cmdChan chan command, eventChan chan event) {
 		if s.lc.ShoudStop() {
 			return
 		}
-		switch cmd := cmd.(type) {
-		case createFile:
-			fileName = filepath.Join(cmd.Root.String(), cmd.Path.String())
-			os.MkdirAll(fileName, 0755)
-			id = cmd.Id
-			modTime = cmd.modTime
-			file, err = os.Create(id.String())
 
-		case writeBuffer:
-			n, err := file.Write([]byte(cmd))
-			copied += copyProgress(n)
-			if err != nil {
-				s.events <- m.Error{Name: id.Name, Error: err}
-				return
-			}
-			eventChan <- copied
-
-		}
+		n, err := file.Write([]byte(cmd))
+		copied += copyProgress(n)
 		if err != nil {
-			eventChan <- copyError{Name: id.Name, Error: err}
+			s.events <- m.Error{Name: id.Name, Error: err}
+			return
 		}
+		eventChan <- copied
 	}
 }

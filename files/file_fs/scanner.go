@@ -38,6 +38,9 @@ type fileInfo struct {
 const hashFileName = ".meta.csv"
 
 func (s *scanner) handleCommand(cmd m.FileCommand) bool {
+	s.lc.Started()
+	defer s.lc.Done()
+
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
 		s.scanArchive()
@@ -103,9 +106,6 @@ func (s *scanner) scanArchive() {
 }
 
 func (s *scanner) hashArchive() {
-	s.lc.Started()
-	defer s.lc.Done()
-
 	s.readMeta()
 	defer func() {
 		s.storeMeta()
@@ -117,26 +117,37 @@ func (s *scanner) hashArchive() {
 		}
 	}()
 
-	fileInfos := make([]*fileInfo, 0, len(s.infos))
+	hashedInfos := m.FilesHashed{}
+	nonHashedInfos := []*fileInfo{}
 	for _, info := range s.infos {
-		fileInfos = append(fileInfos, info)
-	}
-
-	sort.Slice(fileInfos, func(i, j int) bool {
-		return fileInfos[i].meta.Size < fileInfos[j].meta.Size
-	})
-
-	for i, info := range fileInfos {
-		if info.hash == "" {
-			if s.lc.ShoudStop() {
-				return
-			}
-			s.hashFile(fileInfos[i])
-
-			s.events <- m.FileHashed{
+		if info.hash != "" {
+			hashedInfos = append(hashedInfos, m.FileHashed{
 				Id:   info.meta.Id,
 				Hash: info.hash,
-			}
+			})
+		} else {
+			nonHashedInfos = append(nonHashedInfos, info)
+		}
+	}
+
+	if len(hashedInfos) > 0 {
+		s.events <- hashedInfos
+	}
+
+	sort.Slice(nonHashedInfos, func(i, j int) bool {
+		return nonHashedInfos[i].meta.Size < nonHashedInfos[j].meta.Size
+	})
+
+	for _, info := range nonHashedInfos {
+		s.hashFile(info)
+
+		if s.lc.ShoudStop() {
+			return
+		}
+
+		s.events <- m.FileHashed{
+			Id:   info.meta.Id,
+			Hash: info.hash,
 		}
 	}
 }
@@ -218,16 +229,6 @@ func (s *scanner) readMeta() {
 			info, ok := s.infos[iNode]
 			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
 				info.hash = m.Hash(hash)
-				s.events <- m.FileHashed{
-					Id: m.Id{
-						Root: s.root,
-						Name: m.Name{
-							Path: info.meta.Path,
-							Base: info.meta.Base,
-						},
-					},
-					Hash: m.Hash(hash),
-				}
 			}
 		}
 	}

@@ -82,6 +82,14 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		widget.Render(renderer, w.Position{X: 0, Y: 0}, w.Size(c.screenSize))
 		renderer.Show()
 	}
+
+	go func() {
+		for {
+			if _, ok := <-events; !ok {
+				break
+			}
+		}
+	}()
 }
 
 func (c *controller) currentFolder() *folder {

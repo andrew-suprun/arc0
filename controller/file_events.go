@@ -48,6 +48,12 @@ func (c *controller) archiveHashed(tree m.ArchiveHashed) {
 	c.setSelectedIdx(0)
 }
 
+func (c *controller) filesHashed(hashed m.FilesHashed) {
+	for _, file := range hashed {
+		c.fileHashed(file)
+	}
+}
+
 func (c *controller) fileHashed(hashed m.FileHashed) {
 	archive := c.archives[hashed.Root]
 	file := c.files[hashed.Id]
