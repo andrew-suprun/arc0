@@ -93,19 +93,20 @@ func (s *scanner) copyFiles(source m.Id, targets []m.Root) error {
 
 	for {
 		hasValue := false
+		minCopied := uint64(0)
 		for i := range events {
 			if event, ok := <-events[i]; ok {
 				hasValue = true
 				switch event := event.(type) {
 				case copyProgress:
-					copied[i] += uint64(event)
+					copied[i] = uint64(event)
+					minCopied = copied[i]
 
 				case copyError:
 					s.events <- m.Error{Name: event.Name, Error: event.Error}
 				}
 			}
 		}
-		minCopied := uint64(0)
 		for _, fileCopied := range copied {
 			if minCopied > fileCopied {
 				minCopied = fileCopied

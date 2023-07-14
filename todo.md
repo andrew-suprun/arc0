@@ -1,5 +1,5 @@
+* add FilesHashed event for stored hashes
 * make copying aware of lifecycle
-* issue copying progress events
 * remove partially copied files due to interruption
 * reset modTime for new copies
 * fix jumping selection
