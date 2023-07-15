@@ -117,21 +117,13 @@ func (s *scanner) hashArchive() {
 		}
 	}()
 
-	hashedInfos := m.FilesHashed{}
 	nonHashedInfos := []*fileInfo{}
 	for _, info := range s.infos {
 		if info.hash != "" {
-			hashedInfos = append(hashedInfos, m.FileHashed{
-				Id:   info.meta.Id,
-				Hash: info.hash,
-			})
+			s.events <- m.FileHashed{Id: info.meta.Id, Hash: info.hash}
 		} else {
 			nonHashedInfos = append(nonHashedInfos, info)
 		}
-	}
-
-	if len(hashedInfos) > 0 {
-		s.events <- hashedInfos
 	}
 
 	sort.Slice(nonHashedInfos, func(i, j int) bool {

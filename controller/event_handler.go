@@ -16,9 +16,6 @@ func (c *controller) handleEvent(event any) {
 	case m.ArchiveHashed:
 		c.archiveHashed(event)
 
-	case m.FilesHashed:
-		c.filesHashed(event)
-
 	case m.FileHashed:
 		c.fileHashed(event)
 

@@ -30,10 +30,6 @@ type FileHashed struct {
 
 func (FileHashed) event() {}
 
-type FilesHashed []FileHashed
-
-func (FilesHashed) event() {}
-
 func (h FileHashed) String() string {
 	return fmt.Sprintf("Hashed Id: %q, Hash: %q", h.Id.String(), h.Hash)
 }
