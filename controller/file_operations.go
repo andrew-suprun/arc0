@@ -52,6 +52,13 @@ func (c *controller) keepFile(file *m.File) {
 			}
 		} else {
 			cmd.Delete = append(cmd.Delete, entry.Id)
+			for i, file := range files {
+				if file.Id == entry.Id {
+					files[i] = files[len(files)-1]
+					c.files[file.Hash] = files[:len(files)-1]
+					break
+				}
+			}
 		}
 	}
 

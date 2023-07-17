@@ -86,7 +86,7 @@ func (s *Screen) String() string {
 	if len(s.Entries) > 0 {
 		fmt.Fprintf(buf, "  Entries: {\n")
 		for _, entry := range s.Entries {
-			fmt.Fprintf(buf, "    %s:\n", &entry.File)
+			fmt.Fprintf(buf, "    %s:\n", entry)
 		}
 		fmt.Fprintf(buf, "  }\n")
 	}
