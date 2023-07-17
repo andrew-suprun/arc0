@@ -37,9 +37,6 @@ func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
-		s.scanArchive()
-
-	case m.HashArchive:
 		s.hashArchive()
 
 	case m.HandleFiles:
@@ -67,28 +64,6 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	return true
 }
 
-func (s *scanner) scanArchive() {
-	archFiles := metas[s.root]
-	var archiveMetas m.FileMetas
-	for _, meta := range archFiles {
-		archiveMetas = append(archiveMetas, m.FileMeta{
-			Id: m.Id{
-				Root: s.root,
-				Name: m.Name{
-					Path: dir(meta.FullName),
-					Base: name(meta.FullName),
-				},
-			},
-			Size:    meta.Size,
-			ModTime: meta.ModTime,
-		})
-	}
-	s.events <- m.ArchiveScanned{
-		Root:      s.root,
-		FileMetas: archiveMetas,
-	}
-}
-
 func (s *scanner) hashArchive() {
 	archFiles := metas[s.root]
 	scans := make([]bool, len(archFiles))
@@ -99,15 +74,19 @@ func (s *scanner) hashArchive() {
 	for i := range archFiles {
 		if !scans[i] {
 			meta := archFiles[i]
-			s.events <- m.FileHashed{
-				Id: m.Id{
-					Root: meta.Root,
-					Name: m.Name{
-						Path: dir(meta.FullName),
-						Base: name(meta.FullName),
+			s.events <- m.FileScanned{
+				File: &m.File{
+					Id: m.Id{
+						Root: meta.Root,
+						Name: m.Name{
+							Path: dir(meta.FullName),
+							Base: name(meta.FullName),
+						},
 					},
+					Size:    meta.Size,
+					ModTime: meta.ModTime,
+					Hash:    meta.Hash,
 				},
-				Hash: meta.Hash,
 			}
 		}
 	}
@@ -127,19 +106,23 @@ func (s *scanner) hashArchive() {
 				}
 				time.Sleep(time.Millisecond)
 			}
-			s.events <- m.FileHashed{
-				Id: m.Id{
-					Root: meta.Root,
-					Name: m.Name{
-						Path: dir(meta.FullName),
-						Base: name(meta.FullName),
+			s.events <- m.FileScanned{
+				File: &m.File{
+					Id: m.Id{
+						Root: meta.Root,
+						Name: m.Name{
+							Path: dir(meta.FullName),
+							Base: name(meta.FullName),
+						},
 					},
+					Size:    meta.Size,
+					ModTime: meta.ModTime,
+					Hash:    meta.Hash,
 				},
-				Hash: meta.Hash,
 			}
 		}
 	}
-	s.events <- m.ArchiveHashed{
+	s.events <- m.ArchiveScanned{
 		Root: s.root,
 	}
 }
@@ -163,7 +146,6 @@ var modTimes = map[m.Hash]time.Time{}
 var inode = uint64(0)
 
 func init() {
-	sizeByName["8888"] = 88888888
 	sizeByHash["yyyy"] = 50000000
 	sizeByHash["hhhh"] = 50000000
 	for root, metaStrings := range metaMap {

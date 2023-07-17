@@ -6,73 +6,75 @@ import (
 	"strings"
 )
 
-type screenBuilder struct {
-	copyNameHash map[nameAndHash]struct{}
-	originHashed bool
-}
-
-type nameAndHash struct {
+type nameHashPair struct {
 	m.Base
 	m.Hash
 }
+type nameHashSet map[nameHashPair]struct{}
 
-func (c *controller) buildScreen() *w.Screen {
-	builder := &screenBuilder{
-		copyNameHash: map[nameAndHash]struct{}{},
-	}
-	c.assignState()
-	c.buildEntries(builder)
+func (c *controller) buildScreen() {
+	// TODO process c.filesHandled() events here
+	nameHashes := nameHashSet{}
+	c.populateEntries(nameHashes)
 
 	folder := c.currentFolder()
-	screen := &w.Screen{
-		CurrentPath:   c.currentPath,
-		Progress:      c.progress(),
-		SelectedId:    c.getSelectedId(),
-		OffsetIdx:     folder.offsetIdx,
-		SortColumn:    folder.sortColumn,
-		SortAscending: folder.sortAscending,
-	}
+	c.screen.CurrentPath = c.currentPath
+	c.screen.Progress = c.progress()
+	c.screen.SelectedId = c.getSelectedId()
+	c.screen.OffsetIdx = folder.offsetIdx
+	c.screen.SortColumn = folder.sortColumn
+	c.screen.SortAscending = folder.sortAscending
 
-	screen.Entries = make([]*w.File, len(c.entries))
-	c.stats(screen)
-	copy(screen.Entries, c.entries)
-	return screen
+	c.stats()
 }
 
-func (c *controller) assignState() {
-	for _, file := range c.files {
-		if presence, ok := c.state[file.Hash]; ok {
-			file.State = presence
-		} else {
-			file.State = w.Resolved
-		}
+func (c *controller) populateEntries(nameHashes nameHashSet) {
+	c.screen.Entries = c.screen.Entries[:0]
+	for hash, files := range c.files {
+		state := c.calcState(hash, files)
+		c.state[hash] = state
+		c.addEntries(state, files, nameHashes)
 	}
-}
-
-func (c *controller) buildEntries(builder *screenBuilder) {
-	c.entries = c.entries[:0]
-
-	c.handleOrigin(builder, c.archives[c.origin])
-
-	for _, root := range c.roots[1:] {
-		c.handleCopy(builder, c.archives[root])
-	}
-
 	c.sort()
 }
 
-func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
-	for _, file := range c.files {
-		if file.Root != c.origin {
+func (c *controller) calcState(hash m.Hash, files []*m.File) w.State {
+	state := c.state[hash]
+	if state == w.Pending {
+		return w.Pending
+	}
+	originFiles := 0
+	names := map[m.Name]struct{}{}
+	for _, file := range files {
+		if file.Root == c.origin {
+			originFiles++
+		}
+		names[file.Name] = struct{}{}
+	}
+	if originFiles == 0 {
+		return w.Absent
+	} else if originFiles > 1 {
+		return w.Duplicate
+	}
+	return w.Resolved
+}
+
+func (c *controller) addEntries(state w.State, files []*m.File, nameHashes nameHashSet) {
+	originState := c.archives[c.origin].progressState
+	for _, file := range files {
+		if file.Root != c.origin && originState == m.Initial {
 			continue
 		}
+		nameHash := nameHashPair{Base: file.Base, Hash: file.Hash}
+
 		if file.Path == c.currentPath {
-			c.entries = append(c.entries, &w.File{
-				FileMeta: file.FileMeta,
-				FileKind: w.FileRegular,
-				Hash:     file.Hash,
-				State:    file.State,
-			})
+			if _, ok := nameHashes[nameHash]; !ok {
+				c.screen.Entries = append(c.screen.Entries, &w.File{
+					File:  *file,
+					Kind:  w.FileRegular,
+					State: state,
+				})
+			}
 		} else if strings.HasPrefix(file.Path.String(), c.currentPath.String()) {
 			relPath := file.Path
 			if len(c.currentPath) > 0 {
@@ -80,16 +82,20 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 			}
 			name := m.Base(strings.SplitN(relPath.String(), "/", 2)[0])
 
-			i, found := m.Find(c.entries, func(entry *w.File) bool { return name == entry.Base })
+			i, found := m.Find(c.screen.Entries, func(entry *w.File) bool {
+				return name == entry.Base && entry.Kind == w.FileFolder
+			})
 			if found {
-				c.entries[i].Size += file.Size
-				if c.entries[i].ModTime.Before(file.ModTime) {
-					c.entries[i].ModTime = file.ModTime
+				c.screen.Entries[i].Size += file.Size
+				if c.screen.Entries[i].ModTime.Before(file.ModTime) {
+					c.screen.Entries[i].ModTime = file.ModTime
 				}
-				c.mergeState(c.entries[i], file)
+				if c.screen.Entries[i].State < state {
+					c.screen.Entries[i].State = state
+				}
 			} else {
 				entry := &w.File{
-					FileMeta: m.FileMeta{
+					File: m.File{
 						Id: m.Id{
 							Root: file.Root,
 							Name: m.Name{
@@ -100,82 +106,20 @@ func (c *controller) handleOrigin(builder *screenBuilder, archive *archive) {
 						Size:    file.Size,
 						ModTime: file.ModTime,
 					},
-					State:    file.State,
-					FileKind: w.FileFolder,
+					Kind:  w.FileFolder,
+					State: state,
 				}
-				c.entries = append(c.entries, entry)
+				c.screen.Entries = append(c.screen.Entries, entry)
 			}
 		}
-	}
-	builder.originHashed = true
-}
-
-func (c *controller) mergeState(folder, file *w.File) {
-	state := file.State
-	if folder.State < state {
-		folder.State = state
-	}
-}
-
-func (c *controller) handleCopy(builder *screenBuilder, archive *archive) {
-	if !builder.originHashed {
-		return
-	}
-
-	for _, file := range c.files {
-		if file.Root == c.origin || c.state[file.Hash] != w.Absent {
-			continue
-		}
-		nameHash := nameAndHash{Base: file.Base, Hash: file.Hash}
-		if _, ok := builder.copyNameHash[nameHash]; ok {
-			continue
-		}
-		if file.Path == c.currentPath {
-			entry := &w.File{
-				FileMeta: file.FileMeta,
-				FileKind: w.FileRegular,
-				Hash:     file.Hash,
-				State:    file.State,
-			}
-
-			c.entries = append(c.entries, entry)
-			builder.copyNameHash[nameHash] = struct{}{}
-		} else if strings.HasPrefix(file.Path.String(), c.currentPath.String()) {
-			relPath := file.Path
-			if len(c.currentPath) > 0 {
-				relPath = file.Path[len(c.currentPath)+1:]
-			}
-			name := m.Base(strings.SplitN(relPath.String(), "/", 2)[0])
-
-			i, found := m.Find(c.entries, func(entry *w.File) bool { return name == entry.Base })
-			if found {
-				c.mergeState(c.entries[i], file)
-				continue
-			}
-			entry := &w.File{
-				FileMeta: m.FileMeta{
-					Id: m.Id{
-						Root: file.Root,
-						Name: m.Name{
-							Path: c.currentPath,
-							Base: name,
-						},
-					},
-				},
-				FileKind: w.FileFolder,
-				State:    file.State,
-			}
-
-			c.entries = append(c.entries, entry)
-
-		}
+		nameHashes[nameHash] = struct{}{}
 	}
 }
 
 func (c *controller) progress() []w.ProgressInfo {
 	infos := []w.ProgressInfo{}
 	archive := c.archives[c.origin]
-	if archive.progressState == m.Hashed && c.copySize > 0 {
+	if archive.progressState == m.Scanned && c.copySize > 0 {
 		infos = append(infos, w.ProgressInfo{
 			Root:  c.origin,
 			Tab:   " Copying",
@@ -186,9 +130,6 @@ func (c *controller) progress() []w.ProgressInfo {
 	var value float64
 	for _, root := range c.roots {
 		archive := c.archives[root]
-		if archive.progressState != m.Scanned {
-			continue
-		}
 		tab = " Hashing"
 		value = float64(archive.totalHashed+archive.hashingProgress.Hashed) / float64(archive.totalSize)
 		infos = append(infos, w.ProgressInfo{Root: root, Tab: tab, Value: value})
@@ -196,17 +137,20 @@ func (c *controller) progress() []w.ProgressInfo {
 	return infos
 }
 
-func (c *controller) stats(screen *w.Screen) {
-	screen.PendingFiles, screen.DuplicateFiles, screen.AbsentFiles = 0, 0, 0
+func (c *controller) stats() {
+	c.screen.PendingFiles, c.screen.DuplicateFiles, c.screen.AbsentFiles = 0, 0, 0
 
 	for _, presence := range c.state {
 		switch presence {
 		case w.Pending:
-			screen.PendingFiles++
+			c.screen.PendingFiles++
 		case w.Duplicate:
-			screen.DuplicateFiles++
+			c.screen.DuplicateFiles++
 		case w.Absent:
-			screen.AbsentFiles++
+			c.screen.AbsentFiles++
 		}
+	}
+	if c.archives[c.origin].progressState == m.Initial {
+		c.screen.AbsentFiles = 0
 	}
 }

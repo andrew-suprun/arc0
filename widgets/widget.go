@@ -55,6 +55,7 @@ const (
 )
 
 type Screen struct {
+	ScreenSize     m.ScreenSize
 	CurrentPath    m.Path
 	Entries        []*File
 	Progress       []ProgressInfo
@@ -65,11 +66,37 @@ type Screen struct {
 	PendingFiles   int
 	DuplicateFiles int
 	AbsentFiles    int
+	FileTreeLines  int
 }
 
-type Feedback struct {
-	Entries       int // TODO Remove entries from controller
-	FileTreeLines int
+func (s *Screen) String() string {
+	buf := &strings.Builder{}
+	fmt.Fprintln(buf, "Screen{")
+	fmt.Fprintf(buf, "  ScreenSize:     {Width: %d, Height %d},\n", s.ScreenSize.Width, s.ScreenSize.Height)
+	fmt.Fprintf(buf, "  CurrentPath:    %q,\n", s.CurrentPath)
+	fmt.Fprintf(buf, "  SelectedId:     %q,\n", s.SelectedId)
+	fmt.Fprintf(buf, "  OffsetIdx:      %d,\n", s.OffsetIdx)
+	fmt.Fprintf(buf, "  SortColumn:     %s,\n", s.SortColumn)
+	fmt.Fprintf(buf, "  SortAscending:  %v,\n", s.SortAscending)
+	fmt.Fprintf(buf, "  PendingFiles:   %d,\n", s.PendingFiles)
+	fmt.Fprintf(buf, "  DuplicateFiles: %d,\n", s.DuplicateFiles)
+	fmt.Fprintf(buf, "  AbsentFiles:    %d,\n", s.AbsentFiles)
+	fmt.Fprintf(buf, "  FileTreeLines:  %d,\n", s.FileTreeLines)
+	if len(s.Entries) > 0 {
+		fmt.Fprintf(buf, "  Entries: {\n")
+		for _, entry := range s.Entries {
+			fmt.Fprintf(buf, "    %s:\n", &entry.File)
+		}
+		fmt.Fprintf(buf, "  }\n")
+	}
+	if len(s.Progress) > 0 {
+		fmt.Fprintf(buf, "  Progress: {\n")
+		for _, progress := range s.Progress {
+			fmt.Fprintf(buf, "    {Root: %q, Tab: %q, Value: %f}:\n", progress.Root, progress.Tab, progress.Value)
+		}
+		fmt.Fprintf(buf, "  }\n")
+	}
+	return buf.String()
 }
 
 type SortColumn int
@@ -80,17 +107,28 @@ const (
 	SortBySize
 )
 
+func (c SortColumn) String() string {
+	switch c {
+	case SortByName:
+		return "SortByName"
+	case SortByTime:
+		return "SortByTime"
+	case SortBySize:
+		return "SortBySize"
+	}
+	return "Illegal Sort Solumn"
+}
+
 type File struct {
-	m.FileMeta
-	FileKind
-	m.Hash
+	m.File
+	Kind
 	State
 }
 
-type FileKind int
+type Kind int
 
 const (
-	FileRegular FileKind = iota
+	FileRegular Kind = iota
 	FileFolder
 )
 
@@ -110,10 +148,10 @@ type ProgressInfo struct {
 }
 
 func (f *File) String() string {
-	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q, State: %s}", f.Id, f.FileKind, f.Size, f.Hash, f.State)
+	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q, State: %s}", f.Id, f.Kind, f.Size, f.Hash, f.State)
 }
 
-func (k FileKind) String() string {
+func (k Kind) String() string {
 	switch k {
 	case FileFolder:
 		return "FileFolder"

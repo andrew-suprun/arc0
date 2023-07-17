@@ -10,29 +10,21 @@ type Event interface {
 	event()
 }
 
+type FileScanned struct {
+	*File
+}
+
+func (FileScanned) event() {}
+
+func (f *FileScanned) String() string {
+	return f.File.String()
+}
+
 type ArchiveScanned struct {
 	Root
-	FileMetas
 }
 
 func (ArchiveScanned) event() {}
-
-type ArchiveHashed struct {
-	Root
-}
-
-func (ArchiveHashed) event() {}
-
-type FileHashed struct {
-	Id
-	Hash
-}
-
-func (FileHashed) event() {}
-
-func (h FileHashed) String() string {
-	return fmt.Sprintf("Hashed Id: %q, Hash: %q", h.Id.String(), h.Hash)
-}
 
 type FilesHandled HandleFiles
 
@@ -47,7 +39,6 @@ type ProgressState int
 const (
 	Initial ProgressState = iota
 	Scanned
-	Hashed
 )
 
 type HashingProgress struct {
@@ -143,6 +134,10 @@ func (PgUp) event() {}
 type PgDn struct{}
 
 func (PgDn) event() {}
+
+type Debug struct{}
+
+func (Debug) event() {}
 
 type Quit struct{}
 

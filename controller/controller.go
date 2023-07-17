@@ -10,24 +10,22 @@ type controller struct {
 	roots  []m.Root
 	origin m.Root
 
-	archives map[m.Root]*archive
-	folders  map[m.Path]*folder
-	files    map[m.Id]*w.File
-	state    map[m.Hash]w.State
+	archives           map[m.Root]*archive
+	folders            map[m.Path]*folder
+	files              map[m.Hash][]*m.File
+	state              map[m.Hash]w.State
+	filesHandledEvents []m.FilesHandled
+	copyingProgress    m.CopyingProgress
+	archivesScanned    bool
+	copySize           uint64
+	totalCopied        uint64
 
-	copyingProgress m.CopyingProgress
-	copySize        uint64
-	totalCopied     uint64
-
-	screenSize         m.ScreenSize
 	lastMouseEventTime time.Time
-
-	currentPath m.Path
-	entries     []*w.File
-
-	feedback w.Feedback
+	currentPath        m.Path
 
 	Errors []any
+
+	screen w.Screen
 
 	quit bool
 }
@@ -41,7 +39,6 @@ type archive struct {
 }
 
 type folder struct {
-	selectedId    m.Id
 	selectedIdx   int
 	offsetIdx     int
 	sortColumn    w.SortColumn
@@ -55,8 +52,8 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 
 		archives: map[m.Root]*archive{},
 		folders:  map[m.Path]*folder{},
+		files:    map[m.Hash][]*m.File{},
 		state:    map[m.Hash]w.State{},
-		files:    map[m.Id]*w.File{},
 	}
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
@@ -76,10 +73,10 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		}
 
 		renderer.Reset()
-		screen := c.buildScreen()
+		c.buildScreen()
 
-		widget := screen.View(&c.feedback)
-		widget.Render(renderer, w.Position{X: 0, Y: 0}, w.Size(c.screenSize))
+		widget := c.screen.View()
+		widget.Render(renderer, w.Position{X: 0, Y: 0}, w.Size(c.screen.ScreenSize))
 		renderer.Show()
 	}
 
@@ -96,64 +93,70 @@ func (c *controller) currentFolder() *folder {
 	curFolder, ok := c.folders[c.currentPath]
 	if !ok {
 		curFolder = &folder{
-			sortAscending: []bool{true, false, false, false},
+			sortAscending: []bool{true, false, false},
 		}
 		c.folders[c.currentPath] = curFolder
 	}
 	return curFolder
 }
 
-func (c *controller) getSelectedFile() *w.File {
-	if len(c.entries) == 0 {
-		return nil
-	}
-	folder := c.currentFolder()
-	idx := 0
-	for idx = range c.entries {
-		if c.entries[idx].Id == folder.selectedId {
-			return c.entries[idx]
+func (c *controller) do(f func(entry *m.File) bool) {
+	for _, entries := range c.files {
+		for _, entry := range entries {
+			if !f(entry) {
+				return
+			}
 		}
 	}
-	if idx >= len(c.entries) {
-		idx = len(c.entries) - 1
+}
+
+func (c *controller) find(f func(entry *m.File) bool) *m.File {
+	for _, entries := range c.files {
+		for _, entry := range entries {
+			if f(entry) {
+				return entry
+			}
+		}
 	}
-	if idx < 0 {
-		idx = 0
+	return nil
+}
+
+func (c *controller) getSelectedFile() *w.File {
+	selectedIdx := c.currentFolder().selectedIdx
+	if selectedIdx >= len(c.screen.Entries) {
+		return nil
 	}
-	folder.selectedIdx = idx
-	folder.selectedId = c.entries[folder.selectedIdx].Id
-	return c.entries[idx]
+	return c.screen.Entries[selectedIdx]
+}
+
+func (c *controller) getSelectedIdx() int {
+	return c.currentFolder().selectedIdx
 }
 
 func (c *controller) getSelectedId() m.Id {
-	if file := c.getSelectedFile(); file != nil {
+	file := c.getSelectedFile()
+	if file != nil {
 		return file.Id
 	}
 	return m.Id{}
 }
 
-func (c *controller) setSelectedId(id m.Id) {
-	folder := c.currentFolder()
-	folder.selectedId = id
-	for idx, entry := range c.entries {
-		if entry.Id == id {
-			folder.selectedIdx = idx
-		}
-	}
-}
-
-func (c *controller) getSelectedIdx() (result int) {
-	return c.currentFolder().selectedIdx
-}
-
 func (c *controller) setSelectedIdx(idx int) {
-	folder := c.currentFolder()
-	if idx >= len(c.entries) {
-		idx = len(c.entries) - 1
+	if idx >= len(c.screen.Entries) {
+		idx = len(c.screen.Entries) - 1
 	}
 	if idx < 0 {
 		idx = 0
 	}
-	folder.selectedIdx = idx
-	folder.selectedId = c.entries[idx].Id
+	c.currentFolder().selectedIdx = idx
+}
+
+func (c *controller) setSelectedId(id m.Id) {
+	for idx, entry := range c.screen.Entries {
+		if entry.Id == id {
+			c.currentFolder().selectedIdx = idx
+			return
+		}
+	}
+	c.currentFolder().selectedIdx = 0
 }

@@ -147,6 +147,8 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 
 	case "Backspace2": // Ctrl+Delete
 		device.events <- model.Delete{}
+	case "F12": // Ctrl+Delete
+		device.events <- model.Debug{}
 	}
 }
 

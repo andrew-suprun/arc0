@@ -21,10 +21,10 @@ var (
 	colConstraint = Constraint{Size: Size{Width: 0, Height: 0}, Flex: Flex{X: 1, Y: 1}}
 )
 
-func (s *Screen) View(feedback *Feedback) Widget {
+func (s *Screen) View() Widget {
 	return Column(colConstraint,
 		s.title(),
-		s.folderView(feedback),
+		s.folderView(),
 		s.progress(),
 		s.fileStats(),
 	)
@@ -36,7 +36,7 @@ func (c *Screen) title() Widget {
 	)
 }
 
-func (s *Screen) folderView(feedback *Feedback) Widget {
+func (s *Screen) folderView() Widget {
 	return Column(colConstraint,
 		s.breadcrumbs(),
 		Styled(styleArchiveHeader,
@@ -49,7 +49,7 @@ func (s *Screen) folderView(feedback *Feedback) Widget {
 		),
 		Scroll(m.Scroll{}, Constraint{Size: Size{Width: 0, Height: 0}, Flex: Flex{X: 1, Y: 1}},
 			func(size Size) Widget {
-				feedback.FileTreeLines = size.Height
+				s.FileTreeLines = size.Height
 				if s.OffsetIdx > len(s.Entries)+1-size.Height {
 					s.OffsetIdx = len(s.Entries) + 1 - size.Height
 				}
@@ -77,7 +77,7 @@ func (s *Screen) folderView(feedback *Feedback) Widget {
 func (s *Screen) fileRow(file *File) []Widget {
 	result := []Widget{Text(statusString(file)).Width(11)}
 
-	if file.FileKind == FileRegular {
+	if file.Kind == FileRegular {
 		result = append(result, Text("   "))
 	} else {
 		result = append(result, Text(" ▶ "))
@@ -202,7 +202,7 @@ func formatSize(size uint64) string {
 
 func (c *Screen) styleFile(file *File, selected bool) Style {
 	bg, flags := byte(17), Flags(0)
-	if file.FileKind == FileFolder {
+	if file.Kind == FileFolder {
 		bg = byte(18)
 	}
 	result := Style{FG: c.statusColor(file), BG: bg, Flags: flags}

@@ -1,3 +1,5 @@
+* fix tab key action
+* display FPS
 * fix jumping selection
 * fix ghost folders
 * make logging optional triggered by '-log' command line flag

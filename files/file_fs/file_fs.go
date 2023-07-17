@@ -29,7 +29,9 @@ func (fs *fileFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 		root:   root,
 		events: fs.events,
 		lc:     fs.lc,
-		infos:  map[uint64]*fileInfo{},
+		files:  map[uint64]*m.File{},
+		stored: map[uint64]*m.File{},
+		sent:   map[m.Id]struct{}{},
 	}
 	s.Actor = actor.NewActor[m.FileCommand](s.handleCommand)
 	return s

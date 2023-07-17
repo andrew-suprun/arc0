@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,16 +27,13 @@ type scanner struct {
 	root   m.Root
 	events m.EventChan
 	lc     *lifecycle.Lifecycle
-	infos  map[uint64]*fileInfo
+	files  map[uint64]*m.File
+	stored map[uint64]*m.File
+	sent   map[m.Id]struct{}
 	actor.Actor[m.FileCommand]
 }
 
-type fileInfo struct {
-	meta m.FileMeta
-	hash m.Hash
-}
-
-const hashFileName = ".meta.csv"
+const hashFileName = ".csv"
 
 func (s *scanner) handleCommand(cmd m.FileCommand) bool {
 	s.lc.Started()
@@ -45,9 +43,6 @@ func (s *scanner) handleCommand(cmd m.FileCommand) bool {
 	case m.ScanArchive:
 		s.scanArchive()
 
-	case m.HashArchive:
-		s.hashArchive()
-
 	case m.HandleFiles:
 		s.handleFiles(cmd)
 	}
@@ -55,6 +50,17 @@ func (s *scanner) handleCommand(cmd m.FileCommand) bool {
 }
 
 func (s *scanner) scanArchive() {
+	defer func() {
+		s.events <- m.ArchiveScanned{
+			Root: s.root,
+		}
+	}()
+
+	s.readMeta()
+	defer func() {
+		s.storeMeta()
+	}()
+
 	fsys := os.DirFS(s.root.String())
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if s.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
@@ -79,7 +85,7 @@ func (s *scanner) scanArchive() {
 		modTime := meta.ModTime()
 		modTime = modTime.UTC().Round(time.Second)
 
-		fileMeta := m.FileMeta{
+		file := &m.File{
 			Id: m.Id{
 				Root: s.root,
 				Name: m.Name{
@@ -91,68 +97,51 @@ func (s *scanner) scanArchive() {
 			Size:    uint64(meta.Size()),
 		}
 
-		s.infos[sys.Ino] = &fileInfo{
-			meta: fileMeta,
+		if stored, ok := s.stored[sys.Ino]; ok && stored.ModTime == modTime && stored.Size == uint64(meta.Size()) {
+			file.Hash = stored.Hash
+			s.events <- m.FileScanned{File: file}
+			log.Printf("scanArchive:1: file: %s", file)
+			s.sent[file.Id] = struct{}{}
 		}
+		s.files[sys.Ino] = file
 
 		return nil
 	})
 
-	result := m.ArchiveScanned{Root: s.root}
-	for _, info := range s.infos {
-		result.FileMetas = append(result.FileMetas, info.meta)
-	}
-	s.events <- result
-}
-
-func (s *scanner) hashArchive() {
-	s.readMeta()
-	defer func() {
-		s.storeMeta()
-	}()
-
-	defer func() {
-		s.events <- m.ArchiveHashed{
-			Root: s.root,
-		}
-	}()
-
-	nonHashedInfos := []*fileInfo{}
-	for _, info := range s.infos {
-		if info.hash != "" {
-			s.events <- m.FileHashed{Id: info.meta.Id, Hash: info.hash}
-		} else {
-			nonHashedInfos = append(nonHashedInfos, info)
-		}
+	files := []*m.File{}
+	for _, file := range s.files {
+		files = append(files, file)
 	}
 
-	sort.Slice(nonHashedInfos, func(i, j int) bool {
-		return nonHashedInfos[i].meta.Size < nonHashedInfos[j].meta.Size
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Size < files[j].Size
 	})
 
-	for _, info := range nonHashedInfos {
-		s.hashFile(info)
+	for _, file := range files {
+		if _, ok := s.sent[file.Id]; ok {
+			continue
+		}
+
+		s.hashFile(file)
 
 		if s.lc.ShoudStop() {
 			return
 		}
 
-		s.events <- m.FileHashed{
-			Id:   info.meta.Id,
-			Hash: info.hash,
-		}
+		s.events <- m.FileScanned{File: file}
+		log.Printf("scanArchive:2: file: %s", file)
 	}
 }
 
-func (s *scanner) hashFile(info *fileInfo) {
+func (s *scanner) hashFile(info *m.File) {
 	hash := sha256.New()
 	buf := make([]byte, 1024*1024)
 	var hashed uint64
 
-	fsys := os.DirFS(info.meta.Root.String())
-	file, err := fsys.Open(info.meta.Name.String())
+	fsys := os.DirFS(info.Root.String())
+	file, err := fsys.Open(info.Name.String())
 	if err != nil {
-		s.events <- m.Error{Name: info.meta.Name, Error: err}
+		s.events <- m.Error{Name: info.Name, Error: err}
 		return
 	}
 	defer file.Close()
@@ -167,12 +156,12 @@ func (s *scanner) hashFile(info *fileInfo) {
 			nw, ew := hash.Write(buf[0:nr])
 			if ew != nil {
 				if err != nil {
-					s.events <- m.Error{Name: info.meta.Name, Error: err}
+					s.events <- m.Error{Name: info.Name, Error: err}
 					return
 				}
 			}
 			if nr != nw {
-				s.events <- m.Error{Name: info.meta.Name, Error: err}
+				s.events <- m.Error{Name: info.Name, Error: err}
 				return
 			}
 		}
@@ -181,17 +170,17 @@ func (s *scanner) hashFile(info *fileInfo) {
 			break
 		}
 		if er != nil {
-			s.events <- m.Error{Name: info.meta.Name, Error: er}
+			s.events <- m.Error{Name: info.Name, Error: er}
 			return
 		}
 
 		hashed += uint64(nr)
 		s.events <- m.HashingProgress{
-			Root:   info.meta.Root,
+			Root:   info.Root,
 			Hashed: hashed,
 		}
 	}
-	info.hash = m.Hash(base64.RawURLEncoding.EncodeToString(hash.Sum(nil)))
+	info.Hash = m.Hash(base64.RawURLEncoding.EncodeToString(hash.Sum(nil)))
 }
 
 func (s *scanner) readMeta() {
@@ -218,25 +207,30 @@ func (s *scanner) readMeta() {
 				continue
 			}
 
-			info, ok := s.infos[iNode]
-			if hash != "" && ok && info.meta.ModTime == modTime && info.meta.Size == size {
-				info.hash = m.Hash(hash)
+			s.stored[iNode] = &m.File{
+				ModTime: modTime,
+				Size:    uint64(size),
+				Hash:    m.Hash(hash),
+			}
+			info, ok := s.files[iNode]
+			if hash != "" && ok && info.ModTime == modTime && info.Size == size {
+				info.Hash = m.Hash(hash)
 			}
 		}
 	}
 }
 
 func (s *scanner) storeMeta() error {
-	result := make([][]string, 1, len(s.infos)+1)
+	result := make([][]string, 1, len(s.files)+1)
 	result[0] = []string{"INode", "Name", "Size", "ModTime", "Hash"}
 
-	for iNode, info := range s.infos {
+	for iNode, file := range s.files {
 		result = append(result, []string{
 			fmt.Sprint(iNode),
-			norm.NFC.String(info.meta.Name.String()),
-			fmt.Sprint(info.meta.Size),
-			info.meta.ModTime.UTC().Format(time.RFC3339Nano),
-			info.hash.String(),
+			norm.NFC.String(file.Name.String()),
+			fmt.Sprint(file.Size),
+			file.ModTime.UTC().Format(time.RFC3339Nano),
+			file.Hash.String(),
 		})
 	}
 

@@ -8,15 +8,17 @@ import (
 )
 
 func (c *controller) keepFile(file *w.File) {
-	if file == nil || file.FileKind != w.FileRegular || file.Hash == "" || c.state[file.Hash] == w.Pending {
+	if file == nil || file.Kind != w.FileRegular || !c.archivesScanned || c.state[file.Hash] == w.Pending {
 		return
 	}
+
+	c.state[file.Hash] = w.Pending
 
 	cmd := m.HandleFiles{Hash: file.Hash}
 
 	fileName := file.Name
-	keepFiles := map[m.Root]*w.File{}
-	for _, entry := range c.files {
+	keepFiles := map[m.Root]*m.File{}
+	c.do(func(entry *m.File) bool {
 		if entry.Hash == file.Hash {
 			root := entry.Root
 			name := entry.Name
@@ -32,11 +34,11 @@ func (c *controller) keepFile(file *w.File) {
 				keepFiles[root] = entry
 			}
 		}
-	}
-
-	for _, entry := range c.files {
-		if entry == file {
-			continue
+		return true
+	})
+	c.do(func(entry *m.File) bool {
+		if entry.Id == file.Id {
+			return true
 		}
 		if entry.Hash == file.Hash {
 			root := entry.Root
@@ -49,16 +51,13 @@ func (c *controller) keepFile(file *w.File) {
 						cmd.Rename = append(cmd.Rename, *rename)
 					}
 					cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.Id, NewId: newId})
-					c.files[newId] = keepFile
-					delete(c.files, keepFile.Id)
-					keepFile.Id = newId
 				}
 			} else {
 				cmd.Delete = append(cmd.Delete, entry.Id)
-				delete(c.files, entry.Id)
 			}
 		}
-	}
+		return true
+	})
 
 	copy := m.CopyFile{From: file.Id}
 	for _, root := range c.roots {
@@ -73,12 +72,10 @@ func (c *controller) keepFile(file *w.File) {
 			}
 			copy.To = append(copy.To, root)
 			newFile := &w.File{
-				FileMeta: file.FileMeta,
-				FileKind: file.FileKind,
-				Hash:     file.Hash,
+				File: file.File,
+				Kind: file.Kind,
 			}
 			newFile.Id = newId
-			c.files[newId] = newFile
 		}
 	}
 	if len(copy.To) > 0 {
@@ -92,11 +89,13 @@ func (c *controller) keepFile(file *w.File) {
 }
 
 func (c *controller) deleteFile(file *w.File) {
-	if file == nil {
+	if file == nil || !c.archivesScanned {
 		return
 	}
 
-	if file.FileKind == w.FileFolder {
+	c.state[file.Hash] = w.Pending
+
+	if file.Root == "" {
 		c.deleteFolderFile(file)
 	} else if c.state[file.Hash] == w.Absent {
 		c.deleteRegularFile(file.Hash)
@@ -105,23 +104,24 @@ func (c *controller) deleteFile(file *w.File) {
 
 func (c *controller) deleteRegularFile(hash m.Hash) {
 	cmd := m.HandleFiles{Hash: hash}
-	for _, entry := range c.files {
+	c.do(func(entry *m.File) bool {
 		if entry.Hash == hash && c.state[entry.Hash] == w.Absent {
 			cmd.Delete = append(cmd.Delete, entry.Id)
-			delete(c.files, entry.Id)
 		}
-	}
+		return true
+	})
 	c.archives[c.origin].scanner.Send(cmd)
 }
 
 func (c *controller) deleteFolderFile(file *w.File) {
 	path := file.Name.String()
 	hashes := map[m.Hash]struct{}{}
-	for id, entry := range c.files {
-		if c.state[entry.Hash] == w.Absent && strings.HasPrefix(id.Path.String(), path) {
+	c.do(func(entry *m.File) bool {
+		if c.state[entry.Hash] == w.Absent && strings.HasPrefix(entry.Path.String(), path) {
 			hashes[entry.Hash] = struct{}{}
 		}
-	}
+		return true
+	})
 
 	for hash := range hashes {
 		c.deleteRegularFile(hash)
@@ -129,18 +129,18 @@ func (c *controller) deleteFolderFile(file *w.File) {
 }
 
 func (c *controller) ensureNameAvailable(id m.Id) *m.RenameFile {
-	file := c.files[id]
+	file := c.find(func(entry *m.File) bool {
+		return entry.Id == id
+	})
 	if file != nil {
 		newId := c.newName(id)
-		c.files[newId] = file
-		delete(c.files, id)
 		file.Id = newId
 		return &m.RenameFile{Id: id, NewId: newId}
 	}
 	return nil
 }
 
-func (a *controller) newName(id m.Id) m.Id {
+func (c *controller) newName(id m.Id) m.Id {
 	parts := strings.Split(id.Base.String(), ".")
 
 	var part string
@@ -157,14 +157,11 @@ func (a *controller) newName(id m.Id) m.Id {
 			parts[len(parts)-2] = fmt.Sprintf("%s [%d]", part, idx)
 			newName = strings.Join(parts, ".")
 		}
-		exists := false
-		for _, entity := range a.files {
-			if id.Path == entity.Path && newName == entity.Base.String() {
-				exists = true
-				break
-			}
-		}
-		if !exists {
+		file := c.find(func(entry *m.File) bool {
+			return id.Path == entry.Path && newName == entry.Base.String()
+		})
+
+		if file == nil {
 			return m.Id{
 				Root: id.Root,
 				Name: m.Name{Path: id.Path, Base: m.Base(newName)},

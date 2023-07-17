@@ -10,14 +10,11 @@ func (c *controller) handleEvent(event any) {
 		return
 	}
 	switch event := event.(type) {
+	case m.FileScanned:
+		c.fileScanned(event)
+
 	case m.ArchiveScanned:
 		c.archiveScanned(event)
-
-	case m.ArchiveHashed:
-		c.archiveHashed(event)
-
-	case m.FileHashed:
-		c.fileHashed(event)
 
 	case m.FilesHandled:
 		c.filesHandled(event)
@@ -29,7 +26,7 @@ func (c *controller) handleEvent(event any) {
 		c.handleCopyingProgress(event)
 
 	case m.ScreenSize:
-		c.screenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
+		c.screen.ScreenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
 
 	case m.Enter:
 		c.enter()
@@ -68,13 +65,13 @@ func (c *controller) handleEvent(event any) {
 		c.tab()
 
 	case m.KeepOne:
-		c.keepSelected()
+		c.keepFile(c.getSelectedFile())
 
 	case m.KeepAll:
 		// TODO: Implement, maybe?
 
 	case m.Delete:
-		c.deleteFile(c.getSelectedFile())
+		c.deleteFile(c.screen.Entries[c.currentFolder().selectedIdx])
 
 	case m.Error:
 		log.Printf("### Error: %s", event)
@@ -82,6 +79,9 @@ func (c *controller) handleEvent(event any) {
 
 	case m.Quit:
 		c.quit = true
+
+	case m.Debug:
+		log.Println(c.screen.String())
 
 	default:
 		log.Panicf("### unhandled event: %#v", event)

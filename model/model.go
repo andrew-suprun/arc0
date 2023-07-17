@@ -48,15 +48,14 @@ func (hash Hash) String() string {
 	return string(hash)
 }
 
-type FileMeta struct {
+type File struct {
 	Id
 	Size    uint64
 	ModTime time.Time
+	Hash
 }
 
-func (m *FileMeta) String() string {
-	return fmt.Sprintf("Meta{Root: %q, Path: %q Name: %q, Size: %d, ModTime: %s}",
-		m.Root, m.Path, m.Base, m.Size, m.ModTime.Format(time.DateTime))
+func (m *File) String() string {
+	return fmt.Sprintf("Meta{Root: %q, Path: %q Name: %q, Size: %d, ModTime: %s, Hash: %q}",
+		m.Root, m.Path, m.Base, m.Size, m.ModTime.Format(time.DateTime), m.Hash)
 }
-
-type FileMetas []FileMeta

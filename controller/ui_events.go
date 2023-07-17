@@ -34,15 +34,15 @@ func (c *controller) mouseTarget(cmd any) {
 }
 
 func (c *controller) selectFirst() {
-	if len(c.entries) > 0 {
+	if len(c.screen.Entries) > 0 {
 		c.setSelectedIdx(0)
 		c.currentFolder().offsetIdx = 0
 	}
 }
 
 func (c *controller) selectLast() {
-	if len(c.entries) > 0 {
-		c.setSelectedIdx(len(c.entries) - 1)
+	if len(c.screen.Entries) > 0 {
+		c.setSelectedIdx(len(c.screen.Entries) - 1)
 		c.makeSelectedVisible()
 	}
 }
@@ -54,26 +54,26 @@ func (c *controller) open() {
 func (c *controller) enter() {
 	selectedId := c.getSelectedId()
 	var file *w.File
-	for i := range c.entries {
-		if c.entries[i].Id == selectedId {
-			file = c.entries[i]
+	for i := range c.screen.Entries {
+		if c.screen.Entries[i].Id == selectedId {
+			file = c.screen.Entries[i]
 			break
 		}
 	}
 
-	if file != nil && file.FileKind == w.FileFolder {
+	if file != nil && file.Kind == w.FileFolder {
 		c.currentPath = m.Path(file.Name.String())
 	}
 }
 
 func (c *controller) pgUp() {
-	c.shiftOffset(-c.feedback.FileTreeLines)
-	c.moveSelection(-c.feedback.FileTreeLines)
+	c.shiftOffset(-c.screen.FileTreeLines)
+	c.moveSelection(-c.screen.FileTreeLines)
 }
 
 func (c *controller) pgDn() {
-	c.shiftOffset(c.feedback.FileTreeLines)
-	c.moveSelection(c.feedback.FileTreeLines)
+	c.shiftOffset(c.screen.FileTreeLines)
+	c.moveSelection(c.screen.FileTreeLines)
 }
 
 func (c *controller) exit() {
@@ -101,29 +101,24 @@ func (c *controller) shiftOffset(lines int) {
 	folder.offsetIdx += lines
 	if folder.offsetIdx < 0 {
 		folder.offsetIdx = 0
-	} else if folder.offsetIdx >= len(c.entries) {
-		folder.offsetIdx = len(c.entries) - 1
+	} else if folder.offsetIdx >= len(c.screen.Entries) {
+		folder.offsetIdx = len(c.screen.Entries) - 1
 	}
-}
-
-func (c *controller) keepSelected() {
-	selectedId := c.getSelectedId()
-	selectedFile := c.files[selectedId]
-	c.keepFile(selectedFile)
 }
 
 func (c *controller) tab() {
 	selected := c.getSelectedFile()
 
-	if selected == nil || selected.FileKind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
+	if selected == nil || selected.Kind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
 		return
 	}
 	sameHash := []m.Id{}
-	for _, file := range c.files {
+	c.do(func(file *m.File) bool {
 		if file.Hash == selected.Hash && file.Root == c.origin {
 			sameHash = append(sameHash, file.Id)
 		}
-	}
+		return true
+	})
 	sort.Slice(sameHash, func(i, j int) bool {
 		return strings.ToLower(sameHash[i].Name.String()) < strings.ToLower(sameHash[j].Name.String())
 	})
@@ -138,4 +133,18 @@ func (c *controller) tab() {
 	c.setSelectedId(id)
 
 	c.makeSelectedVisible()
+}
+
+func (c *controller) makeSelectedVisible() {
+	selectedIdx := c.getSelectedIdx()
+	offsetIdx := c.currentFolder().offsetIdx
+
+	if offsetIdx > selectedIdx {
+		offsetIdx = selectedIdx
+	}
+	if offsetIdx < selectedIdx+1-c.screen.FileTreeLines {
+		offsetIdx = selectedIdx + 1 - c.screen.FileTreeLines
+	}
+
+	c.currentFolder().offsetIdx = offsetIdx
 }
