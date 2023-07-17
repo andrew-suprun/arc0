@@ -14,10 +14,10 @@ type controller struct {
 	folders         map[m.Path]*folder
 	files           map[m.Hash][]*m.File
 	state           map[m.Hash]w.State
-	copyingProgress m.CopyingProgress
-	archivesScanned bool
 	copySize        uint64
 	totalCopied     uint64
+	fileCopied      uint64
+	archivesScanned bool
 
 	lastMouseEventTime time.Time
 	currentPath        m.Path

@@ -120,7 +120,7 @@ func (c *controller) progress() []w.ProgressInfo {
 		infos = append(infos, w.ProgressInfo{
 			Root:  c.origin,
 			Tab:   " Copying",
-			Value: float64(c.totalCopied+uint64(c.copyingProgress)) / float64(c.copySize),
+			Value: float64(c.totalCopied+uint64(c.fileCopied)) / float64(c.copySize),
 		})
 	}
 	var tab string

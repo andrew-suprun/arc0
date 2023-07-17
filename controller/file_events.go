@@ -50,10 +50,20 @@ func (c *controller) handleHashingProgress(event m.HashingProgress) {
 }
 
 func (c *controller) handleCopyingProgress(event m.CopyingProgress) {
-	c.copyingProgress = event
+	c.fileCopied = uint64(event)
 }
 
 func (c *controller) filesHandled(event m.FilesHandled) {
 	log.Printf("filesHandled: %s", event)
 	c.state[event.Hash] = w.Resolved
+	if event.Copy != nil {
+		c.fileCopied = 0
+		file := c.find(func(entry *m.File) bool {
+			return entry.Id == m.Id(event.Copy.From)
+		})
+		c.totalCopied += file.Size
+	}
+	if c.totalCopied == c.copySize {
+		c.totalCopied, c.copySize = 0, 0
+	}
 }
