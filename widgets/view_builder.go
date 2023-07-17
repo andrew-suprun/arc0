@@ -177,6 +177,7 @@ func (s *Screen) fileStats() Widget {
 		stats = append(stats, Text(fmt.Sprintf(" Pending: %d", s.PendingFiles)))
 	}
 	stats = append(stats, Text("").Flex(1))
+	stats = append(stats, Text(fmt.Sprintf(" FPS: %d ", s.FPS)))
 	return Styled(
 		styleAppTitle,
 		Row(Constraint{Size: Size{Width: 0, Height: 1}, Flex: Flex{X: 1, Y: 0}}, stats...),

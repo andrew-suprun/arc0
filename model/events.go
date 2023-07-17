@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 )
 
 type EventChan chan Event
@@ -58,6 +59,10 @@ func (HashingProgress) event() {}
 type CopyingProgress uint64
 
 func (CopyingProgress) event() {}
+
+type Tick time.Time
+
+func (Tick) event() {}
 
 type Error struct {
 	Name

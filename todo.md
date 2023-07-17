@@ -4,7 +4,6 @@
 * fix tab key action
 * fix jumping selection
 * fix ghost folders
-* display FPS in stats
 * make logging optional triggered by '-log' command line flag
 * change m.Error.Name to m.Error.Id
 * handle 'keep all' event 

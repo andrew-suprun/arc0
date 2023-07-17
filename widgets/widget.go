@@ -67,6 +67,7 @@ type Screen struct {
 	DuplicateFiles int
 	AbsentFiles    int
 	FileTreeLines  int
+	FPS            int
 }
 
 func (s *Screen) String() string {

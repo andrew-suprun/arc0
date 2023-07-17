@@ -22,9 +22,12 @@ type controller struct {
 	lastMouseEventTime time.Time
 	currentPath        m.Path
 
-	Errors []any
+	frames   int
+	prevTick time.Time
 
 	screen w.Screen
+
+	Errors []any
 
 	quit bool
 }
@@ -54,6 +57,9 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		files:    map[m.Hash][]*m.File{},
 		state:    map[m.Hash]w.State{},
 	}
+
+	go ticker(events)
+
 	for _, path := range roots {
 		scanner := fs.NewArchiveScanner(path)
 		c.archives[path] = &archive{
@@ -71,6 +77,7 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 		default:
 		}
 
+		c.frames++
 		renderer.Reset()
 		c.buildScreen()
 

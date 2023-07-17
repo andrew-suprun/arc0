@@ -2,6 +2,7 @@ package controller
 
 import (
 	m "arch/model"
+	w "arch/widgets"
 	"log"
 )
 
@@ -54,5 +55,5 @@ func (c *controller) handleCopyingProgress(event m.CopyingProgress) {
 
 func (c *controller) filesHandled(event m.FilesHandled) {
 	log.Printf("filesHandled: %s", event)
-	// TODO
+	c.state[event.Hash] = w.Resolved
 }

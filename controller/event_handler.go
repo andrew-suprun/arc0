@@ -28,6 +28,9 @@ func (c *controller) handleEvent(event any) {
 	case m.CopyingProgress:
 		c.handleCopyingProgress(event)
 
+	case m.Tick:
+		c.handleTick(event)
+
 	case m.ScreenSize:
 		c.screen.ScreenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
 
