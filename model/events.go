@@ -65,7 +65,7 @@ type Tick time.Time
 func (Tick) event() {}
 
 type Error struct {
-	Name
+	Id    Id
 	Error error
 }
 

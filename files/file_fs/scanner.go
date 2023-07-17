@@ -65,7 +65,7 @@ func (s *scanner) scanArchive() {
 
 		if err != nil {
 			s.events <- m.Error{
-				Name:  m.Name{Path: m.Path(dir(path)), Base: m.Base(name(path))},
+				Id:    m.Id{Root: s.root, Name: m.Name{Path: m.Path(dir(path)), Base: m.Base(name(path))}},
 				Error: err}
 			return nil
 		}
@@ -73,7 +73,7 @@ func (s *scanner) scanArchive() {
 		meta, err := d.Info()
 		if err != nil {
 			s.events <- m.Error{
-				Name:  m.Name{Path: m.Path(dir(path)), Base: m.Base(name(path))},
+				Id:    m.Id{Root: s.root, Name: m.Name{Path: m.Path(dir(path)), Base: m.Base(name(path))}},
 				Error: err}
 			return nil
 		}
@@ -151,7 +151,7 @@ func (s *scanner) hashFile(info *m.File) {
 	fsys := os.DirFS(info.Root.String())
 	file, err := fsys.Open(info.Name.String())
 	if err != nil {
-		s.events <- m.Error{Name: info.Name, Error: err}
+		s.events <- m.Error{Id: info.Id, Error: err}
 		return
 	}
 	defer file.Close()
@@ -166,12 +166,12 @@ func (s *scanner) hashFile(info *m.File) {
 			nw, ew := hash.Write(buf[0:nr])
 			if ew != nil {
 				if err != nil {
-					s.events <- m.Error{Name: info.Name, Error: err}
+					s.events <- m.Error{Id: info.Id, Error: err}
 					return
 				}
 			}
 			if nr != nw {
-				s.events <- m.Error{Name: info.Name, Error: err}
+				s.events <- m.Error{Id: info.Id, Error: err}
 				return
 			}
 		}
@@ -180,7 +180,7 @@ func (s *scanner) hashFile(info *m.File) {
 			break
 		}
 		if er != nil {
-			s.events <- m.Error{Name: info.Name, Error: er}
+			s.events <- m.Error{Id: info.Id, Error: er}
 			return
 		}
 
