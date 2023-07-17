@@ -68,7 +68,7 @@ func (c *controller) handleEvent(event any) {
 		c.tab()
 
 	case m.KeepOne:
-		c.keepFile(c.getSelectedFile())
+		c.keepSelected()
 
 	case m.KeepAll:
 		// TODO: Implement, maybe?

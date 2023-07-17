@@ -10,15 +10,14 @@ type controller struct {
 	roots  []m.Root
 	origin m.Root
 
-	archives           map[m.Root]*archive
-	folders            map[m.Path]*folder
-	files              map[m.Hash][]*m.File
-	state              map[m.Hash]w.State
-	filesHandledEvents []m.FilesHandled
-	copyingProgress    m.CopyingProgress
-	archivesScanned    bool
-	copySize           uint64
-	totalCopied        uint64
+	archives        map[m.Root]*archive
+	folders         map[m.Path]*folder
+	files           map[m.Hash][]*m.File
+	state           map[m.Hash]w.State
+	copyingProgress m.CopyingProgress
+	archivesScanned bool
+	copySize        uint64
+	totalCopied     uint64
 
 	lastMouseEventTime time.Time
 	currentPath        m.Path

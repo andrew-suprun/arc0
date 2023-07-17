@@ -2,6 +2,7 @@ package controller
 
 import (
 	m "arch/model"
+	"log"
 )
 
 func (c *controller) totalSize(event m.TotalSize) {
@@ -23,7 +24,24 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 			return
 		}
 	}
+	c.autoResolve()
+}
+
+func (c *controller) autoResolve() {
 	c.archivesScanned = true
+	for _, files := range c.files {
+		originFiles := []*m.File{}
+		names := map[m.Name]struct{}{}
+		for _, file := range files {
+			if file.Root == c.origin {
+				originFiles = append(originFiles, file)
+			}
+			names[file.Name] = struct{}{}
+		}
+		if len(originFiles) == 1 && (len(files) != len(c.roots) || len(names) != 1) {
+			c.keepFile(originFiles[0])
+		}
+	}
 }
 
 func (c *controller) handleHashingProgress(event m.HashingProgress) {
@@ -35,5 +53,6 @@ func (c *controller) handleCopyingProgress(event m.CopyingProgress) {
 }
 
 func (c *controller) filesHandled(event m.FilesHandled) {
-	c.filesHandledEvents = append(c.filesHandledEvents, event)
+	log.Printf("filesHandled: %s", event)
+	// TODO
 }

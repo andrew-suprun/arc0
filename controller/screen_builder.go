@@ -13,7 +13,6 @@ type nameHashPair struct {
 type nameHashSet map[nameHashPair]struct{}
 
 func (c *controller) buildScreen() {
-	// TODO process c.filesHandled() events here
 	nameHashes := nameHashSet{}
 	c.populateEntries(nameHashes)
 
@@ -44,12 +43,10 @@ func (c *controller) calcState(hash m.Hash, files []*m.File) w.State {
 		return w.Pending
 	}
 	originFiles := 0
-	names := map[m.Name]struct{}{}
 	for _, file := range files {
 		if file.Root == c.origin {
 			originFiles++
 		}
-		names[file.Name] = struct{}{}
 	}
 	if originFiles == 0 {
 		return w.Absent
@@ -60,9 +57,9 @@ func (c *controller) calcState(hash m.Hash, files []*m.File) w.State {
 }
 
 func (c *controller) addEntries(state w.State, files []*m.File, nameHashes nameHashSet) {
-	originState := c.archives[c.origin].progressState
+	originProgressState := c.archives[c.origin].progressState
 	for _, file := range files {
-		if file.Root != c.origin && originState == m.Initial {
+		if file.Root != c.origin && (originProgressState == m.Initial || state != w.Absent) {
 			continue
 		}
 		nameHash := nameHashPair{Base: file.Base, Hash: file.Hash}

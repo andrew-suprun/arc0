@@ -135,6 +135,13 @@ func (c *controller) tab() {
 	c.makeSelectedVisible()
 }
 
+func (c *controller) keepSelected() {
+	selected := c.getSelectedFile()
+	if selected.Kind == w.FileRegular {
+		c.keepFile(&selected.File)
+	}
+}
+
 func (c *controller) makeSelectedVisible() {
 	selectedIdx := c.getSelectedIdx()
 	offsetIdx := c.currentFolder().offsetIdx

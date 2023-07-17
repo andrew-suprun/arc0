@@ -7,57 +7,53 @@ import (
 	"strings"
 )
 
-func (c *controller) keepFile(file *w.File) {
-	if file == nil || file.Kind != w.FileRegular || !c.archivesScanned || c.state[file.Hash] == w.Pending {
+func (c *controller) keepFile(file *m.File) {
+	if file == nil || !c.archivesScanned || c.state[file.Hash] == w.Pending {
 		return
 	}
 
 	c.state[file.Hash] = w.Pending
+	files := c.files[file.Hash]
 
 	cmd := m.HandleFiles{Hash: file.Hash}
 
 	fileName := file.Name
 	keepFiles := map[m.Root]*m.File{}
-	c.do(func(entry *m.File) bool {
-		if entry.Hash == file.Hash {
-			root := entry.Root
-			name := entry.Name
-			if prevFile, ok := keepFiles[root]; ok {
-				if name == fileName {
-					keepFiles[root] = entry
-				} else if name.Path == fileName.Path && name.Path != prevFile.Path {
-					keepFiles[root] = entry
-				} else if name.Base == fileName.Base && name.Base != prevFile.Base {
-					keepFiles[root] = entry
-				}
-			} else {
+	for _, entry := range files {
+		root := entry.Root
+		name := entry.Name
+		if prevFile, ok := keepFiles[root]; ok {
+			if name == fileName {
+				keepFiles[root] = entry
+			} else if name.Path == fileName.Path && name.Path != prevFile.Path {
+				keepFiles[root] = entry
+			} else if name.Base == fileName.Base && name.Base != prevFile.Base {
 				keepFiles[root] = entry
 			}
+		} else {
+			keepFiles[root] = entry
 		}
-		return true
-	})
-	c.do(func(entry *m.File) bool {
+	}
+	for _, entry := range files {
 		if entry.Id == file.Id {
-			return true
+			continue
 		}
-		if entry.Hash == file.Hash {
-			root := entry.Root
-			keepFile := keepFiles[root]
-			if entry == keepFile {
-				if fileName != keepFile.Name {
-					newId := m.Id{Root: keepFile.Root, Name: fileName}
-					rename := c.ensureNameAvailable(newId)
-					if rename != nil {
-						cmd.Rename = append(cmd.Rename, *rename)
-					}
-					cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.Id, NewId: newId})
+		root := entry.Root
+		keepFile := keepFiles[root]
+		if entry == keepFile {
+			if fileName != keepFile.Name {
+				newId := m.Id{Root: keepFile.Root, Name: fileName}
+				rename := c.ensureNameAvailable(newId)
+				if rename != nil {
+					cmd.Rename = append(cmd.Rename, *rename)
 				}
-			} else {
-				cmd.Delete = append(cmd.Delete, entry.Id)
+				cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.Id, NewId: newId})
+				keepFile.Id = newId
 			}
+		} else {
+			cmd.Delete = append(cmd.Delete, entry.Id)
 		}
-		return true
-	})
+	}
 
 	copy := m.CopyFile{From: file.Id}
 	for _, root := range c.roots {
@@ -71,11 +67,13 @@ func (c *controller) keepFile(file *w.File) {
 				cmd.Rename = append(cmd.Rename, *rename)
 			}
 			copy.To = append(copy.To, root)
-			newFile := &w.File{
-				File: file.File,
-				Kind: file.Kind,
+			newFile := &m.File{
+				Id:      newId,
+				Size:    file.Size,
+				ModTime: file.ModTime,
+				Hash:    file.Hash,
 			}
-			newFile.Id = newId
+			c.files[file.Hash] = append(c.files[file.Hash], newFile)
 		}
 	}
 	if len(copy.To) > 0 {
