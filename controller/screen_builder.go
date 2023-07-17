@@ -130,8 +130,11 @@ func (c *controller) progress() []w.ProgressInfo {
 	var value float64
 	for _, root := range c.roots {
 		archive := c.archives[root]
+		if archive.progressState == m.Scanned {
+			continue
+		}
 		tab = " Hashing"
-		value = float64(archive.totalHashed+archive.hashingProgress.Hashed) / float64(archive.totalSize)
+		value = float64(archive.totalHashed+archive.fileHashed) / float64(archive.totalSize)
 		infos = append(infos, w.ProgressInfo{Root: root, Tab: tab, Value: value})
 	}
 	return infos

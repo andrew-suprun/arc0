@@ -142,7 +142,7 @@ const (
 )
 
 type ProgressInfo struct {
-	m.Root
+	Root  m.Root
 	Tab   string
 	Value float64
 }

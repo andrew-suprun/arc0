@@ -31,11 +31,11 @@ type controller struct {
 }
 
 type archive struct {
-	scanner         m.ArchiveScanner
-	hashingProgress m.HashingProgress
-	progressState   m.ProgressState
-	totalSize       uint64
-	totalHashed     uint64
+	scanner       m.ArchiveScanner
+	progressState m.ProgressState
+	totalSize     uint64
+	totalHashed   uint64
+	fileHashed    uint64
 }
 
 type folder struct {

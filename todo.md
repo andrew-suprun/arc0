@@ -1,5 +1,5 @@
+* fix delete on folder
 * fix tab key action
-* display FPS
 * fix jumping selection
 * fix ghost folders
 * make logging optional triggered by '-log' command line flag
@@ -9,14 +9,3 @@
 * ??? move Screen{} and View() into separate package
 * ??? Separate Scroll into Scroll and Sized
 * ??? store hashes as hex encoded strings
-
-* scanner:
-
-func copyFile(src, dst string) error {
-	err := copyFileInternal(src, dst)
-	if err != nil {
-		return err
-	}
-	return setFileModTime(src, dst)
-}
-

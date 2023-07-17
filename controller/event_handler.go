@@ -10,6 +10,9 @@ func (c *controller) handleEvent(event any) {
 		return
 	}
 	switch event := event.(type) {
+	case m.TotalSize:
+		c.totalSize(event)
+
 	case m.FileScanned:
 		c.fileScanned(event)
 

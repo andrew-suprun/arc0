@@ -10,6 +10,13 @@ type Event interface {
 	event()
 }
 
+type TotalSize struct {
+	Root Root
+	Size uint64
+}
+
+func (TotalSize) event() {}
+
 type FileScanned struct {
 	*File
 }

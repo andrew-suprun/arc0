@@ -37,7 +37,7 @@ func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
-		s.hashArchive()
+		s.scanArchive()
 
 	case m.HandleFiles:
 		if cmd.Copy == nil {
@@ -64,8 +64,18 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	return true
 }
 
-func (s *scanner) hashArchive() {
+func (s *scanner) scanArchive() {
 	archFiles := metas[s.root]
+	totalSize := uint64(0)
+	for _, file := range archFiles {
+		totalSize += file.Size
+	}
+
+	s.events <- m.TotalSize{
+		Root: s.root,
+		Size: totalSize,
+	}
+
 	scans := make([]bool, len(archFiles))
 
 	for i := range archFiles {

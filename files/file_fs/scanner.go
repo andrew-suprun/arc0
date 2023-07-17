@@ -56,11 +56,7 @@ func (s *scanner) scanArchive() {
 		}
 	}()
 
-	s.readMeta()
-	defer func() {
-		s.storeMeta()
-	}()
-
+	totalSize := uint64(0)
 	fsys := os.DirFS(s.root.String())
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if s.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
@@ -96,17 +92,31 @@ func (s *scanner) scanArchive() {
 			ModTime: modTime,
 			Size:    uint64(meta.Size()),
 		}
+		totalSize += file.Size
 
-		if stored, ok := s.stored[sys.Ino]; ok && stored.ModTime == modTime && stored.Size == uint64(meta.Size()) {
+		s.files[sys.Ino] = file
+
+		return nil
+	})
+
+	s.readMeta()
+	defer func() {
+		s.storeMeta()
+	}()
+
+	s.events <- m.TotalSize{
+		Root: s.root,
+		Size: totalSize,
+	}
+
+	for ino, file := range s.files {
+		if stored, ok := s.stored[ino]; ok && stored.ModTime == file.ModTime && stored.Size == file.Size {
 			file.Hash = stored.Hash
 			s.events <- m.FileScanned{File: file}
 			log.Printf("scanArchive:1: file: %s", file)
 			s.sent[file.Id] = struct{}{}
 		}
-		s.files[sys.Ino] = file
-
-		return nil
-	})
+	}
 
 	files := []*m.File{}
 	for _, file := range s.files {
