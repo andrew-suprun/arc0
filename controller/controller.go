@@ -21,6 +21,7 @@ type controller struct {
 
 	lastMouseEventTime time.Time
 	currentPath        m.Path
+	selectedIdx        int
 
 	frames   int
 	prevTick time.Time
@@ -138,21 +139,4 @@ func (c *controller) entry(id m.Id) *w.File {
 		}
 	}
 	return nil
-}
-
-func (c *controller) selectedIdx() int {
-	for idx, entry := range c.screen.Entries {
-		if entry.Id == c.screen.SelectedId {
-			return idx
-		}
-	}
-	return 0
-}
-
-func (c *controller) selectedId() m.Id {
-	result := c.currentFolder().selectedId
-	if result.Base == "" && len(c.screen.Entries) > 0 {
-		return c.screen.Entries[0].Id
-	}
-	return result
 }

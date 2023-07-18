@@ -15,7 +15,7 @@ func (c *controller) mouseTarget(cmd any) {
 	folder := c.currentFolder()
 	switch cmd := cmd.(type) {
 	case m.SelectFile:
-		if c.selectedId() == m.Id(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
+		if folder.selectedId == m.Id(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
 			c.open()
 		} else {
 			folder.selectedId = m.Id(cmd)
@@ -87,7 +87,7 @@ func (c *controller) revealInFinder() {
 
 func (c *controller) moveSelection(lines int) {
 	folder := c.currentFolder()
-	id := c.selectedId()
+	id := folder.selectedId
 	for idx, entry := range c.screen.Entries {
 		if entry.Id == id {
 			newIdx := idx + lines
@@ -156,8 +156,15 @@ func (c *controller) keepSelected() {
 }
 
 func (c *controller) makeSelectedVisible() {
-	selectedIdx := c.selectedIdx()
-	offsetIdx := c.currentFolder().offsetIdx
+	folder := c.currentFolder()
+	selectedIdx := 0
+	for idx, entry := range c.screen.Entries {
+		if entry.Id == folder.selectedId {
+			selectedIdx = idx
+			break
+		}
+	}
+	offsetIdx := folder.offsetIdx
 
 	if offsetIdx > selectedIdx {
 		offsetIdx = selectedIdx
@@ -166,5 +173,5 @@ func (c *controller) makeSelectedVisible() {
 		offsetIdx = selectedIdx + 1 - c.screen.FileTreeLines
 	}
 
-	c.currentFolder().offsetIdx = offsetIdx
+	folder.offsetIdx = offsetIdx
 }

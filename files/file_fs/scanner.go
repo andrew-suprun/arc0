@@ -124,7 +124,9 @@ func (s *scanner) scanArchive() {
 	}
 
 	sort.Slice(files, func(i, j int) bool {
-		return files[i].Size < files[j].Size
+		iName := strings.ToLower(files[i].Id.String())
+		jName := strings.ToLower(files[j].Id.String())
+		return iName < jName
 	})
 
 	for _, file := range files {

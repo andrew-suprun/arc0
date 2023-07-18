@@ -17,16 +17,31 @@ func (c *controller) buildScreen() {
 	c.populateEntries(nameHashes)
 
 	folder := c.currentFolder()
+
+	if len(c.screen.Entries) > 0 {
+		if folder.selectedId.Base == "" {
+			folder.selectedId = c.screen.Entries[0].Id
+		} else {
+			found := false
+			for idx, entry := range c.screen.Entries {
+				if entry.Id == c.screen.SelectedId {
+					c.selectedIdx = idx
+					found = true
+					break
+				}
+			}
+			if !found {
+				folder.selectedId = c.screen.Entries[c.selectedIdx].Id
+			}
+		}
+	}
+
 	c.screen.CurrentPath = c.currentPath
 	c.screen.Progress = c.progress()
-	c.screen.SelectedId = c.selectedId()
+	c.screen.SelectedId = folder.selectedId
 	c.screen.OffsetIdx = folder.offsetIdx
 	c.screen.SortColumn = folder.sortColumn
 	c.screen.SortAscending = folder.sortAscending
-
-	if c.screen.SelectedId.Base == "" && len(c.screen.Entries) > 0 {
-		c.screen.SelectedId = c.screen.Entries[0].Id
-	}
 
 	c.stats()
 }
