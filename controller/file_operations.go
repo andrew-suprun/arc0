@@ -17,6 +17,17 @@ func (c *controller) keepFile(file *m.File) {
 
 	cmd := m.HandleFiles{Hash: file.Hash}
 
+	if file.Root != c.origin {
+		originId := m.Id{Root: c.origin, Name: file.Name}
+		sameNameOrigin := c.find(func(entry *m.File) bool {
+			return entry.Id == originId
+		})
+		if sameNameOrigin != nil {
+			newId := c.newId(file.Id)
+			file.Id = newId
+		}
+	}
+
 	fileName := file.Name
 	keepFiles := map[m.Root]*m.File{}
 	for _, entry := range files {
@@ -34,6 +45,7 @@ func (c *controller) keepFile(file *m.File) {
 			keepFiles[root] = entry
 		}
 	}
+
 	for _, entry := range files {
 		if entry.Id == file.Id {
 			continue
@@ -138,14 +150,14 @@ func (c *controller) ensureNameAvailable(id m.Id) *m.RenameFile {
 		return entry.Id == id
 	})
 	if file != nil {
-		newId := c.newName(id)
+		newId := c.newId(id)
 		file.Id = newId
 		return &m.RenameFile{Id: id, NewId: newId}
 	}
 	return nil
 }
 
-func (c *controller) newName(id m.Id) m.Id {
+func (c *controller) newId(id m.Id) m.Id {
 	parts := strings.Split(id.Base.String(), ".")
 
 	var part string

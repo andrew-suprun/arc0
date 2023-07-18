@@ -1,4 +1,3 @@
-* fix renaming in keepFile() on copy files
 * fix delete on folder
 * fix tab key action
 * look into controller.do() and controller.find() usage
