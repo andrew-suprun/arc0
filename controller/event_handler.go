@@ -77,7 +77,7 @@ func (c *controller) handleEvent(event any) {
 		// TODO: Implement, maybe?
 
 	case m.Delete:
-		c.deleteFile(c.screen.Entries[c.currentFolder().selectedIdx])
+		c.deleteFile(c.selectedEntry())
 
 	case m.Error:
 		log.Printf("### Error: %s", event)

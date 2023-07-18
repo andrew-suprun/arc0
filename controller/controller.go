@@ -41,7 +41,7 @@ type archive struct {
 }
 
 type folder struct {
-	selectedIdx   int
+	selectedId    m.Id
 	offsetIdx     int
 	sortColumn    w.SortColumn
 	sortAscending []bool
@@ -127,42 +127,32 @@ func (c *controller) find(f func(entry *m.File) bool) *m.File {
 	return nil
 }
 
-func (c *controller) getSelectedFile() *w.File {
-	selectedIdx := c.currentFolder().selectedIdx
-	if selectedIdx >= len(c.screen.Entries) {
-		return nil
-	}
-	return c.screen.Entries[selectedIdx]
+func (c *controller) selectedEntry() *w.File {
+	return c.entry(c.screen.SelectedId)
 }
 
-func (c *controller) getSelectedIdx() int {
-	return c.currentFolder().selectedIdx
-}
-
-func (c *controller) getSelectedId() m.Id {
-	file := c.getSelectedFile()
-	if file != nil {
-		return file.Id
-	}
-	return m.Id{}
-}
-
-func (c *controller) setSelectedIdx(idx int) {
-	if idx >= len(c.screen.Entries) {
-		idx = len(c.screen.Entries) - 1
-	}
-	if idx < 0 {
-		idx = 0
-	}
-	c.currentFolder().selectedIdx = idx
-}
-
-func (c *controller) setSelectedId(id m.Id) {
-	for idx, entry := range c.screen.Entries {
+func (c *controller) entry(id m.Id) *w.File {
+	for _, entry := range c.screen.Entries {
 		if entry.Id == id {
-			c.currentFolder().selectedIdx = idx
-			return
+			return entry
 		}
 	}
-	c.currentFolder().selectedIdx = 0
+	return nil
+}
+
+func (c *controller) selectedIdx() int {
+	for idx, entry := range c.screen.Entries {
+		if entry.Id == c.screen.SelectedId {
+			return idx
+		}
+	}
+	return 0
+}
+
+func (c *controller) selectedId() m.Id {
+	result := c.currentFolder().selectedId
+	if result.Base == "" && len(c.screen.Entries) > 0 {
+		return c.screen.Entries[0].Id
+	}
+	return result
 }

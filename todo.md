@@ -1,5 +1,6 @@
+* fix edge case: keeping copy file when one of parent folders have the same
+    name as an origin file
 * fix delete on folder
-* fix tab key action
 * look into controller.do() and controller.find() usage
 * make logging optional triggered by '-log' command line flag
 * handle 'keep all' event 

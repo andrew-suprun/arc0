@@ -19,10 +19,14 @@ func (c *controller) buildScreen() {
 	folder := c.currentFolder()
 	c.screen.CurrentPath = c.currentPath
 	c.screen.Progress = c.progress()
-	c.screen.SelectedId = c.getSelectedId()
+	c.screen.SelectedId = c.selectedId()
 	c.screen.OffsetIdx = folder.offsetIdx
 	c.screen.SortColumn = folder.sortColumn
 	c.screen.SortAscending = folder.sortAscending
+
+	if c.screen.SelectedId.Base == "" && len(c.screen.Entries) > 0 {
+		c.screen.SelectedId = c.screen.Entries[0].Id
+	}
 
 	c.stats()
 }
@@ -94,7 +98,6 @@ func (c *controller) addEntries(state w.State, files []*m.File, nameHashes nameH
 				entry := &w.File{
 					File: m.File{
 						Id: m.Id{
-							Root: file.Root,
 							Name: m.Name{
 								Path: c.currentPath,
 								Base: name,
