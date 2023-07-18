@@ -88,21 +88,16 @@ func (c *controller) revealInFinder() {
 func (c *controller) moveSelection(lines int) {
 	folder := c.currentFolder()
 	id := c.selectedId()
-	log.Printf("moveSelection: lines: %d, id: %q", lines, id)
 	for idx, entry := range c.screen.Entries {
-		log.Printf("moveSelection: idx: %d, entry: %s", idx, entry)
 		if entry.Id == id {
 			newIdx := idx + lines
-			log.Printf("moveSelection: newIdx.1: %d", newIdx)
 			if newIdx >= len(c.screen.Entries) {
 				newIdx = len(c.screen.Entries) - 1
 			}
 			if newIdx < 0 {
 				newIdx = 0
 			}
-			log.Printf("moveSelection: newIdx.2: %d", newIdx)
 			newId := c.screen.Entries[newIdx].Id
-			log.Printf("moveSelection: newId: %q", newId)
 			folder.selectedId = newId
 
 		}

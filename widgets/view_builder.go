@@ -3,7 +3,6 @@ package widgets
 import (
 	m "arch/model"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -38,7 +37,6 @@ func (c *Screen) title() Widget {
 }
 
 func (s *Screen) folderView() Widget {
-	log.Printf("folderView: selectedId: %q", s.SelectedId)
 	return Column(colConstraint,
 		s.breadcrumbs(),
 		Styled(styleArchiveHeader,

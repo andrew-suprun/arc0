@@ -106,17 +106,13 @@ func (c *controller) keepFile(file *m.File) {
 }
 
 func (c *controller) deleteFile(file *w.File) {
-	if file == nil || !c.archivesScanned {
-		return
+	if file.Kind == w.FileFolder {
+		c.deleteFolderFile(file)
+	} else {
+		c.deleteRegularFile(file.Hash)
 	}
 
 	c.state[file.Hash] = w.Pending
-
-	if file.Root == "" {
-		c.deleteFolderFile(file)
-	} else if c.state[file.Hash] == w.Absent {
-		c.deleteRegularFile(file.Hash)
-	}
 }
 
 func (c *controller) deleteRegularFile(hash m.Hash) {
@@ -124,6 +120,14 @@ func (c *controller) deleteRegularFile(hash m.Hash) {
 	c.do(func(entry *m.File) bool {
 		if entry.Hash == hash && c.state[entry.Hash] == w.Absent {
 			cmd.Delete = append(cmd.Delete, entry.Id)
+			files := c.files[hash]
+			for i, file := range files {
+				if file.Id == entry.Id {
+					files[i] = files[len(files)-1]
+					c.files[file.Hash] = files[:len(files)-1]
+					break
+				}
+			}
 		}
 		return true
 	})
