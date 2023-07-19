@@ -39,13 +39,14 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 	case m.ScanArchive:
 		s.scanArchive()
 
-	case m.HandleFiles:
-		if cmd.Copy == nil {
-			s.events <- m.FilesHandled(cmd)
-			return true
-		}
-		for _, meta := range metas[cmd.Copy.From.Root] {
-			if meta.FullName == cmd.Copy.From.Name.String() {
+	case m.DeleteFile:
+		s.events <- m.FileDeleted(cmd)
+
+	case m.RenameFile:
+		s.events <- m.FileRenamed(cmd)
+	case m.CopyFile:
+		for _, meta := range metas[cmd.From.Root] {
+			if meta.FullName == cmd.From.Name.String() {
 				for copied := uint64(0); ; copied += 50000 {
 					if copied > meta.Size {
 						copied = meta.Size
@@ -59,7 +60,7 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 				break
 			}
 		}
-		s.events <- m.FilesHandled(cmd)
+		s.events <- m.FileCopied(cmd)
 	}
 	return true
 }
@@ -201,6 +202,8 @@ var metaMap = map[m.Root]map[string]m.Hash{
 		"uuu.txt":         "hhhh",
 		"xxx.txt":         "xxxx",
 		"yyy.txt":         "yyyy",
+		"same":            "same",
+		"different":       "different",
 	},
 	"copy 1": {
 		"xxx.txt":     "xxxx",
@@ -220,6 +223,8 @@ var metaMap = map[m.Root]map[string]m.Hash{
 		"b/bbb.txt":   "bbbb",
 		"6666":        "6666",
 		"7777":        "7777",
+		"same":        "same-copy",
+		"different":   "different-copy1",
 	},
 	"copy 2": {
 		"xxx.txt":         "xxxx",
@@ -234,6 +239,8 @@ var metaMap = map[m.Root]map[string]m.Hash{
 		"7777":            "6666",
 		"8888":            "8888",
 		"c/ccc.txt":       "bbbb",
+		"same":            "same-copy",
+		"different":       "different-copy2",
 	},
 }
 

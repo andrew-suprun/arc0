@@ -25,24 +25,8 @@ func (c *controller) archiveScanned(tree m.ArchiveScanned) {
 			return
 		}
 	}
-	c.autoResolve()
-}
-
-func (c *controller) autoResolve() {
 	c.archivesScanned = true
-	for _, files := range c.files {
-		originFiles := []*m.File{}
-		names := map[m.Name]struct{}{}
-		for _, file := range files {
-			if file.Root == c.origin {
-				originFiles = append(originFiles, file)
-			}
-			names[file.Name] = struct{}{}
-		}
-		if len(originFiles) == 1 && (len(files) != len(c.roots) || len(names) != 1) {
-			c.keepFile(originFiles[0])
-		}
-	}
+	c.autoresolve()
 }
 
 func (c *controller) handleHashingProgress(event m.HashingProgress) {
@@ -50,20 +34,26 @@ func (c *controller) handleHashingProgress(event m.HashingProgress) {
 }
 
 func (c *controller) handleCopyingProgress(event m.CopyingProgress) {
-	c.fileCopied = uint64(event)
+	c.fileCopiedSize = uint64(event)
 }
 
-func (c *controller) filesHandled(event m.FilesHandled) {
-	log.Printf("filesHandled: %s", event)
+func (c *controller) fileDeleted(event m.FileDeleted) {
+	log.Printf("### %s", event)
 	c.state[event.Hash] = w.Resolved
-	if event.Copy != nil {
-		c.fileCopied = 0
-		file := c.find(func(entry *m.File) bool {
-			return entry.Id == m.Id(event.Copy.From)
-		})
-		c.totalCopied += file.Size
-	}
-	if c.totalCopied == c.copySize {
-		c.totalCopied, c.copySize = 0, 0
+}
+
+func (c *controller) fileRenamed(event m.FileRenamed) {
+	log.Printf("### %s", event)
+	c.state[event.Hash] = w.Resolved
+}
+
+func (c *controller) fileCopied(event m.FileCopied) {
+	log.Printf("### %s", event)
+	c.state[event.Hash] = w.Resolved
+	c.fileCopiedSize = 0
+	file := c.files[event.Hash][0]
+	c.totalCopiedSize += file.Size
+	if c.totalCopiedSize == c.copySize {
+		c.totalCopiedSize, c.copySize = 0, 0
 	}
 }

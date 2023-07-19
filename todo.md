@@ -1,5 +1,3 @@
-* fix edge case: keeping copy file when one of parent folders have the same
-    name as an origin file
 * make logging optional triggered by '-log' command line flag
 * handle 'keep all' event 
 * add descriptions to ScanErrors

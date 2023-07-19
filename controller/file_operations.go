@@ -3,7 +3,6 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
-	"fmt"
 	"strings"
 )
 
@@ -12,21 +11,9 @@ func (c *controller) keepFile(file *m.File) {
 		return
 	}
 
+	scanner := c.archives[c.origin].scanner
 	c.state[file.Hash] = w.Pending
 	files := c.files[file.Hash]
-
-	cmd := m.HandleFiles{Hash: file.Hash}
-
-	if file.Root != c.origin {
-		originId := m.Id{Root: c.origin, Name: file.Name}
-		sameNameOrigin := c.find(func(entry *m.File) bool {
-			return entry.Id == originId
-		})
-		if sameNameOrigin != nil {
-			newId := c.newId(file.Id)
-			file.Id = newId
-		}
-	}
 
 	fileName := file.Name
 	keepFiles := map[m.Root]*m.File{}
@@ -55,15 +42,11 @@ func (c *controller) keepFile(file *m.File) {
 		if entry == keepFile {
 			if fileName != keepFile.Name {
 				newId := m.Id{Root: keepFile.Root, Name: fileName}
-				rename := c.ensureNameAvailable(newId)
-				if rename != nil {
-					cmd.Rename = append(cmd.Rename, *rename)
-				}
-				cmd.Rename = append(cmd.Rename, m.RenameFile{Id: keepFile.Id, NewId: newId})
+				scanner.Send(m.RenameFile{From: keepFile.Id, To: newId, Hash: file.Hash})
 				keepFile.Id = newId
 			}
 		} else {
-			cmd.Delete = append(cmd.Delete, entry.Id)
+			scanner.Send(m.DeleteFile{Id: entry.Id, Hash: file.Hash})
 			for i, file := range files {
 				if file.Id == entry.Id {
 					files[i] = files[len(files)-1]
@@ -74,18 +57,14 @@ func (c *controller) keepFile(file *m.File) {
 		}
 	}
 
-	copy := m.CopyFile{From: file.Id}
+	copy := m.CopyFile{From: file.Id, Hash: file.Hash}
 	for _, root := range c.roots {
 		if root == file.Root {
 			continue
 		}
 		if _, ok := keepFiles[root]; !ok {
 			newId := m.Id{Root: root, Name: fileName}
-			rename := c.ensureNameAvailable(newId)
-			if rename != nil {
-				cmd.Rename = append(cmd.Rename, *rename)
-			}
-			copy.To = append(copy.To, root)
+			copy.To = append(copy.To, newId)
 			newFile := &m.File{
 				Id:      newId,
 				Size:    file.Size,
@@ -96,12 +75,8 @@ func (c *controller) keepFile(file *m.File) {
 		}
 	}
 	if len(copy.To) > 0 {
-		cmd.Copy = &copy
+		scanner.Send(copy)
 		c.copySize += file.Size
-	}
-	if len(cmd.Delete) > 0 || len(cmd.Rename) > 0 || cmd.Copy != nil {
-		c.archives[c.origin].scanner.Send(cmd)
-		c.state[file.Hash] = w.Pending
 	}
 }
 
@@ -116,10 +91,10 @@ func (c *controller) deleteFile(file *w.File) {
 }
 
 func (c *controller) deleteRegularFile(hash m.Hash) {
-	cmd := m.HandleFiles{Hash: hash}
-	c.do(func(entry *m.File) bool {
+	c.state[hash] = w.Pending
+	c.every(func(entry *m.File) {
 		if entry.Hash == hash && c.state[entry.Hash] == w.Absent {
-			cmd.Delete = append(cmd.Delete, entry.Id)
+			c.archives[c.origin].scanner.Send(m.DeleteFile{Id: entry.Id, Hash: entry.Hash})
 			files := c.files[hash]
 			for i, file := range files {
 				if file.Id == entry.Id {
@@ -129,95 +104,19 @@ func (c *controller) deleteRegularFile(hash m.Hash) {
 				}
 			}
 		}
-		return true
 	})
-	c.archives[c.origin].scanner.Send(cmd)
 }
 
 func (c *controller) deleteFolderFile(file *w.File) {
 	path := file.Name.String()
 	hashes := map[m.Hash]struct{}{}
-	c.do(func(entry *m.File) bool {
+	c.every(func(entry *m.File) {
 		if c.state[entry.Hash] == w.Absent && strings.HasPrefix(entry.Path.String(), path) {
 			hashes[entry.Hash] = struct{}{}
 		}
-		return true
 	})
 
 	for hash := range hashes {
 		c.deleteRegularFile(hash)
 	}
-}
-
-func (c *controller) ensureNameAvailable(id m.Id) *m.RenameFile {
-	file := c.find(func(entry *m.File) bool {
-		return entry.Id == id
-	})
-	if file != nil {
-		newId := c.newId(id)
-		file.Id = newId
-		return &m.RenameFile{Id: id, NewId: newId}
-	}
-	return nil
-}
-
-func (c *controller) newId(id m.Id) m.Id {
-	parts := strings.Split(id.Base.String(), ".")
-
-	var part string
-	if len(parts) == 1 {
-		part = stripIdx(parts[0])
-	} else {
-		part = stripIdx(parts[len(parts)-2])
-	}
-	for idx := 1; ; idx++ {
-		var newName string
-		if len(parts) == 1 {
-			newName = fmt.Sprintf("%s [%d]", part, idx)
-		} else {
-			parts[len(parts)-2] = fmt.Sprintf("%s [%d]", part, idx)
-			newName = strings.Join(parts, ".")
-		}
-		file := c.find(func(entry *m.File) bool {
-			return id.Path == entry.Path && newName == entry.Base.String()
-		})
-
-		if file == nil {
-			return m.Id{
-				Root: id.Root,
-				Name: m.Name{Path: id.Path, Base: m.Base(newName)},
-			}
-		}
-	}
-}
-
-type stripIdxState int
-
-const (
-	expectCloseBracket stripIdxState = iota
-	expectDigit
-	expectDigitOrOpenBracket
-	expectOpenBracket
-	expectSpace
-	done
-)
-
-func stripIdx(name string) string {
-	state := expectCloseBracket
-	i := len(name) - 1
-	for ; i >= 0; i-- {
-		ch := name[i]
-		if ch == ']' && state == expectCloseBracket {
-			state = expectDigit
-		} else if ch >= '0' && ch <= '9' && (state == expectDigit || state == expectDigitOrOpenBracket) {
-			state = expectDigitOrOpenBracket
-		} else if ch == '[' && state == expectDigitOrOpenBracket {
-			state = expectSpace
-		} else if ch == ' ' && state == expectSpace {
-			break
-		} else {
-			return name
-		}
-	}
-	return name[:i]
 }

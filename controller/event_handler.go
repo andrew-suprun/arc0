@@ -19,8 +19,14 @@ func (c *controller) handleEvent(event any) {
 	case m.ArchiveScanned:
 		c.archiveScanned(event)
 
-	case m.FilesHandled:
-		c.filesHandled(event)
+	case m.FileDeleted:
+		c.fileDeleted(event)
+
+	case m.FileRenamed:
+		c.fileRenamed(event)
+
+	case m.FileCopied:
+		c.fileCopied(event)
 
 	case m.HashingProgress:
 		c.handleHashingProgress(event)

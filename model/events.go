@@ -34,12 +34,28 @@ type ArchiveScanned struct {
 
 func (ArchiveScanned) event() {}
 
-type FilesHandled HandleFiles
+type FileDeleted DeleteFile
 
-func (FilesHandled) event() {}
+func (FileDeleted) event() {}
 
-func (h FilesHandled) String() string {
-	return HandleFiles(h).String()
+func (h FileDeleted) String() string {
+	return DeleteFile(h).String()
+}
+
+type FileRenamed RenameFile
+
+func (FileRenamed) event() {}
+
+func (h FileRenamed) String() string {
+	return RenameFile(h).String()
+}
+
+type FileCopied CopyFile
+
+func (FileCopied) event() {}
+
+func (h FileCopied) String() string {
+	return CopyFile(h).String()
 }
 
 type ProgressState int

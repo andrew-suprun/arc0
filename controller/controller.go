@@ -15,8 +15,8 @@ type controller struct {
 	files           map[m.Hash][]*m.File
 	state           map[m.Hash]w.State
 	copySize        uint64
-	totalCopied     uint64
-	fileCopied      uint64
+	totalCopiedSize uint64
+	fileCopiedSize  uint64
 	archivesScanned bool
 
 	lastMouseEventTime time.Time
@@ -107,25 +107,12 @@ func (c *controller) currentFolder() *folder {
 	return curFolder
 }
 
-func (c *controller) do(f func(entry *m.File) bool) {
+func (c *controller) every(f func(entry *m.File)) {
 	for _, entries := range c.files {
 		for _, entry := range entries {
-			if !f(entry) {
-				return
-			}
+			f(entry)
 		}
 	}
-}
-
-func (c *controller) find(f func(entry *m.File) bool) *m.File {
-	for _, entries := range c.files {
-		for _, entry := range entries {
-			if f(entry) {
-				return entry
-			}
-		}
-	}
-	return nil
 }
 
 func (c *controller) selectedEntry() *w.File {

@@ -43,8 +43,14 @@ func (s *scanner) handleCommand(cmd m.FileCommand) bool {
 	case m.ScanArchive:
 		s.scanArchive()
 
-	case m.HandleFiles:
-		s.handleFiles(cmd)
+	case m.DeleteFile:
+		s.deleteFile(cmd)
+
+	case m.RenameFile:
+		s.renameFile(cmd)
+
+	case m.CopyFile:
+		s.copyFile(cmd)
 	}
 	return !s.lc.ShoudStop()
 }
@@ -141,7 +147,6 @@ func (s *scanner) scanArchive() {
 		}
 
 		s.events <- m.FileScanned{File: file}
-		log.Printf("scanArchive:2: file: %s", file)
 	}
 }
 

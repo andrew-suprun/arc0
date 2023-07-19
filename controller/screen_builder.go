@@ -24,7 +24,7 @@ func (c *controller) buildScreen() {
 		} else {
 			found := false
 			for idx, entry := range c.screen.Entries {
-				if entry.Id == c.screen.SelectedId {
+				if entry.Id == folder.selectedId {
 					c.selectedIdx = idx
 					found = true
 					break
@@ -138,7 +138,7 @@ func (c *controller) progress() []w.ProgressInfo {
 		infos = append(infos, w.ProgressInfo{
 			Root:  c.origin,
 			Tab:   " Copying",
-			Value: float64(c.totalCopied+uint64(c.fileCopied)) / float64(c.copySize),
+			Value: float64(c.totalCopiedSize+uint64(c.fileCopiedSize)) / float64(c.copySize),
 		})
 	}
 	var tab string

@@ -3,7 +3,6 @@ package model
 import (
 	"arch/actor"
 	"fmt"
-	"strings"
 )
 
 type FS interface {
@@ -22,45 +21,37 @@ type ScanArchive struct{}
 
 func (ScanArchive) cmd() {}
 
-type HandleFiles struct {
-	Hash
-	Delete []Id
-	Rename []RenameFile
-	Copy   *CopyFile
+type DeleteFile struct {
+	Hash Hash
+	Id   Id
 }
 
-func (HandleFiles) cmd() {}
+func (DeleteFile) cmd() {}
 
-func (h HandleFiles) String() string {
-	buf := &strings.Builder{}
-	fmt.Fprintf(buf, "HandleFiles: hash: %q\n", h.Hash)
-	for _, d := range h.Delete {
-		fmt.Fprintf(buf, "    delete: %s\n", d)
-	}
-
-	for _, r := range h.Rename {
-		fmt.Fprintf(buf, "    %s\n", r)
-	}
-	if h.Copy != nil {
-		fmt.Fprintf(buf, "    %s\n", h.Copy)
-	}
-	return buf.String()
+func (d DeleteFile) String() string {
+	return fmt.Sprintf("DeleteFile: Id: %q, hash: %q", d.Id, d.Hash)
 }
 
 type RenameFile struct {
-	Id
-	NewId Id
+	Hash Hash
+	From Id
+	To   Id
 }
 
+func (RenameFile) cmd() {}
+
 func (r RenameFile) String() string {
-	return fmt.Sprintf("RenameFile: Id=%q, NewId=%q", r.Id, r.NewId)
+	return fmt.Sprintf("RenameFile: From: %q, To: %q, hash: %q", r.From, r.To, r.Hash)
 }
 
 type CopyFile struct {
+	Hash Hash
 	From Id
-	To   []Root
+	To   []Id
 }
 
+func (CopyFile) cmd() {}
+
 func (c CopyFile) String() string {
-	return fmt.Sprintf("CopyFile: From=%q, To=%v", c.From, c.To)
+	return fmt.Sprintf("CopyFile: From=%q, To=%v, hash: %q", c.From, c.To, c.Hash)
 }
