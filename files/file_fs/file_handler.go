@@ -4,7 +4,6 @@ import (
 	m "arch/model"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,10 +11,11 @@ import (
 )
 
 func (s *scanner) deleteFile(delete m.DeleteFile) {
-	log.Printf("delete: %q", delete.Id)
+	defer func() {
+		s.events <- m.FileDeleted(delete)
+	}()
 	err := os.Remove(delete.Id.String())
 	if err != nil {
-		log.Printf("### ERROR: %#v", err)
 		s.events <- m.Error{Id: delete.Id, Error: err}
 	}
 	path := filepath.Join(delete.Id.Root.String(), delete.Id.Path.String())
@@ -35,7 +35,9 @@ func (s *scanner) deleteFile(delete m.DeleteFile) {
 }
 
 func (s *scanner) renameFile(rename m.RenameFile) {
-	log.Printf("rename: from: %q, to: %q", rename.From, rename.To)
+	defer func() {
+		s.events <- m.FileRenamed(rename)
+	}()
 	path := filepath.Join(rename.From.Root.String(), rename.To.Path.String())
 	err := os.MkdirAll(path, 0755)
 	if err != nil {
@@ -47,18 +49,20 @@ func (s *scanner) renameFile(rename m.RenameFile) {
 	}
 }
 
-func (s *scanner) copyFile(cmd m.CopyFile) {
-	log.Printf("copy: from: %q, to: %q", cmd.From, cmd.To)
+func (s *scanner) copyFile(copy m.CopyFile) {
+	defer func() {
+		s.events <- m.FileCopied(copy)
+	}()
 
-	events := make([]chan event, len(cmd.To))
-	copied := make([]uint64, len(cmd.To))
+	events := make([]chan event, len(copy.To))
+	copied := make([]uint64, len(copy.To))
 	reported := uint64(0)
 
-	for i := range cmd.To {
+	for i := range copy.To {
 		events[i] = make(chan event)
 	}
 
-	go s.reader(cmd.From, cmd.To, events)
+	go s.reader(copy.From, copy.To, events)
 
 	for {
 		hasValue := false
@@ -145,8 +149,8 @@ func (s *scanner) reader(source m.Id, targets []m.Id, eventChans []chan event) {
 func (s *scanner) writer(id m.Id, modTime time.Time, cmdChan chan []byte, eventChan chan event) {
 	var copied copyProgress
 
-	fileName := filepath.Join(id.Root.String(), id.Path.String())
-	os.MkdirAll(fileName, 0755)
+	filePath := filepath.Join(id.Root.String(), id.Path.String())
+	os.MkdirAll(filePath, 0755)
 	file, err := os.Create(id.String())
 	if err != nil {
 		s.events <- m.Error{Id: id, Error: err}
@@ -157,10 +161,9 @@ func (s *scanner) writer(id m.Id, modTime time.Time, cmdChan chan []byte, eventC
 		if file != nil {
 			file.Close()
 			if s.lc.ShoudStop() {
-				os.Remove(fileName)
+				os.Remove(filePath)
 			}
-			os.Chtimes(fileName, time.Now(), modTime)
-
+			os.Chtimes(id.String(), time.Now(), modTime)
 		}
 		close(eventChan)
 	}()

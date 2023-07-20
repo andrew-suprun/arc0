@@ -91,9 +91,12 @@ func (c *controller) deleteFile(file *w.File) {
 }
 
 func (c *controller) deleteRegularFile(hash m.Hash) {
+	if c.state[hash] != w.Absent {
+		return
+	}
 	c.state[hash] = w.Pending
 	c.every(func(entry *m.File) {
-		if entry.Hash == hash && c.state[entry.Hash] == w.Absent {
+		if entry.Hash == hash {
 			c.archives[c.origin].scanner.Send(m.DeleteFile{Id: entry.Id, Hash: entry.Hash})
 			files := c.files[hash]
 			for i, file := range files {

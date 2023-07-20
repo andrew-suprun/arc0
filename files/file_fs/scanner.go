@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,7 +32,7 @@ type scanner struct {
 	actor.Actor[m.FileCommand]
 }
 
-const hashFileName = ".csv"
+const hashFileName = ".meta.csv"
 
 func (s *scanner) handleCommand(cmd m.FileCommand) bool {
 	s.lc.Started()
@@ -119,7 +118,6 @@ func (s *scanner) scanArchive() {
 		if stored, ok := s.stored[ino]; ok && stored.ModTime == file.ModTime && stored.Size == file.Size {
 			file.Hash = stored.Hash
 			s.events <- m.FileScanned{File: file}
-			log.Printf("scanArchive:1: file: %s", file)
 			s.sent[file.Id] = struct{}{}
 		}
 	}

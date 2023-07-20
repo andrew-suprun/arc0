@@ -7,7 +7,7 @@ import (
 )
 
 type nameHashPair struct {
-	m.Base
+	m.Name
 	m.Hash
 }
 type nameHashSet map[nameHashPair]struct{}
@@ -18,7 +18,8 @@ func (c *controller) buildScreen() {
 
 	folder := c.currentFolder()
 
-	if len(c.screen.Entries) > 0 {
+	nEntries := len(c.screen.Entries)
+	if nEntries > 0 {
 		if folder.selectedId.Base == "" {
 			folder.selectedId = c.screen.Entries[0].Id
 		} else {
@@ -31,6 +32,12 @@ func (c *controller) buildScreen() {
 				}
 			}
 			if !found {
+				if c.selectedIdx >= nEntries {
+					c.selectedIdx = nEntries - 1
+				}
+				if c.selectedIdx < 0 {
+					c.selectedIdx = 0
+				}
 				folder.selectedId = c.screen.Entries[c.selectedIdx].Id
 			}
 		}
@@ -81,7 +88,7 @@ func (c *controller) addEntries(state w.State, files []*m.File, nameHashes nameH
 		if file.Root != c.origin && (originProgressState == m.Initial || state != w.Absent) {
 			continue
 		}
-		nameHash := nameHashPair{Base: file.Base, Hash: file.Hash}
+		nameHash := nameHashPair{Name: file.Name, Hash: file.Hash}
 
 		if file.Path == c.currentPath {
 			if _, ok := nameHashes[nameHash]; !ok {
