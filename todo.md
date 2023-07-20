@@ -1,4 +1,5 @@
 * atomic frame rendering
+* keyboard shortcuts for selecting sorting order
 * keepFile on folders
 * make logging optional triggered by '-log' command line flag
 * handle 'keep all' event 
