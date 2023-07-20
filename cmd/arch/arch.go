@@ -34,7 +34,7 @@ func main() {
 	}
 
 	lc := lifecycle.New()
-	events := make(m.EventChan, 10)
+	events := make(m.EventChan, 256)
 	renderer, err := tcell.NewRenderer(events)
 	if err != nil {
 		log.Printf("Failed to open terminal: %#v", err)

@@ -70,12 +70,18 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 	}
 
 	for !c.quit {
+		count := 0
 		event := <-events
 		c.handleEvent(event)
-		select {
-		case event = <-events:
-			c.handleEvent(event)
-		default:
+	readEvents:
+		for {
+			select {
+			case event = <-events:
+				c.handleEvent(event)
+				count++
+			default:
+				break readEvents
+			}
 		}
 
 		c.frames++
