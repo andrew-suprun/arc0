@@ -21,10 +21,10 @@ func (s scroll) Constraint() Constraint {
 	return s.constraint
 }
 
-func (s scroll) Render(renderer Renderer, pos Position, size Size) {
-	renderer.AddScrollArea(s.event, pos, size)
+func (s scroll) Render(screen *Screen, pos Position, size Size) {
+	screen.ScrollAreas = append(screen.ScrollAreas, ScrollArea{Command: s.event, Position: pos, Size: size})
 	widget := s.widget(size)
-	widget.Render(renderer, pos, size)
+	widget.Render(screen, pos, size)
 }
 
 func (s scroll) String() string { return toString(s) }

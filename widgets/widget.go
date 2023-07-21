@@ -8,19 +8,9 @@ import (
 
 type Widget interface {
 	Constraint() Constraint
-	Render(Renderer, Position, Size)
+	Render(*Screen, Position, Size)
 	String() string
 	ToString(*strings.Builder, string)
-}
-
-type Renderer interface {
-	AddMouseTarget(m.MouseTarget, Position, Size)
-	AddScrollArea(m.Scroll, Position, Size)
-	SetStyle(style Style)
-	CurrentStyle() Style
-	Text([]rune, Position)
-	Reset()
-	Show()
 }
 
 type Constraint struct {
@@ -54,7 +44,7 @@ const (
 	Reverse Flags = 4
 )
 
-type Screen struct {
+type View struct {
 	ScreenSize     m.ScreenSize
 	CurrentPath    m.Path
 	Entries        []*File
@@ -70,7 +60,7 @@ type Screen struct {
 	FPS            int
 }
 
-func (s *Screen) String() string {
+func (s *View) String() string {
 	buf := &strings.Builder{}
 	fmt.Fprintln(buf, "Screen{")
 	fmt.Fprintf(buf, "  ScreenSize:     {Width: %d, Height %d},\n", s.ScreenSize.Width, s.ScreenSize.Height)

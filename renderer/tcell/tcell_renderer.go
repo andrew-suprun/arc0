@@ -1,36 +1,46 @@
 package tcell
 
 import (
-	"arch/model"
-	"arch/widgets"
+	"arch/lifecycle"
+	m "arch/model"
+	"arch/stream"
+	w "arch/widgets"
 	"log"
 
 	"github.com/gdamore/tcell/v2"
 )
 
 type tcellRenderer struct {
-	events           model.EventChan
+	lc               *lifecycle.Lifecycle
+	controllerEvents stream.Stream[m.Event]
+
+	inEvents         stream.Stream[inEvent]
 	screen           tcell.Screen
-	mouseTargetAreas []mouseTargetArea
-	scrollAreas      []scrollArea
-	style            widgets.Style
+	mouseTargetAreas []w.MouseTargetArea
+	scrollAreas      []w.ScrollArea
 }
 
-type mouseTargetArea struct {
-	model.MouseTarget
-	widgets.Position
-	widgets.Size
+type inEvent interface {
+	incoming()
 }
 
-type scrollArea struct {
-	model.Scroll
-	widgets.Position
-	widgets.Size
+type screenEvent struct {
+	*w.Screen
 }
 
-var defaultStyle = widgets.Style{FG: 231, BG: 17}
+func (screenEvent) incoming() {}
 
-func NewRenderer(events model.EventChan) (*tcellRenderer, error) {
+type quitEvent struct{}
+
+func (quitEvent) incoming() {}
+
+type tcellEvent struct {
+	tcell.Event
+}
+
+func (tcellEvent) incoming() {}
+
+func NewRenderer(lc *lifecycle.Lifecycle, controllerEvents stream.Stream[m.Event]) (w.Renderer, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		return nil, err
@@ -40,115 +50,167 @@ func NewRenderer(events model.EventChan) (*tcellRenderer, error) {
 	}
 	screen.EnableMouse()
 
-	device := &tcellRenderer{
-		events: events,
-		screen: screen,
-		style:  defaultStyle,
+	renderer := &tcellRenderer{
+		lc:               lc,
+		controllerEvents: controllerEvents,
+		screen:           screen,
+		inEvents:         stream.NewStream[inEvent]("tcell"),
 	}
+	go renderer.handleEvents()
+	go renderer.handleTcellEvents()
 
-	go func() {
-		for {
-			device.handleEvent()
-		}
-	}()
-
-	return device, nil
+	return renderer, nil
 }
 
-func (device *tcellRenderer) handleEvent() {
-	event := device.screen.PollEvent()
+func (r *tcellRenderer) Push(screen *w.Screen) {
+	r.inEvents.Push(screenEvent{screen})
+}
+
+func (r *tcellRenderer) Quit() {
+	r.inEvents.Push(quitEvent{})
+}
+
+func (r *tcellRenderer) handleEvents() {
+	r.lc.Started()
+	defer r.lc.Done()
+
 	for {
-		if ev, mouseEvent := event.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
-			break
+		events := []inEvent{r.inEvents.Pull()}
+		events = append(events, r.inEvents.PullAll()...)
+		lastScreenEventIdx := -1
+		for idx, event := range events {
+			if _, ok := event.(screenEvent); ok {
+				lastScreenEventIdx = idx
+			}
 		}
-		event = device.screen.PollEvent()
-	}
+		for idx, event := range events {
+			switch event := event.(type) {
+			case screenEvent:
+				if idx == lastScreenEventIdx {
+					r.renderScreen(event.Screen)
+				}
 
-	if event == nil {
-		return
+			case quitEvent:
+				r.screen.Fini()
+				return
+
+			case tcellEvent:
+				r.handleTcellEvent(event.Event)
+
+			default:
+				log.Panicf("TCELL: UNHANDLED EVENT: %T", event)
+			}
+		}
 	}
-	switch tcellEvent := event.(type) {
+}
+
+func (r *tcellRenderer) handleTcellEvent(event tcell.Event) bool {
+	switch event := event.(type) {
 	case *tcell.EventResize:
-		device.screen.Sync()
-		w, h := tcellEvent.Size()
-		device.events <- model.ScreenSize{Width: w, Height: h}
-
-	case *tcell.EventKey:
-		device.handleKeyEvent(tcellEvent)
+		x, y := event.Size()
+		r.controllerEvents.Push(m.ScreenSize{Width: x, Height: y})
 
 	case *tcell.EventMouse:
-		device.handleMouseEvent(tcellEvent)
+		r.handleMouseEvent(event)
+
+	case *tcell.EventKey:
+		r.handleKeyEvent(event)
 
 	default:
-		log.Panicf("### unhandled tcell event: %#v", tcellEvent)
+		log.Panicf("### unhandled renderer event: %T", event)
 	}
+	return true
 }
 
-func (d *tcellRenderer) AddMouseTarget(event model.MouseTarget, pos widgets.Position, size widgets.Size) {
-	d.mouseTargetAreas = append(d.mouseTargetAreas, mouseTargetArea{MouseTarget: event, Position: pos, Size: size})
-}
-func (d *tcellRenderer) AddScrollArea(event model.Scroll, pos widgets.Position, size widgets.Size) {
-	d.scrollAreas = append(d.scrollAreas, scrollArea{Scroll: event, Position: pos, Size: size})
-}
-func (d *tcellRenderer) SetStyle(style widgets.Style) {
-	d.style = style
+func (r *tcellRenderer) renderScreen(screen *w.Screen) {
+	r.mouseTargetAreas = make([]w.MouseTargetArea, len(screen.MouseTargets))
+	copy(r.mouseTargetAreas, screen.MouseTargets)
+
+	r.scrollAreas = make([]w.ScrollArea, len(screen.ScrollAreas))
+	copy(r.scrollAreas, screen.ScrollAreas)
+
+	for y := range screen.Cells {
+		for x, cell := range screen.Cells[y] {
+			style := tcell.StyleDefault.
+				Foreground(tcell.PaletteColor(int(cell.Style.FG))).
+				Background(tcell.PaletteColor(int(cell.Style.BG))).
+				Bold(cell.Style.Flags&w.Bold == w.Bold).
+				Italic(cell.Style.Flags&w.Italic == w.Italic).
+				Reverse(cell.Style.Flags&w.Reverse == w.Reverse)
+
+			r.screen.SetContent(x, y, cell.Rune, nil, style)
+		}
+	}
+	r.screen.Show()
 }
 
-func (d *tcellRenderer) CurrentStyle() widgets.Style {
-	return d.style
+func (r *tcellRenderer) handleTcellEvents() {
+	for {
+		event := r.screen.PollEvent()
+		for {
+			if ev, mouseEvent := event.(*tcell.EventMouse); !mouseEvent || ev.Buttons() != 0 {
+				break
+			}
+			event = r.screen.PollEvent()
+		}
+
+		if event != nil {
+			r.inEvents.Push(tcellEvent{event})
+		}
+	}
 }
 
 func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 	log.Printf("### key: %q  %v  %c", key.Name(), key.Modifiers(), key.Rune())
 	switch key.Name() {
 	case "Ctrl+C":
-		device.events <- model.Quit{}
+		device.controllerEvents.Push(m.Quit{})
 
 	case "Enter":
-		device.events <- model.Open{}
+		device.controllerEvents.Push(m.Open{})
 
 	// case "Esc":
 
 	case "Ctrl+R":
-		device.events <- model.RevealInFinder{}
+		device.controllerEvents.Push(m.RevealInFinder{})
 
 	case "Home":
-		device.events <- model.SelectFirst{}
+		device.controllerEvents.Push(m.SelectFirst{})
 
 	case "End":
-		device.events <- model.SelectLast{}
+		device.controllerEvents.Push(m.SelectLast{})
 
 	case "PgUp":
-		device.events <- model.PgUp{}
+		device.controllerEvents.Push(m.PgUp{})
 
 	case "PgDn":
-		device.events <- model.PgDn{}
+		device.controllerEvents.Push(m.PgDn{})
 
 	case "Up":
-		device.events <- model.MoveSelection{Lines: -1}
+		device.controllerEvents.Push(m.MoveSelection{Lines: -1})
 
 	case "Down":
-		device.events <- model.MoveSelection{Lines: 1}
+		device.controllerEvents.Push(m.MoveSelection{Lines: 1})
 
 	case "Left":
-		device.events <- model.Exit{}
+		device.controllerEvents.Push(m.Exit{})
 
 	case "Right":
-		device.events <- model.Enter{}
+		device.controllerEvents.Push(m.Enter{})
 
 	case "Ctrl+K":
-		device.events <- model.KeepOne{}
+		device.controllerEvents.Push(m.KeepOne{})
 
 	case "Ctrl+A":
-		device.events <- model.KeepAll{}
+		device.controllerEvents.Push(m.KeepAll{})
 
 	case "Tab":
-		device.events <- model.Tab{}
+		device.controllerEvents.Push(m.Tab{})
 
 	case "Backspace2": // Ctrl+Delete
-		device.events <- model.Delete{}
-	case "F12": // Ctrl+Delete
-		device.events <- model.Debug{}
+		device.controllerEvents.Push(m.Delete{})
+	case "F12":
+		device.controllerEvents.Push(m.Debug{})
 	}
 }
 
@@ -161,11 +223,10 @@ func (d *tcellRenderer) handleMouseEvent(event *tcell.EventMouse) {
 				target.Position.Y <= y && target.Position.Y+target.Size.Height > y {
 
 				if event.Buttons() == 512 {
-					target.Scroll.Lines = 1
+					d.controllerEvents.Push(m.Scroll{Command: target.Command, Lines: 1})
 				} else {
-					target.Scroll.Lines = -1
+					d.controllerEvents.Push(m.Scroll{Command: target.Command, Lines: -1})
 				}
-				d.events <- target.Scroll
 				return
 			}
 		}
@@ -175,34 +236,8 @@ func (d *tcellRenderer) handleMouseEvent(event *tcell.EventMouse) {
 		if target.Position.X <= x && target.Position.X+target.Size.Width > x &&
 			target.Position.Y <= y && target.Position.Y+target.Size.Height > y {
 
-			d.events <- target.MouseTarget
+			d.controllerEvents.Push(m.MouseTarget{Command: target.Command})
 			return
 		}
 	}
-}
-
-func (d *tcellRenderer) Text(runes []rune, pos widgets.Position) {
-	for i, rune := range runes {
-		style := tcell.StyleDefault.
-			Foreground(tcell.PaletteColor(int(d.style.FG))).
-			Background(tcell.PaletteColor(int(d.style.BG))).
-			Bold(d.style.Flags&widgets.Bold == widgets.Bold).
-			Italic(d.style.Flags&widgets.Italic == widgets.Italic).
-			Reverse(d.style.Flags&widgets.Reverse == widgets.Reverse)
-
-		d.screen.SetContent(pos.X+i, pos.Y, rune, nil, style)
-	}
-}
-
-func (d *tcellRenderer) Show() {
-	d.screen.Show()
-}
-
-func (d *tcellRenderer) Reset() {
-	d.scrollAreas = d.scrollAreas[:0]
-	d.mouseTargetAreas = d.mouseTargetAreas[:0]
-}
-
-func (d *tcellRenderer) Stop() {
-	d.screen.Fini()
 }

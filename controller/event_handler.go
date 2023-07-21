@@ -2,6 +2,7 @@ package controller
 
 import (
 	m "arch/model"
+	w "arch/widgets"
 	"log"
 )
 
@@ -38,7 +39,8 @@ func (c *controller) handleEvent(event any) {
 		c.handleTick(event)
 
 	case m.ScreenSize:
-		c.screen.ScreenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
+		c.view.ScreenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
+		c.screen = w.NewScreen(c.view.ScreenSize)
 
 	case m.Enter:
 		c.enter()
@@ -93,7 +95,7 @@ func (c *controller) handleEvent(event any) {
 		c.quit = true
 
 	case m.Debug:
-		log.Println(c.screen.String())
+		log.Println(c.view.String())
 
 	default:
 		log.Panicf("### unhandled event: %#v", event)

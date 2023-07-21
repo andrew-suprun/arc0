@@ -7,6 +7,7 @@ import (
 	"arch/lifecycle"
 	m "arch/model"
 	"arch/renderer/tcell"
+	"arch/stream"
 	"log"
 	"os"
 )
@@ -34,8 +35,9 @@ func main() {
 	}
 
 	lc := lifecycle.New()
-	events := make(m.EventChan, 1024)
-	renderer, err := tcell.NewRenderer(events)
+
+	events := stream.NewStream[m.Event]("contr")
+	renderer, err := tcell.NewRenderer(lc, events)
 	if err != nil {
 		log.Printf("Failed to open terminal: %#v", err)
 		return
@@ -54,6 +56,6 @@ func main() {
 
 	controller.Run(fs, renderer, events, paths)
 
+	renderer.Quit()
 	lc.Stop()
-	renderer.Stop()
 }

@@ -35,16 +35,16 @@ func (c *controller) mouseTarget(cmd any) {
 }
 
 func (c *controller) selectFirst() {
-	if len(c.screen.Entries) > 0 {
+	if len(c.view.Entries) > 0 {
 		folder := c.currentFolder()
-		folder.selectedId = c.screen.Entries[0].Id
+		folder.selectedId = c.view.Entries[0].Id
 		folder.offsetIdx = 0
 	}
 }
 
 func (c *controller) selectLast() {
-	if len(c.screen.Entries) > 0 {
-		c.currentFolder().selectedId = c.screen.Entries[len(c.screen.Entries)-1].Id
+	if len(c.view.Entries) > 0 {
+		c.currentFolder().selectedId = c.view.Entries[len(c.view.Entries)-1].Id
 		c.makeSelectedVisible()
 	}
 }
@@ -61,13 +61,13 @@ func (c *controller) enter() {
 }
 
 func (c *controller) pgUp() {
-	c.shiftOffset(-c.screen.FileTreeLines)
-	c.moveSelection(-c.screen.FileTreeLines)
+	c.shiftOffset(-c.view.FileTreeLines)
+	c.moveSelection(-c.view.FileTreeLines)
 }
 
 func (c *controller) pgDn() {
-	c.shiftOffset(c.screen.FileTreeLines)
-	c.moveSelection(c.screen.FileTreeLines)
+	c.shiftOffset(c.view.FileTreeLines)
+	c.moveSelection(c.view.FileTreeLines)
 }
 
 func (c *controller) exit() {
@@ -88,16 +88,16 @@ func (c *controller) revealInFinder() {
 func (c *controller) moveSelection(lines int) {
 	folder := c.currentFolder()
 	id := folder.selectedId
-	for idx, entry := range c.screen.Entries {
+	for idx, entry := range c.view.Entries {
 		if entry.Id == id {
 			newIdx := idx + lines
-			if newIdx >= len(c.screen.Entries) {
-				newIdx = len(c.screen.Entries) - 1
+			if newIdx >= len(c.view.Entries) {
+				newIdx = len(c.view.Entries) - 1
 			}
 			if newIdx < 0 {
 				newIdx = 0
 			}
-			newId := c.screen.Entries[newIdx].Id
+			newId := c.view.Entries[newIdx].Id
 			folder.selectedId = newId
 
 		}
@@ -110,8 +110,8 @@ func (c *controller) shiftOffset(lines int) {
 	folder.offsetIdx += lines
 	if folder.offsetIdx < 0 {
 		folder.offsetIdx = 0
-	} else if folder.offsetIdx >= len(c.screen.Entries) {
-		folder.offsetIdx = len(c.screen.Entries) - 1
+	} else if folder.offsetIdx >= len(c.view.Entries) {
+		folder.offsetIdx = len(c.view.Entries) - 1
 	}
 }
 
@@ -158,7 +158,7 @@ func (c *controller) keepSelected() {
 func (c *controller) makeSelectedVisible() {
 	folder := c.currentFolder()
 	selectedIdx := 0
-	for idx, entry := range c.screen.Entries {
+	for idx, entry := range c.view.Entries {
 		if entry.Id == folder.selectedId {
 			selectedIdx = idx
 			break
@@ -169,8 +169,8 @@ func (c *controller) makeSelectedVisible() {
 	if offsetIdx > selectedIdx {
 		offsetIdx = selectedIdx
 	}
-	if offsetIdx < selectedIdx+1-c.screen.FileTreeLines {
-		offsetIdx = selectedIdx + 1 - c.screen.FileTreeLines
+	if offsetIdx < selectedIdx+1-c.view.FileTreeLines {
+		offsetIdx = selectedIdx + 1 - c.view.FileTreeLines
 	}
 
 	folder.offsetIdx = offsetIdx

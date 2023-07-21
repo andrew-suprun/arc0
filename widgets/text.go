@@ -36,7 +36,7 @@ func (t *text) Constraint() Constraint {
 	return Constraint{Size: Size{Width: t.width, Height: 1}, Flex: Flex{X: t.flex, Y: 0}}
 }
 
-func (t *text) Render(renderer Renderer, pos Position, size Size) {
+func (t *text) Render(screen *Screen, pos Position, size Size) {
 	if size.Width < 1 {
 		return
 	}
@@ -49,7 +49,9 @@ func (t *text) Render(renderer Renderer, pos Position, size Size) {
 		diff--
 	}
 
-	renderer.Text(t.runes, pos)
+	for x := 0; x < size.Width; x++ {
+		screen.Cells[pos.Y][pos.X+x] = Cell{Rune: t.runes[x], Style: screen.Style}
+	}
 }
 
 func (t *text) String() string {

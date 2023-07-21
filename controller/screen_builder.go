@@ -18,13 +18,13 @@ func (c *controller) buildScreen() {
 
 	folder := c.currentFolder()
 
-	nEntries := len(c.screen.Entries)
+	nEntries := len(c.view.Entries)
 	if nEntries > 0 {
 		if folder.selectedId.Base == "" {
-			folder.selectedId = c.screen.Entries[0].Id
+			folder.selectedId = c.view.Entries[0].Id
 		} else {
 			found := false
-			for idx, entry := range c.screen.Entries {
+			for idx, entry := range c.view.Entries {
 				if entry.Id == folder.selectedId {
 					c.selectedIdx = idx
 					found = true
@@ -38,23 +38,23 @@ func (c *controller) buildScreen() {
 				if c.selectedIdx < 0 {
 					c.selectedIdx = 0
 				}
-				folder.selectedId = c.screen.Entries[c.selectedIdx].Id
+				folder.selectedId = c.view.Entries[c.selectedIdx].Id
 			}
 		}
 	}
 
-	c.screen.CurrentPath = c.currentPath
-	c.screen.Progress = c.progress()
-	c.screen.SelectedId = folder.selectedId
-	c.screen.OffsetIdx = folder.offsetIdx
-	c.screen.SortColumn = folder.sortColumn
-	c.screen.SortAscending = folder.sortAscending
+	c.view.CurrentPath = c.currentPath
+	c.view.Progress = c.progress()
+	c.view.SelectedId = folder.selectedId
+	c.view.OffsetIdx = folder.offsetIdx
+	c.view.SortColumn = folder.sortColumn
+	c.view.SortAscending = folder.sortAscending
 
 	c.stats()
 }
 
 func (c *controller) populateEntries(nameHashes nameHashSet) {
-	c.screen.Entries = c.screen.Entries[:0]
+	c.view.Entries = c.view.Entries[:0]
 	for hash, files := range c.files {
 		state := c.calcState(hash, files)
 		c.state[hash] = state
@@ -92,7 +92,7 @@ func (c *controller) addEntries(state w.State, files []*m.File, nameHashes nameH
 
 		if file.Path == c.currentPath {
 			if _, ok := nameHashes[nameHash]; !ok {
-				c.screen.Entries = append(c.screen.Entries, &w.File{
+				c.view.Entries = append(c.view.Entries, &w.File{
 					File:  *file,
 					Kind:  w.FileRegular,
 					State: state,
@@ -105,16 +105,16 @@ func (c *controller) addEntries(state w.State, files []*m.File, nameHashes nameH
 			}
 			name := m.Base(strings.SplitN(relPath.String(), "/", 2)[0])
 
-			i, found := m.Find(c.screen.Entries, func(entry *w.File) bool {
+			i, found := m.Find(c.view.Entries, func(entry *w.File) bool {
 				return name == entry.Base && entry.Kind == w.FileFolder
 			})
 			if found {
-				c.screen.Entries[i].Size += file.Size
-				if c.screen.Entries[i].ModTime.Before(file.ModTime) {
-					c.screen.Entries[i].ModTime = file.ModTime
+				c.view.Entries[i].Size += file.Size
+				if c.view.Entries[i].ModTime.Before(file.ModTime) {
+					c.view.Entries[i].ModTime = file.ModTime
 				}
-				if c.screen.Entries[i].State < state {
-					c.screen.Entries[i].State = state
+				if c.view.Entries[i].State < state {
+					c.view.Entries[i].State = state
 				}
 			} else {
 				entry := &w.File{
@@ -131,7 +131,7 @@ func (c *controller) addEntries(state w.State, files []*m.File, nameHashes nameH
 					Kind:  w.FileFolder,
 					State: state,
 				}
-				c.screen.Entries = append(c.screen.Entries, entry)
+				c.view.Entries = append(c.view.Entries, entry)
 			}
 		}
 		nameHashes[nameHash] = struct{}{}
@@ -163,19 +163,19 @@ func (c *controller) progress() []w.ProgressInfo {
 }
 
 func (c *controller) stats() {
-	c.screen.PendingFiles, c.screen.DuplicateFiles, c.screen.AbsentFiles = 0, 0, 0
+	c.view.PendingFiles, c.view.DuplicateFiles, c.view.AbsentFiles = 0, 0, 0
 
 	for _, presence := range c.state {
 		switch presence {
 		case w.Pending:
-			c.screen.PendingFiles++
+			c.view.PendingFiles++
 		case w.Duplicate:
-			c.screen.DuplicateFiles++
+			c.view.DuplicateFiles++
 		case w.Absent:
-			c.screen.AbsentFiles++
+			c.view.AbsentFiles++
 		}
 	}
 	if c.archives[c.origin].progressState == m.Initial {
-		c.screen.AbsentFiles = 0
+		c.view.AbsentFiles = 0
 	}
 }

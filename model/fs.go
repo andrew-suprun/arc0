@@ -1,7 +1,6 @@
 package model
 
 import (
-	"arch/actor"
 	"fmt"
 )
 
@@ -10,7 +9,7 @@ type FS interface {
 }
 
 type ArchiveScanner interface {
-	actor.Actor[FileCommand]
+	Send(cmd FileCommand)
 }
 
 type FileCommand interface {

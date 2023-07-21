@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-type EventChan chan Event
-
 type Event interface {
 	event()
 }
@@ -138,7 +136,8 @@ type Delete struct{}
 func (Delete) event() {}
 
 type Scroll struct {
-	Lines int
+	Command any
+	Lines   int
 }
 
 func (Scroll) event() {}

@@ -18,11 +18,11 @@ func (s styled) Constraint() Constraint {
 	return s.widget.Constraint()
 }
 
-func (s styled) Render(renderer Renderer, pos Position, size Size) {
-	currentStyle := renderer.CurrentStyle()
-	renderer.SetStyle(s.style)
-	s.widget.Render(renderer, pos, size)
-	renderer.SetStyle(currentStyle)
+func (s styled) Render(screen *Screen, pos Position, size Size) {
+	currentStyle := screen.Style
+	screen.Style = s.style
+	s.widget.Render(screen, pos, size)
+	screen.Style = currentStyle
 }
 
 func (s styled) String() string { return toString(s) }

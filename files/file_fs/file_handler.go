@@ -12,11 +12,11 @@ import (
 
 func (s *scanner) deleteFile(delete m.DeleteFile) {
 	defer func() {
-		s.events <- m.FileDeleted(delete)
+		s.events.Push(m.FileDeleted(delete))
 	}()
 	err := os.Remove(delete.Id.String())
 	if err != nil {
-		s.events <- m.Error{Id: delete.Id, Error: err}
+		s.events.Push(m.Error{Id: delete.Id, Error: err})
 	}
 	path := filepath.Join(delete.Id.Root.String(), delete.Id.Path.String())
 	fsys := os.DirFS(path)
@@ -36,22 +36,22 @@ func (s *scanner) deleteFile(delete m.DeleteFile) {
 
 func (s *scanner) renameFile(rename m.RenameFile) {
 	defer func() {
-		s.events <- m.FileRenamed(rename)
+		s.events.Push(m.FileRenamed(rename))
 	}()
 	path := filepath.Join(rename.From.Root.String(), rename.To.Path.String())
 	err := os.MkdirAll(path, 0755)
 	if err != nil {
-		s.events <- m.Error{Id: rename.From, Error: err}
+		s.events.Push(m.Error{Id: rename.From, Error: err})
 	}
 	err = os.Rename(rename.From.String(), rename.To.String())
 	if err != nil {
-		s.events <- m.Error{Id: rename.From, Error: err}
+		s.events.Push(m.Error{Id: rename.From, Error: err})
 	}
 }
 
 func (s *scanner) copyFile(copy m.CopyFile) {
 	defer func() {
-		s.events <- m.FileCopied(copy)
+		s.events.Push(m.FileCopied(copy))
 	}()
 
 	events := make([]chan event, len(copy.To))
@@ -76,7 +76,7 @@ func (s *scanner) copyFile(copy m.CopyFile) {
 					minCopied = copied[i]
 
 				case copyError:
-					s.events <- m.Error{Id: event.Id, Error: event.Error}
+					s.events.Push(m.Error{Id: event.Id, Error: event.Error})
 				}
 			}
 		}
@@ -87,7 +87,7 @@ func (s *scanner) copyFile(copy m.CopyFile) {
 		}
 		if reported < minCopied {
 			reported = minCopied
-			s.events <- m.CopyingProgress(reported)
+			s.events.Push(m.CopyingProgress(reported))
 		}
 		if !hasValue {
 			break
@@ -117,7 +117,7 @@ func (s *scanner) reader(source m.Id, targets []m.Id, eventChans []chan event) {
 
 	info, err := os.Stat(source.String())
 	if err != nil {
-		s.events <- m.Error{Id: source, Error: err}
+		s.events.Push(m.Error{Id: source, Error: err})
 		return
 	}
 
@@ -128,7 +128,7 @@ func (s *scanner) reader(source m.Id, targets []m.Id, eventChans []chan event) {
 
 	sourceFile, err := os.Open(source.String())
 	if err != nil {
-		s.events <- m.Error{Id: source, Error: err}
+		s.events.Push(m.Error{Id: source, Error: err})
 		return
 	}
 
@@ -137,7 +137,7 @@ func (s *scanner) reader(source m.Id, targets []m.Id, eventChans []chan event) {
 		buf := make([]byte, 1024*1024)
 		n, err = sourceFile.Read(buf)
 		if err != nil && err != io.EOF {
-			s.events <- m.Error{Id: source, Error: err}
+			s.events.Push(m.Error{Id: source, Error: err})
 			return
 		}
 		for _, cmd := range commands {
@@ -153,7 +153,7 @@ func (s *scanner) writer(id m.Id, modTime time.Time, cmdChan chan []byte, eventC
 	os.MkdirAll(filePath, 0755)
 	file, err := os.Create(id.String())
 	if err != nil {
-		s.events <- m.Error{Id: id, Error: err}
+		s.events.Push(m.Error{Id: id, Error: err})
 		return
 	}
 
@@ -176,7 +176,7 @@ func (s *scanner) writer(id m.Id, modTime time.Time, cmdChan chan []byte, eventC
 		n, err := file.Write([]byte(cmd))
 		copied += copyProgress(n)
 		if err != nil {
-			s.events <- m.Error{Id: id, Error: err}
+			s.events.Push(m.Error{Id: id, Error: err})
 			return
 		}
 		eventChan <- copied

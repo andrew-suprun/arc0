@@ -34,7 +34,7 @@ func (pb progressBar) Constraint() Constraint {
 	return Constraint{Size: Size{Width: pb.width, Height: 1}, Flex: Flex{X: pb.flex, Y: 0}}
 }
 
-func (pb progressBar) Render(renderer Renderer, pos Position, size Size) {
+func (pb progressBar) Render(screen *Screen, pos Position, size Size) {
 	if size.Width < 1 {
 		return
 	}
@@ -53,7 +53,9 @@ func (pb progressBar) Render(renderer Renderer, pos Position, size Size) {
 		runes[idx] = ' '
 	}
 
-	renderer.Text(runes, pos)
+	for x := 0; x < size.Width; x++ {
+		screen.Cells[pos.Y][pos.X+x] = Cell{Rune: runes[x], Style: screen.Style}
+	}
 }
 
 func (pb progressBar) String() string { return toString(pb) }

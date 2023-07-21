@@ -1,8 +1,8 @@
 package mock_fs
 
 import (
-	"arch/actor"
 	m "arch/model"
+	"arch/stream"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -11,39 +11,50 @@ import (
 var Scan bool
 
 type mockFs struct {
-	events m.EventChan
+	eventStream stream.Stream[m.Event]
 }
 
 type scanner struct {
-	root   m.Root
-	events m.EventChan
-	actor.Actor[m.FileCommand]
+	root        m.Root
+	eventStream stream.Stream[m.Event]
+	inEvents    stream.Stream[m.FileCommand]
 }
 
-func NewFs(events m.EventChan) m.FS {
-	fs := &mockFs{events: events}
+func NewFs(eventStream stream.Stream[m.Event]) m.FS {
+	fs := &mockFs{eventStream: eventStream}
 	return fs
 }
 
 func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 	s := &scanner{
-		root:   root,
-		events: fs.events,
+		root:        root,
+		eventStream: fs.eventStream,
+		inEvents:    stream.NewStream[m.FileCommand](root.String()),
 	}
-	s.Actor = actor.NewActor[m.FileCommand](s.handleFiles)
+	go s.handleEvents()
 	return s
 }
 
-func (s *scanner) handleFiles(cmd m.FileCommand) bool {
+func (s *scanner) Send(cmd m.FileCommand) {
+	s.inEvents.Push(cmd)
+}
+
+func (s *scanner) handleEvents() {
+	for {
+		s.handleEvent(s.inEvents.Pull())
+	}
+}
+
+func (s *scanner) handleEvent(cmd m.FileCommand) {
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
 		s.scanArchive()
 
 	case m.DeleteFile:
-		s.events <- m.FileDeleted(cmd)
+		s.eventStream.Push(m.FileDeleted(cmd))
 
 	case m.RenameFile:
-		s.events <- m.FileRenamed(cmd)
+		s.eventStream.Push(m.FileRenamed(cmd))
 	case m.CopyFile:
 		for _, meta := range metas[cmd.From.Root] {
 			if meta.FullName == cmd.From.Name.String() {
@@ -51,7 +62,7 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 					if copied > meta.Size {
 						copied = meta.Size
 					}
-					s.events <- m.CopyingProgress(copied)
+					s.eventStream.Push(m.CopyingProgress(copied))
 					if copied == meta.Size {
 						break
 					}
@@ -60,9 +71,8 @@ func (s *scanner) handleFiles(cmd m.FileCommand) bool {
 				break
 			}
 		}
-		s.events <- m.FileCopied(cmd)
+		s.eventStream.Push(m.FileCopied(cmd))
 	}
-	return true
 }
 
 func (s *scanner) scanArchive() {
@@ -72,10 +82,10 @@ func (s *scanner) scanArchive() {
 		totalSize += file.Size
 	}
 
-	s.events <- m.TotalSize{
+	s.eventStream.Push(m.TotalSize{
 		Root: s.root,
 		Size: totalSize,
-	}
+	})
 
 	scans := make([]bool, len(archFiles))
 
@@ -85,7 +95,7 @@ func (s *scanner) scanArchive() {
 	for i := range archFiles {
 		if !scans[i] {
 			meta := archFiles[i]
-			s.events <- m.FileScanned{
+			s.eventStream.Push(m.FileScanned{
 				File: &m.File{
 					Id: m.Id{
 						Root: meta.Root,
@@ -98,7 +108,7 @@ func (s *scanner) scanArchive() {
 					ModTime: meta.ModTime,
 					Hash:    meta.Hash,
 				},
-			}
+			})
 		}
 	}
 	for i := range archFiles {
@@ -108,16 +118,13 @@ func (s *scanner) scanArchive() {
 				if hashed > meta.Size {
 					hashed = meta.Size
 				}
-				s.events <- m.HashingProgress{
-					Root:   meta.Root,
-					Hashed: hashed,
-				}
+				s.eventStream.Push(m.HashingProgress{Root: meta.Root, Hashed: hashed})
 				if hashed == meta.Size {
 					break
 				}
 				time.Sleep(time.Millisecond)
 			}
-			s.events <- m.FileScanned{
+			s.eventStream.Push(m.FileScanned{
 				File: &m.File{
 					Id: m.Id{
 						Root: meta.Root,
@@ -130,12 +137,10 @@ func (s *scanner) scanArchive() {
 					ModTime: meta.ModTime,
 					Hash:    meta.Hash,
 				},
-			}
+			})
 		}
 	}
-	s.events <- m.ArchiveScanned{
-		Root: s.root,
-	}
+	s.eventStream.Push(m.ArchiveScanned{Root: s.root})
 }
 
 var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)

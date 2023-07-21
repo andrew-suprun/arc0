@@ -2,6 +2,7 @@ package controller
 
 import (
 	m "arch/model"
+	"arch/stream"
 	w "arch/widgets"
 	"time"
 )
@@ -26,7 +27,8 @@ type controller struct {
 	frames   int
 	prevTick time.Time
 
-	screen w.Screen
+	view   w.View
+	screen *w.Screen
 
 	Errors []any
 
@@ -48,7 +50,7 @@ type folder struct {
 	sortAscending []bool
 }
 
-func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
+func Run(fs m.FS, renderer w.Renderer, events stream.Stream[m.Event], roots []m.Root) {
 	c := &controller{
 		roots:  roots,
 		origin: roots[0],
@@ -70,36 +72,22 @@ func Run(fs m.FS, renderer w.Renderer, events m.EventChan, roots []m.Root) {
 	}
 
 	for !c.quit {
-		count := 0
-		event := <-events
+		event := events.Pull()
 		c.handleEvent(event)
-	readEvents:
-		for {
-			select {
-			case event = <-events:
-				c.handleEvent(event)
-				count++
-			default:
-				break readEvents
-			}
+		for _, event := range events.PullAll() {
+			c.handleEvent(event)
+		}
+		if c.screen == nil {
+			continue
 		}
 
 		c.frames++
-		renderer.Reset()
 		c.buildScreen()
 
-		widget := c.screen.View()
-		widget.Render(renderer, w.Position{X: 0, Y: 0}, w.Size(c.screen.ScreenSize))
-		renderer.Show()
+		widget := c.view.Render()
+		widget.Render(c.screen, w.Position{X: 0, Y: 0}, w.Size(c.view.ScreenSize))
+		renderer.Push(c.screen)
 	}
-
-	go func() {
-		for {
-			if _, ok := <-events; !ok {
-				break
-			}
-		}
-	}()
 }
 
 func (c *controller) currentFolder() *folder {
@@ -122,11 +110,11 @@ func (c *controller) every(f func(entry *m.File)) {
 }
 
 func (c *controller) selectedEntry() *w.File {
-	return c.entry(c.screen.SelectedId)
+	return c.entry(c.view.SelectedId)
 }
 
 func (c *controller) entry(id m.Id) *w.File {
-	for _, entry := range c.screen.Entries {
+	for _, entry := range c.view.Entries {
 		if entry.Id == id {
 			return entry
 		}

@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	styleDefault       = Style{FG: 226, BG: 18}
 	styleAppTitle      = Style{FG: 226, BG: 0, Flags: Bold + Italic}
 	styleStatusLine    = Style{FG: 230, BG: 0, Flags: Italic}
 	styleArchive       = Style{FG: 226, BG: 0, Flags: Bold}
@@ -21,22 +22,24 @@ var (
 	colConstraint = Constraint{Size: Size{Width: 0, Height: 0}, Flex: Flex{X: 1, Y: 1}}
 )
 
-func (s *Screen) View() Widget {
-	return Column(colConstraint,
-		s.title(),
-		s.folderView(),
-		s.progress(),
-		s.fileStats(),
+func (s *View) Render() Widget {
+	return Styled(styleDefault,
+		Column(colConstraint,
+			s.title(),
+			s.folderView(),
+			s.progress(),
+			s.fileStats(),
+		),
 	)
 }
 
-func (c *Screen) title() Widget {
+func (c *View) title() Widget {
 	return Row(rowConstraint,
 		Styled(styleAppTitle, Text(" Archiver").Flex(1)),
 	)
 }
 
-func (s *Screen) folderView() Widget {
+func (s *View) folderView() Widget {
 	return Column(colConstraint,
 		s.breadcrumbs(),
 		Styled(styleArchiveHeader,
@@ -74,7 +77,7 @@ func (s *Screen) folderView() Widget {
 	)
 }
 
-func (s *Screen) fileRow(file *File) []Widget {
+func (s *View) fileRow(file *File) []Widget {
 	result := []Widget{Text(statusString(file)).Width(11)}
 
 	if file.Kind == FileRegular {
@@ -104,7 +107,7 @@ func statusString(file *File) string {
 	return "UNKNOWN"
 }
 
-func (s *Screen) sortIndicator(column SortColumn) string {
+func (s *View) sortIndicator(column SortColumn) string {
 	if column == s.SortColumn {
 		if s.SortAscending[column] {
 			return " ▲"
@@ -114,7 +117,7 @@ func (s *Screen) sortIndicator(column SortColumn) string {
 	return ""
 }
 
-func (c *Screen) breadcrumbs() Widget {
+func (c *View) breadcrumbs() Widget {
 	names := strings.Split(c.CurrentPath.String(), "/")
 	widgets := make([]Widget, 0, len(names)*2+2)
 	widgets = append(widgets, MouseTarget(m.SelectFolder(""),
@@ -132,7 +135,7 @@ func (c *Screen) breadcrumbs() Widget {
 	return Row(rowConstraint, widgets...)
 }
 
-func (s *Screen) progress() Widget {
+func (s *View) progress() Widget {
 	tabWidth := 0
 	rootWidth := 0
 	for _, progress := range s.Progress {
@@ -162,7 +165,7 @@ func (s *Screen) progress() Widget {
 	)
 }
 
-func (s *Screen) fileStats() Widget {
+func (s *View) fileStats() Widget {
 	if s.DuplicateFiles == 0 && s.AbsentFiles == 0 && s.PendingFiles == 0 {
 		return Text(" All Clear").Flex(1)
 	}
@@ -201,7 +204,7 @@ func formatSize(size uint64) string {
 	return b.String()
 }
 
-func (c *Screen) styleFile(file *File, selected bool) Style {
+func (c *View) styleFile(file *File, selected bool) Style {
 	bg, flags := byte(17), Flags(0)
 	if file.Kind == FileFolder {
 		bg = byte(18)
@@ -215,7 +218,7 @@ func (c *Screen) styleFile(file *File, selected bool) Style {
 
 var styleBreadcrumbs = Style{FG: 250, BG: 17, Flags: Bold + Italic}
 
-func (c *Screen) statusColor(file *File) byte {
+func (c *View) statusColor(file *File) byte {
 	switch file.State {
 	case Resolved:
 		return 195

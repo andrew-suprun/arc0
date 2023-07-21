@@ -1,9 +1,9 @@
 package file_fs
 
 import (
-	"arch/actor"
 	"arch/lifecycle"
 	m "arch/model"
+	"arch/stream"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
@@ -15,26 +15,35 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
-
 	"syscall"
+	"time"
 
 	"golang.org/x/text/unicode/norm"
 )
 
-type scanner struct {
-	root   m.Root
-	events m.EventChan
-	lc     *lifecycle.Lifecycle
-	files  map[uint64]*m.File
-	stored map[uint64]*m.File
-	sent   map[m.Id]struct{}
-	actor.Actor[m.FileCommand]
-}
-
 const hashFileName = ".meta.csv"
 
-func (s *scanner) handleCommand(cmd m.FileCommand) bool {
+type scanner struct {
+	root     m.Root
+	events   stream.Stream[m.Event]
+	inEvents stream.Stream[m.FileCommand]
+	lc       *lifecycle.Lifecycle
+	files    map[uint64]*m.File
+	stored   map[uint64]*m.File
+	sent     map[m.Id]struct{}
+}
+
+func (s *scanner) Send(cmd m.FileCommand) {
+	s.inEvents.Push(cmd)
+}
+
+func (s *scanner) handleEvents() {
+	for {
+		s.handleEvent(s.inEvents.Pull())
+	}
+}
+
+func (s *scanner) handleEvent(cmd m.FileCommand) {
 	s.lc.Started()
 	defer s.lc.Done()
 
@@ -51,14 +60,11 @@ func (s *scanner) handleCommand(cmd m.FileCommand) bool {
 	case m.CopyFile:
 		s.copyFile(cmd)
 	}
-	return !s.lc.ShoudStop()
 }
 
 func (s *scanner) scanArchive() {
 	defer func() {
-		s.events <- m.ArchiveScanned{
-			Root: s.root,
-		}
+		s.events.Push(m.ArchiveScanned{Root: s.root})
 	}()
 
 	totalSize := uint64(0)
@@ -69,17 +75,17 @@ func (s *scanner) scanArchive() {
 		}
 
 		if err != nil {
-			s.events <- m.Error{
+			s.events.Push(m.Error{
 				Id:    m.Id{Root: s.root, Name: m.Name{Path: m.Path(dir(path)), Base: m.Base(name(path))}},
-				Error: err}
+				Error: err})
 			return nil
 		}
 
 		meta, err := d.Info()
 		if err != nil {
-			s.events <- m.Error{
+			s.events.Push(m.Error{
 				Id:    m.Id{Root: s.root, Name: m.Name{Path: m.Path(dir(path)), Base: m.Base(name(path))}},
-				Error: err}
+				Error: err})
 			return nil
 		}
 		sys := meta.Sys().(*syscall.Stat_t)
@@ -109,15 +115,15 @@ func (s *scanner) scanArchive() {
 		s.storeMeta()
 	}()
 
-	s.events <- m.TotalSize{
+	s.events.Push(m.TotalSize{
 		Root: s.root,
 		Size: totalSize,
-	}
+	})
 
 	for ino, file := range s.files {
 		if stored, ok := s.stored[ino]; ok && stored.ModTime == file.ModTime && stored.Size == file.Size {
 			file.Hash = stored.Hash
-			s.events <- m.FileScanned{File: file}
+			s.events.Push(m.FileScanned{File: file})
 			s.sent[file.Id] = struct{}{}
 		}
 	}
@@ -144,7 +150,7 @@ func (s *scanner) scanArchive() {
 			return
 		}
 
-		s.events <- m.FileScanned{File: file}
+		s.events.Push(m.FileScanned{File: file})
 	}
 }
 
@@ -156,7 +162,7 @@ func (s *scanner) hashFile(info *m.File) {
 	fsys := os.DirFS(info.Root.String())
 	file, err := fsys.Open(info.Name.String())
 	if err != nil {
-		s.events <- m.Error{Id: info.Id, Error: err}
+		s.events.Push(m.Error{Id: info.Id, Error: err})
 		return
 	}
 	defer file.Close()
@@ -171,12 +177,12 @@ func (s *scanner) hashFile(info *m.File) {
 			nw, ew := hash.Write(buf[0:nr])
 			if ew != nil {
 				if err != nil {
-					s.events <- m.Error{Id: info.Id, Error: err}
+					s.events.Push(m.Error{Id: info.Id, Error: err})
 					return
 				}
 			}
 			if nr != nw {
-				s.events <- m.Error{Id: info.Id, Error: err}
+				s.events.Push(m.Error{Id: info.Id, Error: err})
 				return
 			}
 		}
@@ -185,15 +191,15 @@ func (s *scanner) hashFile(info *m.File) {
 			break
 		}
 		if er != nil {
-			s.events <- m.Error{Id: info.Id, Error: er}
+			s.events.Push(m.Error{Id: info.Id, Error: er})
 			return
 		}
 
 		hashed += uint64(nr)
-		s.events <- m.HashingProgress{
+		s.events.Push(m.HashingProgress{
 			Root:   info.Root,
 			Hashed: hashed,
-		}
+		})
 	}
 	info.Hash = m.Hash(base64.RawURLEncoding.EncodeToString(hash.Sum(nil)))
 }

@@ -1,9 +1,9 @@
 package file_fs
 
 import (
-	"arch/actor"
 	"arch/lifecycle"
 	m "arch/model"
+	"arch/stream"
 	"os"
 	"path/filepath"
 
@@ -11,11 +11,11 @@ import (
 )
 
 type fileFs struct {
-	events m.EventChan
+	events stream.Stream[m.Event]
 	lc     *lifecycle.Lifecycle
 }
 
-func NewFs(events m.EventChan, lc *lifecycle.Lifecycle) m.FS {
+func NewFs(events stream.Stream[m.Event], lc *lifecycle.Lifecycle) m.FS {
 	fs := &fileFs{
 		events: events,
 		lc:     lc,
@@ -26,14 +26,15 @@ func NewFs(events m.EventChan, lc *lifecycle.Lifecycle) m.FS {
 
 func (fs *fileFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 	s := &scanner{
-		root:   root,
-		events: fs.events,
-		lc:     fs.lc,
-		files:  map[uint64]*m.File{},
-		stored: map[uint64]*m.File{},
-		sent:   map[m.Id]struct{}{},
+		root:     root,
+		events:   fs.events,
+		inEvents: stream.NewStream[m.FileCommand](root.String()),
+		lc:       fs.lc,
+		files:    map[uint64]*m.File{},
+		stored:   map[uint64]*m.File{},
+		sent:     map[m.Id]struct{}{},
 	}
-	s.Actor = actor.NewActor[m.FileCommand](s.handleCommand)
+	go s.handleEvents()
 	return s
 }
 

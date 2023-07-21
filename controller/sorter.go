@@ -8,7 +8,7 @@ import (
 
 func (c *controller) sort() {
 	folder := c.currentFolder()
-	files := sliceBy(c.screen.Entries)
+	files := sliceBy(c.view.Entries)
 	var slice sort.Interface
 	switch folder.sortColumn {
 	case w.SortByName:

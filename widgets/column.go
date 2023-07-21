@@ -18,7 +18,7 @@ func (c column) Constraint() Constraint {
 	return c.constraint
 }
 
-func (c column) Render(renderer Renderer, pos Position, size Size) {
+func (c column) Render(screen *Screen, pos Position, size Size) {
 	sizes := make([]int, len(c.widgets))
 	flexes := make([]int, len(c.widgets))
 	for i, widget := range c.widgets {
@@ -27,7 +27,7 @@ func (c column) Render(renderer Renderer, pos Position, size Size) {
 	}
 	heights := calcSizes(size.Height, sizes, flexes)
 	for i, widget := range c.widgets {
-		widget.Render(renderer, Position{X: pos.X, Y: pos.Y}, Size{Width: size.Width, Height: heights[i]})
+		widget.Render(screen, Position{X: pos.X, Y: pos.Y}, Size{Width: size.Width, Height: heights[i]})
 		pos.Y += heights[i]
 	}
 }

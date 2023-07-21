@@ -19,9 +19,9 @@ func (t mouseTarget) Constraint() Constraint {
 	return t.widget.Constraint()
 }
 
-func (t mouseTarget) Render(renderer Renderer, pos Position, size Size) {
-	renderer.AddMouseTarget(t.event, pos, size)
-	t.widget.Render(renderer, pos, size)
+func (t mouseTarget) Render(screen *Screen, pos Position, size Size) {
+	screen.MouseTargets = append(screen.MouseTargets, MouseTargetArea{Command: t.event, Position: pos, Size: size})
+	t.widget.Render(screen, pos, size)
 }
 
 func (t mouseTarget) String() string { return toString(t) }
