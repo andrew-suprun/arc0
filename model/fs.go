@@ -52,5 +52,5 @@ type CopyFile struct {
 func (CopyFile) cmd() {}
 
 func (c CopyFile) String() string {
-	return fmt.Sprintf("CopyFile: From=%q, To=%v, hash: %q", c.From, c.To, c.Hash)
+	return fmt.Sprintf("CopyFile: From: %q, To: %v, hash: %q", c.From, c.To, c.Hash)
 }

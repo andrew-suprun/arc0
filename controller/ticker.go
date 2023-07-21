@@ -3,11 +3,10 @@ package controller
 import (
 	m "arch/model"
 	"arch/stream"
-	"log"
 	"time"
 )
 
-func ticker(events stream.Stream[m.Event]) {
+func ticker(events *stream.Stream[m.Event]) {
 	for tick := range time.NewTicker(time.Second).C {
 		events.Push(m.Tick(tick))
 	}
@@ -33,7 +32,6 @@ func (c *controller) handleTick(tick m.Tick) {
 		hashed := archive.fileHashed + archive.totalHashed - archive.prevHashed
 		archive.speed = float64(hashed) / (seconds * 1024 * 1024)
 		archive.prevHashed = archive.fileHashed + archive.totalHashed
-		log.Printf("tick: hashed: %d, dur: %v, speed: %7.3f", hashed, seconds, archive.speed)
 		remainig := archive.totalSize - archive.fileHashed - archive.totalHashed
 		if hashed == 0 {
 			archive.timeRemaining = 0

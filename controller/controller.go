@@ -55,7 +55,7 @@ type folder struct {
 	sortAscending []bool
 }
 
-func Run(fs m.FS, renderer w.Renderer, events stream.Stream[m.Event], roots []m.Root) {
+func Run(fs m.FS, renderer w.Renderer, events *stream.Stream[m.Event], roots []m.Root) {
 	c := &controller{
 		roots:  roots,
 		origin: roots[0],

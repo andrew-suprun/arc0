@@ -6,3 +6,5 @@ from
 *.log
 *.csv
 data*
+palette
+arch

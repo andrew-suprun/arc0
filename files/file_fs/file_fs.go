@@ -11,11 +11,11 @@ import (
 )
 
 type fileFs struct {
-	events stream.Stream[m.Event]
+	events *stream.Stream[m.Event]
 	lc     *lifecycle.Lifecycle
 }
 
-func NewFs(events stream.Stream[m.Event], lc *lifecycle.Lifecycle) m.FS {
+func NewFs(events *stream.Stream[m.Event], lc *lifecycle.Lifecycle) m.FS {
 	fs := &fileFs{
 		events: events,
 		lc:     lc,

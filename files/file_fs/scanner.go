@@ -25,8 +25,8 @@ const hashFileName = ".meta.csv"
 
 type scanner struct {
 	root     m.Root
-	events   stream.Stream[m.Event]
-	inEvents stream.Stream[m.FileCommand]
+	events   *stream.Stream[m.Event]
+	inEvents *stream.Stream[m.FileCommand]
 	lc       *lifecycle.Lifecycle
 	files    map[uint64]*m.File
 	stored   map[uint64]*m.File

@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	styleDefault       = Style{FG: 226, BG: 18}
+	styleDefault       = Style{FG: 226, BG: 17}
 	styleAppTitle      = Style{FG: 226, BG: 0, Flags: Bold + Italic}
 	styleStatusLine    = Style{FG: 230, BG: 0, Flags: Italic}
 	styleArchive       = Style{FG: 226, BG: 0, Flags: Bold}
