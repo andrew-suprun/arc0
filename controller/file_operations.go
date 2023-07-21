@@ -12,8 +12,8 @@ func (c *controller) keepFile(file *m.File) {
 	}
 
 	scanner := c.archives[c.origin].scanner
-	c.state[file.Hash] = w.Pending
 	files := c.files[file.Hash]
+	pending := false
 
 	fileName := file.Name
 	keepFiles := map[m.Root]*m.File{}
@@ -44,9 +44,11 @@ func (c *controller) keepFile(file *m.File) {
 				newId := m.Id{Root: keepFile.Root, Name: fileName}
 				scanner.Send(m.RenameFile{From: keepFile.Id, To: newId, Hash: file.Hash})
 				keepFile.Id = newId
+				pending = true
 			}
 		} else {
 			scanner.Send(m.DeleteFile{Id: entry.Id, Hash: file.Hash})
+			pending = true
 			for i, file := range files {
 				if file.Id == entry.Id {
 					files[i] = files[len(files)-1]
@@ -76,7 +78,11 @@ func (c *controller) keepFile(file *m.File) {
 	}
 	if len(copy.To) > 0 {
 		scanner.Send(copy)
+		pending = true
 		c.copySize += file.Size
+	}
+	if pending {
+		c.state[file.Hash] = w.Pending
 	}
 }
 
