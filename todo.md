@@ -1,5 +1,3 @@
-* fix mouse handling
-* skip unnecessary progress events
 * don't trigger pending state on resolved files
 * keyboard shortcuts for selecting sorting order
 * keepFile on folders

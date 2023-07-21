@@ -22,7 +22,7 @@ var (
 	colConstraint = Constraint{Size: Size{Width: 0, Height: 0}, Flex: Flex{X: 1, Y: 1}}
 )
 
-func (s *View) Render() Widget {
+func (s *View) RootWidget() Widget {
 	return Styled(styleDefault,
 		Column(colConstraint,
 			s.title(),

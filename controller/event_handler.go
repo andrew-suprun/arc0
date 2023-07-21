@@ -2,7 +2,6 @@ package controller
 
 import (
 	m "arch/model"
-	w "arch/widgets"
 	"log"
 )
 
@@ -40,7 +39,6 @@ func (c *controller) handleEvent(event any) {
 
 	case m.ScreenSize:
 		c.view.ScreenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
-		c.screen = w.NewScreen(c.view.ScreenSize)
 
 	case m.Enter:
 		c.enter()
@@ -67,6 +65,8 @@ func (c *controller) handleEvent(event any) {
 		c.shiftOffset(event.Lines)
 
 	case m.MouseTarget:
+		log.Printf("controller.handleEvent: event: %v", event)
+		log.Printf("controller.handleEvent: command: %v", event.Command)
 		c.mouseTarget(event.Command)
 
 	case m.PgUp:

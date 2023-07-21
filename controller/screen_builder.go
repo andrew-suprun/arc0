@@ -12,7 +12,7 @@ type nameHashPair struct {
 }
 type nameHashSet map[nameHashPair]struct{}
 
-func (c *controller) buildScreen() {
+func (c *controller) buildView() *w.View {
 	nameHashes := nameHashSet{}
 	c.populateEntries(nameHashes)
 
@@ -51,6 +51,7 @@ func (c *controller) buildScreen() {
 	c.view.SortAscending = folder.sortAscending
 
 	c.stats()
+	return &c.view
 }
 
 func (c *controller) populateEntries(nameHashes nameHashSet) {

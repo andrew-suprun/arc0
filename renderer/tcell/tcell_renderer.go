@@ -18,6 +18,7 @@ type tcellRenderer struct {
 	screen           tcell.Screen
 	mouseTargetAreas []w.MouseTargetArea
 	scrollAreas      []w.ScrollArea
+	sync             bool
 }
 
 type inEvent interface {
@@ -107,6 +108,7 @@ func (r *tcellRenderer) handleEvents() {
 func (r *tcellRenderer) handleTcellEvent(event tcell.Event) bool {
 	switch event := event.(type) {
 	case *tcell.EventResize:
+		r.sync = true
 		x, y := event.Size()
 		r.controllerEvents.Push(m.ScreenSize{Width: x, Height: y})
 
@@ -141,7 +143,12 @@ func (r *tcellRenderer) renderScreen(screen *w.Screen) {
 			r.screen.SetContent(x, y, cell.Rune, nil, style)
 		}
 	}
-	r.screen.Show()
+	if r.sync {
+		r.screen.Sync()
+		r.sync = false
+	} else {
+		r.screen.Show()
+	}
 }
 
 func (r *tcellRenderer) handleTcellEvents() {
@@ -216,6 +223,7 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 
 func (d *tcellRenderer) handleMouseEvent(event *tcell.EventMouse) {
 	x, y := event.Position()
+	log.Printf("handleMouseEvent: %d:%d", x, y)
 
 	if event.Buttons() == 256 || event.Buttons() == 512 {
 		for _, target := range d.scrollAreas {
@@ -237,6 +245,7 @@ func (d *tcellRenderer) handleMouseEvent(event *tcell.EventMouse) {
 			target.Position.Y <= y && target.Position.Y+target.Size.Height > y {
 
 			d.controllerEvents.Push(m.MouseTarget{Command: target.Command})
+			log.Printf("handleMouseEvent: cmd: %v", m.MouseTarget{Command: target.Command})
 			return
 		}
 	}

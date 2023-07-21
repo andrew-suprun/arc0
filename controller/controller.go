@@ -27,8 +27,7 @@ type controller struct {
 	frames   int
 	prevTick time.Time
 
-	view   w.View
-	screen *w.Screen
+	view w.View
 
 	Errors []any
 
@@ -77,16 +76,11 @@ func Run(fs m.FS, renderer w.Renderer, events stream.Stream[m.Event], roots []m.
 		for _, event := range events.PullAll() {
 			c.handleEvent(event)
 		}
-		if c.screen == nil {
-			continue
-		}
 
 		c.frames++
-		c.buildScreen()
-
-		widget := c.view.Render()
-		widget.Render(c.screen, w.Position{X: 0, Y: 0}, w.Size(c.view.ScreenSize))
-		renderer.Push(c.screen)
+		screen := w.NewScreen(c.view.ScreenSize)
+		c.buildView().RootWidget().Render(screen, w.Position{X: 0, Y: 0}, w.Size(c.view.ScreenSize))
+		renderer.Push(screen)
 	}
 }
 
