@@ -3,7 +3,6 @@ package controller
 import (
 	m "arch/model"
 	w "arch/widgets"
-	"log"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -127,21 +126,14 @@ func (c *controller) tab() {
 		return strings.ToLower(sameHash[i].Name.String()) < strings.ToLower(sameHash[j].Name.String())
 	})
 
-	for _, entry := range sameHash {
-		log.Printf("### entry: %s", entry)
-	}
-
-	idx, found := m.Find(sameHash, func(entry *m.File) bool { return entry.Id == selected.Id })
-	log.Printf("### idx: %d, found: %v", idx, found)
+	idx, _ := m.Find(sameHash, func(entry *m.File) bool { return entry.Id == selected.Id })
 	for {
 		idx = (idx + 1) % len(sameHash)
 		if sameHash[idx].Root == c.origin {
 			break
 		}
 	}
-	log.Printf("### new idx: %d", idx)
 	id := sameHash[idx].Id
-	log.Printf("### new id: %q", id)
 	c.currentPath = id.Path
 	c.currentFolder().selectedId = id
 

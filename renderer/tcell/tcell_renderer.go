@@ -168,7 +168,7 @@ func (r *tcellRenderer) handleTcellEvents() {
 }
 
 func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
-	log.Printf("### key: %q  %v  %c", key.Name(), key.Modifiers(), key.Rune())
+	log.Printf("### key: %q", key.Name())
 	switch key.Name() {
 	case "Ctrl+C":
 		device.controllerEvents.Push(m.Quit{})
@@ -223,7 +223,6 @@ func (device *tcellRenderer) handleKeyEvent(key *tcell.EventKey) {
 
 func (d *tcellRenderer) handleMouseEvent(event *tcell.EventMouse) {
 	x, y := event.Position()
-	log.Printf("handleMouseEvent: %d:%d", x, y)
 
 	if event.Buttons() == 256 || event.Buttons() == 512 {
 		for _, target := range d.scrollAreas {
@@ -245,7 +244,6 @@ func (d *tcellRenderer) handleMouseEvent(event *tcell.EventMouse) {
 			target.Position.Y <= y && target.Position.Y+target.Size.Height > y {
 
 			d.controllerEvents.Push(m.MouseTarget{Command: target.Command})
-			log.Printf("handleMouseEvent: cmd: %v", m.MouseTarget{Command: target.Command})
 			return
 		}
 	}
