@@ -18,6 +18,9 @@ type controller struct {
 	copySize        uint64
 	totalCopiedSize uint64
 	fileCopiedSize  uint64
+	prevCopied      uint64
+	copySpeed       float64
+	timeRemaining   time.Duration
 	archivesScanned bool
 
 	lastMouseEventTime time.Time
@@ -40,6 +43,9 @@ type archive struct {
 	totalSize     uint64
 	totalHashed   uint64
 	fileHashed    uint64
+	prevHashed    uint64
+	speed         float64
+	timeRemaining time.Duration
 }
 
 type folder struct {

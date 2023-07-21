@@ -4,6 +4,7 @@ import (
 	m "arch/model"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Widget interface {
@@ -83,7 +84,8 @@ func (s *View) String() string {
 	if len(s.Progress) > 0 {
 		fmt.Fprintf(buf, "  Progress: {\n")
 		for _, progress := range s.Progress {
-			fmt.Fprintf(buf, "    {Root: %q, Tab: %q, Value: %f}:\n", progress.Root, progress.Tab, progress.Value)
+			fmt.Fprintf(buf, "    {Root: %q, Tab: %q, ETA: %s, Value: %6.2f%%, Speed: %7.3fMb}:\n",
+				progress.Root, progress.Tab, progress.TimeRemaining, progress.Value, progress.Speed)
 		}
 		fmt.Fprintf(buf, "  }\n")
 	}
@@ -133,9 +135,11 @@ const (
 )
 
 type ProgressInfo struct {
-	Root  m.Root
-	Tab   string
-	Value float64
+	Root          m.Root
+	Tab           string
+	Value         float64
+	Speed         float64
+	TimeRemaining time.Duration
 }
 
 func (f *File) String() string {

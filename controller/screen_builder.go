@@ -144,9 +144,11 @@ func (c *controller) progress() []w.ProgressInfo {
 	archive := c.archives[c.origin]
 	if archive.progressState == m.Scanned && c.copySize > 0 {
 		infos = append(infos, w.ProgressInfo{
-			Root:  c.origin,
-			Tab:   " Copying",
-			Value: float64(c.totalCopiedSize+uint64(c.fileCopiedSize)) / float64(c.copySize),
+			Root:          c.origin,
+			Tab:           " Copying",
+			Value:         float64(c.totalCopiedSize+uint64(c.fileCopiedSize)) / float64(c.copySize),
+			Speed:         c.copySpeed,
+			TimeRemaining: c.timeRemaining,
 		})
 	}
 	var tab string
@@ -158,7 +160,13 @@ func (c *controller) progress() []w.ProgressInfo {
 		}
 		tab = " Hashing"
 		value = float64(archive.totalHashed+archive.fileHashed) / float64(archive.totalSize)
-		infos = append(infos, w.ProgressInfo{Root: root, Tab: tab, Value: value})
+		infos = append(infos, w.ProgressInfo{
+			Root:          root,
+			Tab:           tab,
+			Value:         value,
+			Speed:         archive.speed,
+			TimeRemaining: archive.timeRemaining,
+		})
 	}
 	return infos
 }
