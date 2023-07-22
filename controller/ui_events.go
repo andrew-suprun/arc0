@@ -120,7 +120,7 @@ func (c *controller) tab() {
 	if selected == nil || selected.Kind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
 		return
 	}
-	sameHash := c.files[selected.Hash]
+	sameHash := c.byHash[selected.Hash]
 
 	sort.Slice(sameHash, func(i, j int) bool {
 		return strings.ToLower(sameHash[i].Name.String()) < strings.ToLower(sameHash[j].Name.String())

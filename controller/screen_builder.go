@@ -56,7 +56,7 @@ func (c *controller) buildView() *w.View {
 
 func (c *controller) populateEntries(nameHashes nameHashSet) {
 	c.view.Entries = c.view.Entries[:0]
-	for hash, files := range c.files {
+	for hash, files := range c.byHash {
 		state := c.calcState(hash, files)
 		c.state[hash] = state
 		c.addEntries(state, files, nameHashes)

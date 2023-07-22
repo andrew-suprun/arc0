@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -69,6 +70,7 @@ func (s *scanner) scanArchive() {
 		s.events.Push(m.ArchiveScanned{Root: s.root})
 	}()
 
+	files := []*m.File{}
 	totalSize := uint64(0)
 	fsys := os.DirFS(s.root.String())
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
@@ -108,19 +110,21 @@ func (s *scanner) scanArchive() {
 		totalSize += file.Size
 
 		s.files[sys.Ino] = file
+		files = append(files, file)
+		log.Printf("file: %q", file.Id)
 
 		return nil
+	})
+
+	s.events.Push(m.ArchiveFiles{
+		Root:  s.root,
+		Files: files,
 	})
 
 	s.readMeta()
 	defer func() {
 		s.storeMeta()
 	}()
-
-	s.events.Push(m.TotalSize{
-		Root: s.root,
-		Size: totalSize,
-	})
 
 	for ino, file := range s.files {
 		if stored, ok := s.stored[ino]; ok && stored.ModTime == file.ModTime && stored.Size == file.Size {
@@ -130,15 +134,8 @@ func (s *scanner) scanArchive() {
 		}
 	}
 
-	files := []*m.File{}
-	for _, file := range s.files {
-		files = append(files, file)
-	}
-
 	sort.Slice(files, func(i, j int) bool {
-		iName := strings.ToLower(files[i].Id.String())
-		jName := strings.ToLower(files[j].Id.String())
-		return iName < jName
+		return files[i].Size < files[j].Size
 	})
 
 	for _, file := range files {

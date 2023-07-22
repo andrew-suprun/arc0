@@ -84,9 +84,24 @@ func (s *scanner) scanArchive() {
 		totalSize += file.Size
 	}
 
-	s.eventStream.Push(m.TotalSize{
-		Root: s.root,
-		Size: totalSize,
+	files := []*m.File{}
+	for _, meta := range archFiles {
+		files = append(files, &m.File{
+			Id: m.Id{
+				Root: meta.Root,
+				Name: m.Name{
+					Path: dir(meta.FullName),
+					Base: name(meta.FullName),
+				},
+			},
+			Size:    meta.Size,
+			ModTime: meta.ModTime,
+		})
+	}
+
+	s.eventStream.Push(m.ArchiveFiles{
+		Root:  s.root,
+		Files: files,
 	})
 
 	scans := make([]bool, len(archFiles))

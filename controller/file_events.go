@@ -6,12 +6,17 @@ import (
 	"log"
 )
 
-func (c *controller) totalSize(event m.TotalSize) {
-	c.archives[event.Root].totalSize += event.Size
+func (c *controller) archiveFiles(event m.ArchiveFiles) {
+	archive := c.archives[event.Root]
+	for _, file := range event.Files {
+		c.byId[file.Id] = file
+		c.bySize[file.Size] = append(c.bySize[file.Size], file)
+		archive.totalSize += file.Size
+	}
 }
 
 func (c *controller) fileScanned(event m.FileScanned) {
-	c.files[event.Hash] = append(c.files[event.Hash], event.File)
+	c.byHash[event.Hash] = append(c.byHash[event.Hash], event.File)
 	archive := c.archives[event.Root]
 	archive.totalHashed += event.File.Size
 	archive.fileHashed = 0
@@ -51,7 +56,7 @@ func (c *controller) fileCopied(event m.FileCopied) {
 	log.Printf("### %s", event)
 	c.state[event.Hash] = w.Resolved
 	c.fileCopiedSize = 0
-	file := c.files[event.Hash][0]
+	file := c.byHash[event.Hash][0]
 	c.totalCopiedSize += file.Size
 	if c.totalCopiedSize == c.copySize {
 		c.totalCopiedSize, c.copySize = 0, 0

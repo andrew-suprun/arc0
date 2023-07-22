@@ -12,7 +12,7 @@ func (c *controller) keepFile(file *m.File) {
 	}
 
 	scanner := c.archives[c.origin].scanner
-	files := c.files[file.Hash]
+	files := c.byHash[file.Hash]
 	pending := false
 
 	fileName := file.Name
@@ -52,7 +52,7 @@ func (c *controller) keepFile(file *m.File) {
 			for i, file := range files {
 				if file.Id == entry.Id {
 					files[i] = files[len(files)-1]
-					c.files[file.Hash] = files[:len(files)-1]
+					c.byHash[file.Hash] = files[:len(files)-1]
 					break
 				}
 			}
@@ -73,7 +73,7 @@ func (c *controller) keepFile(file *m.File) {
 				ModTime: file.ModTime,
 				Hash:    file.Hash,
 			}
-			c.files[file.Hash] = append(c.files[file.Hash], newFile)
+			c.byHash[file.Hash] = append(c.byHash[file.Hash], newFile)
 		}
 	}
 	if len(copy.To) > 0 {
@@ -104,11 +104,11 @@ func (c *controller) deleteRegularFile(hash m.Hash) {
 	c.every(func(entry *m.File) {
 		if entry.Hash == hash {
 			c.archives[c.origin].scanner.Send(m.DeleteFile{Id: entry.Id, Hash: entry.Hash})
-			files := c.files[hash]
+			files := c.byHash[hash]
 			for i, file := range files {
 				if file.Id == entry.Id {
 					files[i] = files[len(files)-1]
-					c.files[file.Hash] = files[:len(files)-1]
+					c.byHash[file.Hash] = files[:len(files)-1]
 					break
 				}
 			}

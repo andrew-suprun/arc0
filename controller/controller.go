@@ -13,7 +13,9 @@ type controller struct {
 
 	archives        map[m.Root]*archive
 	folders         map[m.Path]*folder
-	files           map[m.Hash][]*m.File
+	byId            map[m.Id]*m.File
+	bySize          map[uint64][]*m.File
+	byHash          map[m.Hash][]*m.File
 	state           map[m.Hash]w.State
 	copySize        uint64
 	totalCopiedSize uint64
@@ -62,7 +64,9 @@ func Run(fs m.FS, renderer w.Renderer, events *stream.Stream[m.Event], roots []m
 
 		archives: map[m.Root]*archive{},
 		folders:  map[m.Path]*folder{},
-		files:    map[m.Hash][]*m.File{},
+		byId:     map[m.Id]*m.File{},
+		bySize:   map[uint64][]*m.File{},
+		byHash:   map[m.Hash][]*m.File{},
 		state:    map[m.Hash]w.State{},
 	}
 
@@ -100,7 +104,7 @@ func (c *controller) currentFolder() *folder {
 }
 
 func (c *controller) every(f func(entry *m.File)) {
-	for _, entries := range c.files {
+	for _, entries := range c.byHash {
 		for _, entry := range entries {
 			f(entry)
 		}

@@ -50,7 +50,7 @@ func (c *controller) autoresolve() {
 		}
 	})
 
-	for _, files := range c.files {
+	for _, files := range c.byHash {
 		originFiles := []*m.File{}
 		names := map[m.Name]struct{}{}
 		for _, file := range files {

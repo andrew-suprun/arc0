@@ -9,12 +9,12 @@ type Event interface {
 	event()
 }
 
-type TotalSize struct {
-	Root Root
-	Size uint64
+type ArchiveFiles struct {
+	Root  Root
+	Files []*File
 }
 
-func (TotalSize) event() {}
+func (ArchiveFiles) event() {}
 
 type FileScanned struct {
 	*File
