@@ -17,7 +17,7 @@ type mockFs struct {
 type scanner struct {
 	root        m.Root
 	eventStream *stream.Stream[m.Event]
-	inEvents    *stream.Stream[m.FileCommand]
+	commands    *stream.Stream[m.FileCommand]
 }
 
 func NewFs(eventStream *stream.Stream[m.Event]) m.FS {
@@ -29,23 +29,25 @@ func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 	s := &scanner{
 		root:        root,
 		eventStream: fs.eventStream,
-		inEvents:    stream.NewStream[m.FileCommand](root.String()),
+		commands:    stream.NewStream[m.FileCommand](root.String()),
 	}
 	go s.handleEvents()
 	return s
 }
 
 func (s *scanner) Send(cmd m.FileCommand) {
-	s.inEvents.Push(cmd)
+	s.commands.Push(cmd)
 }
 
 func (s *scanner) handleEvents() {
 	for {
-		s.handleEvent(s.inEvents.Pull())
+		for _, cmd := range s.commands.Pull() {
+			s.handleCommand(cmd)
+		}
 	}
 }
 
-func (s *scanner) handleEvent(cmd m.FileCommand) {
+func (s *scanner) handleCommand(cmd m.FileCommand) {
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
 		s.scanArchive()

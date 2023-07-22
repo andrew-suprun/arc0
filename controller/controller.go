@@ -77,9 +77,7 @@ func Run(fs m.FS, renderer w.Renderer, events *stream.Stream[m.Event], roots []m
 	}
 
 	for !c.quit {
-		event := events.Pull()
-		c.handleEvent(event)
-		for _, event := range events.PullAll() {
+		for _, event := range events.Pull() {
 			c.handleEvent(event)
 		}
 

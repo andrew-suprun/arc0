@@ -26,7 +26,7 @@ const hashFileName = ".meta.csv"
 type scanner struct {
 	root     m.Root
 	events   *stream.Stream[m.Event]
-	inEvents *stream.Stream[m.FileCommand]
+	commands *stream.Stream[m.FileCommand]
 	lc       *lifecycle.Lifecycle
 	files    map[uint64]*m.File
 	stored   map[uint64]*m.File
@@ -34,16 +34,18 @@ type scanner struct {
 }
 
 func (s *scanner) Send(cmd m.FileCommand) {
-	s.inEvents.Push(cmd)
+	s.commands.Push(cmd)
 }
 
 func (s *scanner) handleEvents() {
 	for {
-		s.handleEvent(s.inEvents.Pull())
+		for _, cmd := range s.commands.Pull() {
+			s.handleCommand(cmd)
+		}
 	}
 }
 
-func (s *scanner) handleEvent(cmd m.FileCommand) {
+func (s *scanner) handleCommand(cmd m.FileCommand) {
 	s.lc.Started()
 	defer s.lc.Done()
 

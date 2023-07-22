@@ -14,7 +14,7 @@ type tcellRenderer struct {
 	lc               *lifecycle.Lifecycle
 	controllerEvents *stream.Stream[m.Event]
 
-	inEvents         *stream.Stream[inEvent]
+	commands         *stream.Stream[inEvent]
 	screen           tcell.Screen
 	mouseTargetAreas []w.MouseTargetArea
 	scrollAreas      []w.ScrollArea
@@ -25,15 +25,15 @@ type inEvent interface {
 	incoming()
 }
 
-type screenEvent struct {
+type screenCommand struct {
 	*w.Screen
 }
 
-func (screenEvent) incoming() {}
+func (screenCommand) incoming() {}
 
-type quitEvent struct{}
+type quitCommand struct{}
 
-func (quitEvent) incoming() {}
+func (quitCommand) incoming() {}
 
 type tcellEvent struct {
 	tcell.Event
@@ -55,7 +55,7 @@ func NewRenderer(lc *lifecycle.Lifecycle, controllerEvents *stream.Stream[m.Even
 		lc:               lc,
 		controllerEvents: controllerEvents,
 		screen:           screen,
-		inEvents:         stream.NewStream[inEvent]("tcell"),
+		commands:         stream.NewStream[inEvent]("tcell"),
 	}
 	go renderer.handleEvents()
 	go renderer.handleTcellEvents()
@@ -64,11 +64,11 @@ func NewRenderer(lc *lifecycle.Lifecycle, controllerEvents *stream.Stream[m.Even
 }
 
 func (r *tcellRenderer) Push(screen *w.Screen) {
-	r.inEvents.Push(screenEvent{screen})
+	r.commands.Push(screenCommand{screen})
 }
 
 func (r *tcellRenderer) Quit() {
-	r.inEvents.Push(quitEvent{})
+	r.commands.Push(quitCommand{})
 }
 
 func (r *tcellRenderer) handleEvents() {
@@ -76,30 +76,29 @@ func (r *tcellRenderer) handleEvents() {
 	defer r.lc.Done()
 
 	for {
-		events := []inEvent{r.inEvents.Pull()}
-		events = append(events, r.inEvents.PullAll()...)
-		lastScreenEventIdx := -1
-		for idx, event := range events {
-			if _, ok := event.(screenEvent); ok {
-				lastScreenEventIdx = idx
+		lastScreenCommandIdx := -1
+		commands := r.commands.Pull()
+		for idx, cmd := range commands {
+			if _, ok := cmd.(screenCommand); ok {
+				lastScreenCommandIdx = idx
 			}
 		}
-		for idx, event := range events {
-			switch event := event.(type) {
-			case screenEvent:
-				if idx == lastScreenEventIdx {
-					r.renderScreen(event.Screen)
+		for idx, cmd := range commands {
+			switch cmd := cmd.(type) {
+			case screenCommand:
+				if idx == lastScreenCommandIdx {
+					r.renderScreen(cmd.Screen)
 				}
 
-			case quitEvent:
+			case quitCommand:
 				r.screen.Fini()
 				return
 
 			case tcellEvent:
-				r.handleTcellEvent(event.Event)
+				r.handleTcellEvent(cmd.Event)
 
 			default:
-				log.Panicf("TCELL: UNHANDLED EVENT: %T", event)
+				log.Panicf("TCELL: UNHANDLED COMMAND: %T", cmd)
 			}
 		}
 	}
@@ -162,7 +161,7 @@ func (r *tcellRenderer) handleTcellEvents() {
 		}
 
 		if event != nil {
-			r.inEvents.Push(tcellEvent{event})
+			r.commands.Push(tcellEvent{event})
 		}
 	}
 }

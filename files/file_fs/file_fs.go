@@ -28,7 +28,7 @@ func (fs *fileFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 	s := &scanner{
 		root:     root,
 		events:   fs.events,
-		inEvents: stream.NewStream[m.FileCommand](root.String()),
+		commands: stream.NewStream[m.FileCommand](root.String()),
 		lc:       fs.lc,
 		files:    map[uint64]*m.File{},
 		stored:   map[uint64]*m.File{},
