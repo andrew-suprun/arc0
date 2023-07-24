@@ -2,7 +2,7 @@ package controller
 
 import (
 	m "arch/model"
-	w "arch/widgets"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -12,19 +12,20 @@ import (
 
 func (c *controller) mouseTarget(cmd any) {
 	folder := c.currentFolder()
+	selected := folder.selectedEntry
 	switch cmd := cmd.(type) {
 	case m.SelectFile:
-		if folder.selectedId == m.Id(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
+		if selected.Id == m.Id(cmd) && time.Since(c.lastMouseEventTime).Seconds() < 0.5 {
 			c.open()
 		} else {
-			folder.selectedId = m.Id(cmd)
+			folder.selectedEntry = folder.entries[cmd.Base]
 		}
 		c.lastMouseEventTime = time.Now()
 
 	case m.SelectFolder:
 		c.currentPath = m.Path(cmd)
 
-	case w.SortColumn:
+	case m.SortColumn:
 		if cmd == folder.sortColumn {
 			folder.sortAscending[folder.sortColumn] = !folder.sortAscending[folder.sortColumn]
 		} else {
@@ -34,39 +35,46 @@ func (c *controller) mouseTarget(cmd any) {
 }
 
 func (c *controller) selectFirst() {
-	if len(c.view.Entries) > 0 {
-		folder := c.currentFolder()
-		folder.selectedId = c.view.Entries[0].Id
-		folder.offsetIdx = 0
+	folder := c.currentFolder()
+	log.Printf("selectFirst: path: %q, entries: %d", c.currentPath, len(folder.entries))
+	if len(folder.entries) == 0 {
+		return
 	}
+	sorted := folder.sort()
+	folder.selectedEntry = sorted[0]
+	log.Printf("selectFirst: selected: %s", folder.selectedEntry)
+	folder.offsetIdx = 0
 }
 
 func (c *controller) selectLast() {
-	if len(c.view.Entries) > 0 {
-		c.currentFolder().selectedId = c.view.Entries[len(c.view.Entries)-1].Id
-		c.makeSelectedVisible()
+	folder := c.currentFolder()
+	if len(folder.entries) > 0 {
+		return
 	}
+	sorted := folder.sort()
+	folder.selectedEntry = sorted[len(folder.entries)-1]
+	c.makeSelectedVisible()
 }
 
 func (c *controller) open() {
-	exec.Command("open", c.selectedEntry().Id.String()).Start()
+	exec.Command("open", c.currentFolder().selectedEntry.Id.String()).Start()
 }
 
 func (c *controller) enter() {
-	file := c.selectedEntry()
-	if file != nil && file.Kind == w.FileFolder {
+	file := c.currentFolder().selectedEntry
+	if file != nil && file.Kind == m.FileFolder {
 		c.currentPath = m.Path(file.Name.String())
 	}
 }
 
 func (c *controller) pgUp() {
-	c.shiftOffset(-c.view.FileTreeLines)
-	c.moveSelection(-c.view.FileTreeLines)
+	c.shiftOffset(-c.fileTreeLines)
+	c.moveSelection(-c.fileTreeLines)
 }
 
 func (c *controller) pgDn() {
-	c.shiftOffset(c.view.FileTreeLines)
-	c.moveSelection(c.view.FileTreeLines)
+	c.shiftOffset(c.fileTreeLines)
+	c.moveSelection(c.fileTreeLines)
 }
 
 func (c *controller) exit() {
@@ -81,23 +89,23 @@ func (c *controller) exit() {
 }
 
 func (c *controller) revealInFinder() {
-	exec.Command("open", "-R", c.selectedEntry().Id.String()).Start()
+	exec.Command("open", "-R", c.currentFolder().selectedEntry.Id.String()).Start()
 }
 
 func (c *controller) moveSelection(lines int) {
 	folder := c.currentFolder()
-	id := folder.selectedId
-	for idx, entry := range c.view.Entries {
+	id := folder.selectedEntry.Id
+	sorted := folder.sort()
+	for idx, entry := range sorted {
 		if entry.Id == id {
 			newIdx := idx + lines
-			if newIdx >= len(c.view.Entries) {
-				newIdx = len(c.view.Entries) - 1
+			if newIdx >= len(folder.entries) {
+				newIdx = len(folder.entries) - 1
 			}
 			if newIdx < 0 {
 				newIdx = 0
 			}
-			newId := c.view.Entries[newIdx].Id
-			folder.selectedId = newId
+			folder.selectedEntry = sorted[newIdx]
 
 		}
 	}
@@ -109,15 +117,15 @@ func (c *controller) shiftOffset(lines int) {
 	folder.offsetIdx += lines
 	if folder.offsetIdx < 0 {
 		folder.offsetIdx = 0
-	} else if folder.offsetIdx >= len(c.view.Entries) {
-		folder.offsetIdx = len(c.view.Entries) - 1
+	} else if folder.offsetIdx >= len(folder.entries) {
+		folder.offsetIdx = len(folder.entries) - 1
 	}
 }
 
 func (c *controller) tab() {
-	selected := c.selectedEntry()
+	selected := c.currentFolder().selectedEntry
 
-	if selected == nil || selected.Kind != w.FileRegular || c.state[selected.Hash] != w.Duplicate {
+	if selected == nil || selected.Kind != m.FileRegular || selected.State != m.Duplicate {
 		return
 	}
 	sameHash := c.byHash[selected.Hash]
@@ -133,25 +141,24 @@ func (c *controller) tab() {
 			break
 		}
 	}
-	id := sameHash[idx].Id
-	c.currentPath = id.Path
-	c.currentFolder().selectedId = id
-
+	c.currentPath = sameHash[idx].Path
+	c.currentFolder().selectedEntry = sameHash[idx]
 	c.makeSelectedVisible()
 }
 
 func (c *controller) keepSelected() {
-	selected := c.selectedEntry()
-	if selected.Kind == w.FileRegular {
-		c.keepFile(&selected.File)
+	selected := c.currentFolder().selectedEntry
+	if selected.Kind == m.FileRegular {
+		c.keepFile(selected)
 	}
 }
 
 func (c *controller) makeSelectedVisible() {
 	folder := c.currentFolder()
 	selectedIdx := 0
-	for idx, entry := range c.view.Entries {
-		if entry.Id == folder.selectedId {
+	sorted := folder.sort()
+	for idx, entry := range sorted {
+		if entry == folder.selectedEntry {
 			selectedIdx = idx
 			break
 		}
@@ -161,8 +168,8 @@ func (c *controller) makeSelectedVisible() {
 	if offsetIdx > selectedIdx {
 		offsetIdx = selectedIdx
 	}
-	if offsetIdx < selectedIdx+1-c.view.FileTreeLines {
-		offsetIdx = selectedIdx + 1 - c.view.FileTreeLines
+	if offsetIdx < selectedIdx+1-c.fileTreeLines {
+		offsetIdx = selectedIdx + 1 - c.fileTreeLines
 	}
 
 	folder.offsetIdx = offsetIdx

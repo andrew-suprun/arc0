@@ -2,70 +2,13 @@ package controller
 
 import (
 	m "arch/model"
-	w "arch/widgets"
 	"fmt"
-	"path/filepath"
 	"strings"
 )
 
 type namehash struct {
 	name string
 	hash m.Hash
-}
-
-func (c *controller) autoresolve() {
-	allNames := map[string]struct{}{}
-	renamings := map[namehash]m.Name{}
-	pending := map[m.Hash]struct{}{}
-	originNames := map[string]m.Hash{}
-	c.every(func(file *m.File) {
-		if file.Root == c.origin {
-			originNames[file.Name.String()] = file.Hash
-		}
-		allNames[file.Name.String()] = struct{}{}
-		if file.Path == "" {
-			return
-		}
-		parts := strings.Split(file.Path.String(), "/")
-		for len(parts) > 0 {
-			name := filepath.Join(parts...)
-			if file.Root == c.origin {
-				originNames[name] = ""
-			}
-			allNames[name] = struct{}{}
-			parts = parts[:len(parts)-1]
-		}
-	})
-	c.every(func(file *m.File) {
-		if file.Root == c.origin {
-			return
-		}
-		if originHash, ok := originNames[file.Name.String()]; ok && originHash != file.Hash {
-			newName := uniqueName(allNames, renamings, file.Name, file.Hash)
-			newId := m.Id{Root: file.Root, Name: newName}
-			c.archives[c.origin].scanner.Send(m.RenameFile{From: file.Id, To: newId, Hash: file.Hash})
-			file.Id = newId
-			allNames[newId.Name.String()] = struct{}{}
-			pending[file.Hash] = struct{}{}
-		}
-	})
-
-	for _, files := range c.byHash {
-		originFiles := []*m.File{}
-		names := map[m.Name]struct{}{}
-		for _, file := range files {
-			if file.Root == c.origin {
-				originFiles = append(originFiles, file)
-			}
-			names[file.Name] = struct{}{}
-		}
-		if len(originFiles) == 1 && (len(files) != len(c.roots) || len(names) != 1) {
-			c.keepFile(originFiles[0])
-		}
-	}
-	for hash := range pending {
-		c.state[hash] = w.Pending
-	}
 }
 
 func uniqueName(allNames map[string]struct{}, renamings map[namehash]m.Name, name m.Name, hash m.Hash) m.Name {

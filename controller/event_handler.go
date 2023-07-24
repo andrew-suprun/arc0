@@ -6,18 +6,16 @@ import (
 )
 
 func (c *controller) handleEvent(event any) {
+	log.Printf("handleEvent: %T: %v", event, event)
 	if event == nil {
 		return
 	}
 	switch event := event.(type) {
-	case m.ArchiveFiles:
-		c.archiveFiles(event)
-
-	case m.FileScanned:
-		c.fileScanned(event)
-
 	case m.ArchiveScanned:
 		c.archiveScanned(event)
+
+	case m.FileHashed:
+		c.fileHashed(event)
 
 	case m.FileDeleted:
 		c.fileDeleted(event)
@@ -38,7 +36,7 @@ func (c *controller) handleEvent(event any) {
 		c.handleTick(event)
 
 	case m.ScreenSize:
-		c.view.ScreenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
+		c.screenSize = m.ScreenSize{Width: event.Width, Height: event.Height}
 
 	case m.Enter:
 		c.enter()
@@ -83,7 +81,8 @@ func (c *controller) handleEvent(event any) {
 		// TODO: Implement, maybe?
 
 	case m.Delete:
-		c.deleteFile(c.selectedEntry())
+		folder := c.currentFolder()
+		c.deleteFile(folder.selectedEntry)
 
 	case m.Error:
 		log.Printf("### Error: %s", event)
@@ -93,7 +92,7 @@ func (c *controller) handleEvent(event any) {
 		c.quit = true
 
 	case m.Debug:
-		log.Println(c.view.String())
+		log.Println(c.screenString())
 
 	default:
 		log.Panicf("### unhandled event: %#v", event)

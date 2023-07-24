@@ -2,22 +2,21 @@ package controller
 
 import (
 	m "arch/model"
-	w "arch/widgets"
 	"strings"
 )
 
 func (c *controller) keepFile(file *m.File) {
-	if file == nil || !c.archivesScanned || c.state[file.Hash] == w.Pending {
+	if file == nil || file.State <= m.Pending {
 		return
 	}
 
 	scanner := c.archives[c.origin].scanner
-	files := c.byHash[file.Hash]
+	entries := c.byHash[file.Hash]
 	pending := false
 
 	fileName := file.Name
 	keepFiles := map[m.Root]*m.File{}
-	for _, entry := range files {
+	for _, entry := range entries {
 		root := entry.Root
 		name := entry.Name
 		if prevFile, ok := keepFiles[root]; ok {
@@ -33,7 +32,7 @@ func (c *controller) keepFile(file *m.File) {
 		}
 	}
 
-	for _, entry := range files {
+	for _, entry := range entries {
 		if entry.Id == file.Id {
 			continue
 		}
@@ -43,19 +42,19 @@ func (c *controller) keepFile(file *m.File) {
 			if fileName != keepFile.Name {
 				newId := m.Id{Root: keepFile.Root, Name: fileName}
 				scanner.Send(m.RenameFile{From: keepFile.Id, To: newId, Hash: file.Hash})
-				keepFile.Id = newId
 				pending = true
+				keepFile.State = m.Pending
+				delete(c.byId, keepFile.Id)
+				c.byId[newId] = keepFile
+				c.removeEntry(keepFile.Id)
+				c.addEntry(keepFile)
+				keepFile.Id = newId
 			}
 		} else {
 			scanner.Send(m.DeleteFile{Id: entry.Id, Hash: file.Hash})
 			pending = true
-			for i, file := range files {
-				if file.Id == entry.Id {
-					files[i] = files[len(files)-1]
-					c.byHash[file.Hash] = files[:len(files)-1]
-					break
-				}
-			}
+			delete(c.byId, file.Id)
+			c.removeEntry(file.Id)
 		}
 	}
 
@@ -67,63 +66,58 @@ func (c *controller) keepFile(file *m.File) {
 		if _, ok := keepFiles[root]; !ok {
 			newId := m.Id{Root: root, Name: fileName}
 			copy.To = append(copy.To, newId)
-			newFile := &m.File{
-				Id:      newId,
-				Size:    file.Size,
-				ModTime: file.ModTime,
-				Hash:    file.Hash,
-			}
-			c.byHash[file.Hash] = append(c.byHash[file.Hash], newFile)
 		}
 	}
 	if len(copy.To) > 0 {
 		scanner.Send(copy)
 		pending = true
+		file.State = m.Pending
 		c.copySize += file.Size
 	}
 	if pending {
-		c.state[file.Hash] = w.Pending
+		if file.State == m.Duplicate {
+			c.duplicateFiles--
+		} else if file.State == m.Absent {
+			c.absentFiles--
+		}
+		c.pendingFiles++
+		c.setState(file.Hash, m.Pending)
 	}
 }
 
-func (c *controller) deleteFile(file *w.File) {
-	if file.Kind == w.FileFolder {
+func (c *controller) deleteFile(file *m.File) {
+	if file.State != m.Absent {
+		return
+	}
+	if file.Kind == m.FileFolder {
 		c.deleteFolderFile(file)
 	} else {
 		c.deleteRegularFile(file.Hash)
 	}
 
-	c.state[file.Hash] = w.Pending
+	c.setState(file.Hash, m.Pending)
 }
 
 func (c *controller) deleteRegularFile(hash m.Hash) {
-	if c.state[hash] != w.Absent {
-		return
+	c.setState(hash, m.Pending)
+	c.absentFiles--
+	c.pendingFiles++
+	for _, entry := range c.byHash[hash] {
+		c.archives[c.origin].scanner.Send(m.DeleteFile{Id: entry.Id, Hash: entry.Hash})
+		delete(c.byId, entry.Id)
+		c.removeEntry(entry.Id)
 	}
-	c.state[hash] = w.Pending
-	c.every(func(entry *m.File) {
-		if entry.Hash == hash {
-			c.archives[c.origin].scanner.Send(m.DeleteFile{Id: entry.Id, Hash: entry.Hash})
-			files := c.byHash[hash]
-			for i, file := range files {
-				if file.Id == entry.Id {
-					files[i] = files[len(files)-1]
-					c.byHash[file.Hash] = files[:len(files)-1]
-					break
-				}
-			}
-		}
-	})
 }
 
-func (c *controller) deleteFolderFile(file *w.File) {
+func (c *controller) deleteFolderFile(file *m.File) {
 	path := file.Name.String()
 	hashes := map[m.Hash]struct{}{}
-	c.every(func(entry *m.File) {
-		if c.state[entry.Hash] == w.Absent && strings.HasPrefix(entry.Path.String(), path) {
+
+	for _, entry := range c.byId {
+		if entry.State == m.Absent && strings.HasPrefix(entry.Path.String(), path) {
 			hashes[entry.Hash] = struct{}{}
 		}
-	})
+	}
 
 	for hash := range hashes {
 		c.deleteRegularFile(hash)

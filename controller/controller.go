@@ -4,6 +4,8 @@ import (
 	m "arch/model"
 	"arch/stream"
 	w "arch/widgets"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -11,28 +13,30 @@ type controller struct {
 	roots  []m.Root
 	origin m.Root
 
-	archives        map[m.Root]*archive
-	folders         map[m.Path]*folder
-	byId            map[m.Id]*m.File
-	bySize          map[uint64][]*m.File
-	byHash          map[m.Hash][]*m.File
-	state           map[m.Hash]w.State
-	copySize        uint64
-	totalCopiedSize uint64
-	fileCopiedSize  uint64
-	prevCopied      uint64
-	copySpeed       float64
-	timeRemaining   time.Duration
-	archivesScanned bool
+	archives map[m.Root]*archive
+	folders  map[m.Path]*folder
+	byId     map[m.Id]*m.File
+	bySize   map[uint64][]*m.File
+	byHash   map[m.Hash][]*m.File
 
+	copySize           uint64
+	totalCopiedSize    uint64
+	fileCopiedSize     uint64
+	prevCopied         uint64
+	copySpeed          float64
+	timeRemaining      time.Duration
 	lastMouseEventTime time.Time
 	currentPath        m.Path
-	selectedIdx        int
+	screenSize         m.ScreenSize
+	pendingFiles       int
+	duplicateFiles     int
+	absentFiles        int
+	fileTreeLines      int
+	progressInfos      []w.ProgressInfo
 
 	frames   int
+	fps      int
 	prevTick time.Time
-
-	view w.View
 
 	Errors []any
 
@@ -51,9 +55,10 @@ type archive struct {
 }
 
 type folder struct {
-	selectedId    m.Id
+	entries       map[m.Base]*m.File
+	selectedEntry *m.File
 	offsetIdx     int
-	sortColumn    w.SortColumn
+	sortColumn    m.SortColumn
 	sortAscending []bool
 }
 
@@ -67,7 +72,6 @@ func Run(fs m.FS, renderer w.Renderer, events *stream.Stream[m.Event], roots []m
 		byId:     map[m.Id]*m.File{},
 		bySize:   map[uint64][]*m.File{},
 		byHash:   map[m.Hash][]*m.File{},
-		state:    map[m.Hash]w.State{},
 	}
 
 	go ticker(events)
@@ -86,40 +90,56 @@ func Run(fs m.FS, renderer w.Renderer, events *stream.Stream[m.Event], roots []m
 		}
 
 		c.frames++
-		screen := w.NewScreen(c.view.ScreenSize)
-		c.buildView().RootWidget().Render(screen, w.Position{X: 0, Y: 0}, w.Size(c.view.ScreenSize))
+		screen := w.NewScreen(c.screenSize)
+		c.RootWidget().Render(screen, w.Position{X: 0, Y: 0}, w.Size(c.screenSize))
 		renderer.Push(screen)
 	}
 }
 
 func (c *controller) currentFolder() *folder {
-	curFolder, ok := c.folders[c.currentPath]
+	return c.getFolder(c.currentPath)
+}
+
+func (c *controller) getFolder(path m.Path) *folder {
+	pathFolder, ok := c.folders[path]
 	if !ok {
-		curFolder = &folder{
+		pathFolder = &folder{
+			entries:       map[m.Base]*m.File{},
 			sortAscending: []bool{true, false, false},
 		}
-		c.folders[c.currentPath] = curFolder
+		c.folders[path] = pathFolder
 	}
-	return curFolder
+	return pathFolder
 }
 
-func (c *controller) every(f func(entry *m.File)) {
-	for _, entries := range c.byHash {
-		for _, entry := range entries {
-			f(entry)
+func (c *controller) screenString() string {
+	f := c.currentFolder()
+	buf := &strings.Builder{}
+	fmt.Fprintln(buf, "Screen{")
+	fmt.Fprintf(buf, "  ScreenSize:     {Width: %d, Height %d},\n", c.screenSize.Width, c.screenSize.Height)
+	fmt.Fprintf(buf, "  CurrentPath:    %q,\n", c.currentPath)
+	fmt.Fprintf(buf, "  SelectedId:     %s,\n", f.selectedEntry)
+	fmt.Fprintf(buf, "  OffsetIdx:      %d,\n", f.offsetIdx)
+	fmt.Fprintf(buf, "  SortColumn:     %s,\n", f.sortColumn)
+	fmt.Fprintf(buf, "  SortAscending:  %v,\n", f.sortAscending)
+	fmt.Fprintf(buf, "  PendingFiles:   %d,\n", c.pendingFiles)
+	fmt.Fprintf(buf, "  DuplicateFiles: %d,\n", c.duplicateFiles)
+	fmt.Fprintf(buf, "  AbsentFiles:    %d,\n", c.absentFiles)
+	fmt.Fprintf(buf, "  FileTreeLines:  %d,\n", c.fileTreeLines)
+	if len(f.entries) > 0 {
+		fmt.Fprintf(buf, "  Entries: {\n")
+		for _, entry := range f.entries {
+			fmt.Fprintf(buf, "    %s:\n", entry)
 		}
+		fmt.Fprintf(buf, "  }\n")
 	}
-}
-
-func (c *controller) selectedEntry() *w.File {
-	return c.entry(c.view.SelectedId)
-}
-
-func (c *controller) entry(id m.Id) *w.File {
-	for _, entry := range c.view.Entries {
-		if entry.Id == id {
-			return entry
+	if len(c.progressInfos) > 0 {
+		fmt.Fprintf(buf, "  Progress: {\n")
+		for _, progress := range c.progressInfos {
+			fmt.Fprintf(buf, "    {Root: %q, Tab: %q, ETA: %s, Value: %6.2f%%, Speed: %7.3fMb}:\n",
+				progress.Root, progress.Tab, progress.TimeRemaining, progress.Value, progress.Speed)
 		}
+		fmt.Fprintf(buf, "  }\n")
 	}
-	return nil
+	return buf.String()
 }

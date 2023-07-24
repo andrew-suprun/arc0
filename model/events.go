@@ -9,28 +9,23 @@ type Event interface {
 	event()
 }
 
-type ArchiveFiles struct {
-	Root  Root
-	Files []*File
-}
-
-func (ArchiveFiles) event() {}
-
-type FileScanned struct {
-	*File
-}
-
-func (FileScanned) event() {}
-
-func (f *FileScanned) String() string {
-	return f.File.String()
-}
-
 type ArchiveScanned struct {
-	Root
+	Root  Root
+	Files []Meta
 }
 
 func (ArchiveScanned) event() {}
+
+type FileHashed struct {
+	Id
+	Hash
+}
+
+func (FileHashed) event() {}
+
+func (f FileHashed) String() string {
+	return fmt.Sprintf("FileHashed: Id: %q, Hash: %q", f.Id, f.Hash)
+}
 
 type FileDeleted DeleteFile
 
@@ -59,8 +54,9 @@ func (h FileCopied) String() string {
 type ProgressState int
 
 const (
-	Initial ProgressState = iota
-	Scanned
+	ProgressInitial ProgressState = iota
+	ProgressScanned
+	ProgressHashed
 )
 
 type HashingProgress struct {

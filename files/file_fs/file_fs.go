@@ -30,8 +30,8 @@ func (fs *fileFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 		events:   fs.events,
 		commands: stream.NewStream[m.FileCommand](root.String()),
 		lc:       fs.lc,
-		files:    map[uint64]*m.File{},
-		stored:   map[uint64]*m.File{},
+		files:    map[uint64]*m.Meta{},
+		stored:   map[uint64]*m.Meta{},
 		sent:     map[m.Id]struct{}{},
 	}
 	go s.handleEvents()

@@ -16,7 +16,7 @@ func (c *controller) handleTick(tick m.Tick) {
 	now := time.Time(tick)
 	dur := now.Sub(c.prevTick)
 	seconds := dur.Seconds()
-	c.view.FPS = int(float64(c.frames-1) / seconds)
+	c.fps = int(float64(c.frames-1) / seconds)
 	c.frames = 0
 	copied := c.totalCopiedSize + c.fileCopiedSize - c.prevCopied
 	c.copySpeed = float64(copied) / (seconds * 1024 * 1024)

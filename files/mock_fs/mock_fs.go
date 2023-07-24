@@ -3,6 +3,7 @@ package mock_fs
 import (
 	m "arch/model"
 	"arch/stream"
+	"log"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -31,7 +32,7 @@ func (fs *mockFs) NewArchiveScanner(root m.Root) m.ArchiveScanner {
 		eventStream: fs.eventStream,
 		commands:    stream.NewStream[m.FileCommand](root.String()),
 	}
-	go s.handleEvents()
+	go s.handleCommands()
 	return s
 }
 
@@ -39,7 +40,7 @@ func (s *scanner) Send(cmd m.FileCommand) {
 	s.commands.Push(cmd)
 }
 
-func (s *scanner) handleEvents() {
+func (s *scanner) handleCommands() {
 	for {
 		for _, cmd := range s.commands.Pull() {
 			s.handleCommand(cmd)
@@ -48,9 +49,13 @@ func (s *scanner) handleEvents() {
 }
 
 func (s *scanner) handleCommand(cmd m.FileCommand) {
+	log.Printf("mock: cmd: %T: %v", cmd, cmd)
 	switch cmd := cmd.(type) {
 	case m.ScanArchive:
 		s.scanArchive()
+
+	case m.HashArchive:
+		s.hashArchive()
 
 	case m.DeleteFile:
 		s.eventStream.Push(m.FileDeleted(cmd))
@@ -84,9 +89,9 @@ func (s *scanner) scanArchive() {
 		totalSize += file.Size
 	}
 
-	files := []*m.File{}
+	files := []m.Meta{}
 	for _, meta := range archFiles {
-		files = append(files, &m.File{
+		files = append(files, m.Meta{
 			Id: m.Id{
 				Root: meta.Root,
 				Name: m.Name{
@@ -99,10 +104,14 @@ func (s *scanner) scanArchive() {
 		})
 	}
 
-	s.eventStream.Push(m.ArchiveFiles{
+	s.eventStream.Push(m.ArchiveScanned{
 		Root:  s.root,
 		Files: files,
 	})
+}
+
+func (s *scanner) hashArchive() {
+	archFiles := metas[s.root]
 
 	scans := make([]bool, len(archFiles))
 
@@ -112,19 +121,15 @@ func (s *scanner) scanArchive() {
 	for i := range archFiles {
 		if !scans[i] {
 			meta := archFiles[i]
-			s.eventStream.Push(m.FileScanned{
-				File: &m.File{
-					Id: m.Id{
-						Root: meta.Root,
-						Name: m.Name{
-							Path: dir(meta.FullName),
-							Base: name(meta.FullName),
-						},
+			s.eventStream.Push(m.FileHashed{
+				Id: m.Id{
+					Root: meta.Root,
+					Name: m.Name{
+						Path: dir(meta.FullName),
+						Base: name(meta.FullName),
 					},
-					Size:    meta.Size,
-					ModTime: meta.ModTime,
-					Hash:    meta.Hash,
 				},
+				Hash: meta.Hash,
 			})
 		}
 	}
@@ -141,23 +146,18 @@ func (s *scanner) scanArchive() {
 				}
 				time.Sleep(time.Millisecond)
 			}
-			s.eventStream.Push(m.FileScanned{
-				File: &m.File{
-					Id: m.Id{
-						Root: meta.Root,
-						Name: m.Name{
-							Path: dir(meta.FullName),
-							Base: name(meta.FullName),
-						},
+			s.eventStream.Push(m.FileHashed{
+				Id: m.Id{
+					Root: meta.Root,
+					Name: m.Name{
+						Path: dir(meta.FullName),
+						Base: name(meta.FullName),
 					},
-					Size:    meta.Size,
-					ModTime: meta.ModTime,
-					Hash:    meta.Hash,
 				},
+				Hash: meta.Hash,
 			})
 		}
 	}
-	s.eventStream.Push(m.ArchiveScanned{Root: s.root})
 }
 
 var beginning = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)

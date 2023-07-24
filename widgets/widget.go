@@ -23,7 +23,7 @@ type Position struct {
 	X, Y int
 }
 
-//lint:ignore U1000 Casted into m.ScreenSize
+// XXX lint:ignore U1000 Casted into m.ScreenSize
 type Size struct {
 	Width, Height int
 }
@@ -48,11 +48,11 @@ const (
 type View struct {
 	ScreenSize     m.ScreenSize
 	CurrentPath    m.Path
-	Entries        []*File
+	Entries        []*m.File
 	Progress       []ProgressInfo
 	SelectedId     m.Id
 	OffsetIdx      int
-	SortColumn     SortColumn
+	SortColumn     m.SortColumn
 	SortAscending  []bool
 	PendingFiles   int
 	DuplicateFiles int
@@ -61,113 +61,12 @@ type View struct {
 	FPS            int
 }
 
-func (s *View) String() string {
-	buf := &strings.Builder{}
-	fmt.Fprintln(buf, "Screen{")
-	fmt.Fprintf(buf, "  ScreenSize:     {Width: %d, Height %d},\n", s.ScreenSize.Width, s.ScreenSize.Height)
-	fmt.Fprintf(buf, "  CurrentPath:    %q,\n", s.CurrentPath)
-	fmt.Fprintf(buf, "  SelectedId:     %q,\n", s.SelectedId)
-	fmt.Fprintf(buf, "  OffsetIdx:      %d,\n", s.OffsetIdx)
-	fmt.Fprintf(buf, "  SortColumn:     %s,\n", s.SortColumn)
-	fmt.Fprintf(buf, "  SortAscending:  %v,\n", s.SortAscending)
-	fmt.Fprintf(buf, "  PendingFiles:   %d,\n", s.PendingFiles)
-	fmt.Fprintf(buf, "  DuplicateFiles: %d,\n", s.DuplicateFiles)
-	fmt.Fprintf(buf, "  AbsentFiles:    %d,\n", s.AbsentFiles)
-	fmt.Fprintf(buf, "  FileTreeLines:  %d,\n", s.FileTreeLines)
-	if len(s.Entries) > 0 {
-		fmt.Fprintf(buf, "  Entries: {\n")
-		for _, entry := range s.Entries {
-			fmt.Fprintf(buf, "    %s:\n", entry)
-		}
-		fmt.Fprintf(buf, "  }\n")
-	}
-	if len(s.Progress) > 0 {
-		fmt.Fprintf(buf, "  Progress: {\n")
-		for _, progress := range s.Progress {
-			fmt.Fprintf(buf, "    {Root: %q, Tab: %q, ETA: %s, Value: %6.2f%%, Speed: %7.3fMb}:\n",
-				progress.Root, progress.Tab, progress.TimeRemaining, progress.Value, progress.Speed)
-		}
-		fmt.Fprintf(buf, "  }\n")
-	}
-	return buf.String()
-}
-
-type SortColumn int
-
-const (
-	SortByName SortColumn = iota
-	SortByTime
-	SortBySize
-)
-
-func (c SortColumn) String() string {
-	switch c {
-	case SortByName:
-		return "SortByName"
-	case SortByTime:
-		return "SortByTime"
-	case SortBySize:
-		return "SortBySize"
-	}
-	return "Illegal Sort Solumn"
-}
-
-type File struct {
-	m.File
-	Kind
-	State
-}
-
-type Kind int
-
-const (
-	FileRegular Kind = iota
-	FileFolder
-)
-
-type State int
-
-const (
-	Resolved State = iota
-	Pending
-	Duplicate
-	Absent
-)
-
 type ProgressInfo struct {
 	Root          m.Root
 	Tab           string
 	Value         float64
 	Speed         float64
 	TimeRemaining time.Duration
-}
-
-func (f *File) String() string {
-	return fmt.Sprintf("File{FileId: %q, Kind: %s, Size: %d, Hash: %q, State: %s}", f.Id, f.Kind, f.Size, f.Hash, f.State)
-}
-
-func (k Kind) String() string {
-	switch k {
-	case FileFolder:
-		return "FileFolder"
-	case FileRegular:
-		return "FileRegular"
-	}
-	return "UNKNOWN FILE KIND"
-}
-
-func (p State) String() string {
-	switch p {
-	case Resolved:
-		return "Resolved"
-	case Pending:
-		return "Pending"
-	case Duplicate:
-		return "Duplicate"
-	case Absent:
-		return "Absent"
-	}
-	return "UNKNOWN FILE STATE"
 }
 
 func (s Style) String() string {

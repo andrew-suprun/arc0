@@ -20,6 +20,10 @@ type ScanArchive struct{}
 
 func (ScanArchive) cmd() {}
 
+type HashArchive struct{}
+
+func (HashArchive) cmd() {}
+
 type DeleteFile struct {
 	Hash Hash
 	Id   Id

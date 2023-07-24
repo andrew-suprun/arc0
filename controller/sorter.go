@@ -1,30 +1,34 @@
 package controller
 
 import (
-	w "arch/widgets"
+	m "arch/model"
 	"sort"
 	"strings"
 )
 
-func (c *controller) sort() {
-	folder := c.currentFolder()
-	files := sliceBy(c.view.Entries)
+func (f *folder) sort() []*m.File {
+	out := []*m.File{}
+	for _, entry := range f.entries {
+		out = append(out, entry)
+	}
+	files := sliceBy(out)
 	var slice sort.Interface
-	switch folder.sortColumn {
-	case w.SortByName:
+	switch f.sortColumn {
+	case m.SortByName:
 		slice = sliceByName{sliceBy: files}
-	case w.SortByTime:
+	case m.SortByTime:
 		slice = sliceByTime{sliceBy: files}
-	case w.SortBySize:
+	case m.SortBySize:
 		slice = sliceBySize{sliceBy: files}
 	}
-	if !folder.sortAscending[folder.sortColumn] {
+	if !f.sortAscending[f.sortColumn] {
 		slice = sort.Reverse(slice)
 	}
 	sort.Sort(slice)
+	return out
 }
 
-type sliceBy []*w.File
+type sliceBy []*m.File
 
 func (s sliceBy) Len() int {
 	return len(s)

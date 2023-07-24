@@ -11,9 +11,8 @@ func TestStream(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		t.Log(s.Pull())
-		t.Log(s.Pull())
-		t.Log(s.PullAll())
-		t.Log(s.PullAll())
+		t.Log(s.TryPull())
+		t.Log(s.TryPull())
 		wg.Done()
 
 	}()
