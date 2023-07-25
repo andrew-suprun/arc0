@@ -2,7 +2,6 @@ package controller
 
 import (
 	m "arch/model"
-	"log"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -36,19 +35,17 @@ func (c *controller) mouseTarget(cmd any) {
 
 func (c *controller) selectFirst() {
 	folder := c.currentFolder()
-	log.Printf("selectFirst: path: %q, entries: %d", c.currentPath, len(folder.entries))
 	if len(folder.entries) == 0 {
 		return
 	}
 	sorted := folder.sort()
 	folder.selectedEntry = sorted[0]
-	log.Printf("selectFirst: selected: %s", folder.selectedEntry)
 	folder.offsetIdx = 0
 }
 
 func (c *controller) selectLast() {
 	folder := c.currentFolder()
-	if len(folder.entries) > 0 {
+	if len(folder.entries) == 0 {
 		return
 	}
 	sorted := folder.sort()
@@ -94,6 +91,9 @@ func (c *controller) revealInFinder() {
 
 func (c *controller) moveSelection(lines int) {
 	folder := c.currentFolder()
+	if len(folder.entries) == 0 {
+		return
+	}
 	id := folder.selectedEntry.Id
 	sorted := folder.sort()
 	for idx, entry := range sorted {

@@ -2,11 +2,17 @@ package controller
 
 import (
 	m "arch/model"
+	"log"
 	"strings"
 )
 
 func (c *controller) keepFile(file *m.File) {
-	if file == nil || file.State <= m.Pending {
+	log.Printf("keepFile: file: %s", file)
+
+	if file == nil {
+		log.Panic("keepFile(nil)")
+	}
+	if file.State <= m.Pending {
 		return
 	}
 
@@ -44,16 +50,16 @@ func (c *controller) keepFile(file *m.File) {
 				scanner.Send(m.RenameFile{From: keepFile.Id, To: newId, Hash: file.Hash})
 				pending = true
 				keepFile.State = m.Pending
-				delete(c.byId, keepFile.Id)
-				c.byId[newId] = keepFile
+				delete(c.byName, keepFile.Name)
+				c.byName[fileName] = keepFile
 				c.removeEntry(keepFile.Id)
-				c.addEntry(keepFile)
+				c.addFile(keepFile)
 				keepFile.Id = newId
 			}
 		} else {
 			scanner.Send(m.DeleteFile{Id: entry.Id, Hash: file.Hash})
 			pending = true
-			delete(c.byId, file.Id)
+			delete(c.byName, file.Name)
 			c.removeEntry(file.Id)
 		}
 	}
@@ -104,7 +110,7 @@ func (c *controller) deleteRegularFile(hash m.Hash) {
 	c.pendingFiles++
 	for _, entry := range c.byHash[hash] {
 		c.archives[c.origin].scanner.Send(m.DeleteFile{Id: entry.Id, Hash: entry.Hash})
-		delete(c.byId, entry.Id)
+		delete(c.byName, entry.Name)
 		c.removeEntry(entry.Id)
 	}
 }
@@ -113,7 +119,7 @@ func (c *controller) deleteFolderFile(file *m.File) {
 	path := file.Name.String()
 	hashes := map[m.Hash]struct{}{}
 
-	for _, entry := range c.byId {
+	for _, entry := range c.byName {
 		if entry.State == m.Absent && strings.HasPrefix(entry.Path.String(), path) {
 			hashes[entry.Hash] = struct{}{}
 		}

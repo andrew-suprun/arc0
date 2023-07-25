@@ -6,7 +6,6 @@ import (
 )
 
 func (c *controller) handleEvent(event any) {
-	log.Printf("handleEvent: %T: %v", event, event)
 	if event == nil {
 		return
 	}

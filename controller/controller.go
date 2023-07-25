@@ -15,9 +15,10 @@ type controller struct {
 
 	archives map[m.Root]*archive
 	folders  map[m.Path]*folder
-	byId     map[m.Id]*m.File
+	byName   map[m.Name]*m.File
 	bySize   map[uint64][]*m.File
 	byHash   map[m.Hash][]*m.File
+	renames  map[namehash]m.Base
 
 	copySize           uint64
 	totalCopiedSize    uint64
@@ -62,17 +63,27 @@ type folder struct {
 	sortAscending []bool
 }
 
-func Run(fs m.FS, renderer w.Renderer, events *stream.Stream[m.Event], roots []m.Root) {
-	c := &controller{
+type namehash struct {
+	name string
+	hash m.Hash
+}
+
+func newController(roots []m.Root) *controller {
+	return &controller{
 		roots:  roots,
 		origin: roots[0],
 
 		archives: map[m.Root]*archive{},
 		folders:  map[m.Path]*folder{},
-		byId:     map[m.Id]*m.File{},
 		bySize:   map[uint64][]*m.File{},
 		byHash:   map[m.Hash][]*m.File{},
+		renames:  map[namehash]m.Base{},
+		byName:   map[m.Name]*m.File{},
 	}
+}
+
+func Run(fs m.FS, renderer w.Renderer, events *stream.Stream[m.Event], roots []m.Root) {
+	c := newController(roots)
 
 	go ticker(events)
 
@@ -128,7 +139,7 @@ func (c *controller) screenString() string {
 	fmt.Fprintf(buf, "  FileTreeLines:  %d,\n", c.fileTreeLines)
 	if len(f.entries) > 0 {
 		fmt.Fprintf(buf, "  Entries: {\n")
-		for _, entry := range f.entries {
+		for _, entry := range f.sort() {
 			fmt.Fprintf(buf, "    %s:\n", entry)
 		}
 		fmt.Fprintf(buf, "  }\n")

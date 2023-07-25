@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 	"time"
 )
@@ -25,7 +24,6 @@ func (p Path) ParentName() Name {
 	if path == "." {
 		path = ""
 	}
-	log.Printf("ParentName: path: %q, name: %q", path, filepath.Base(strPath))
 	return Name{Path: path, Base: Base(filepath.Base(strPath))}
 }
 
@@ -104,6 +102,7 @@ const (
 	Initial State = iota
 	Resolved
 	Pending
+	Autoresolve
 	Duplicate
 	Absent
 )
@@ -116,6 +115,8 @@ func (s State) String() string {
 		return "Resolved"
 	case Pending:
 		return "Pending"
+	case Autoresolve:
+		return "Autoresolve"
 	case Duplicate:
 		return "Duplicate"
 	case Absent:

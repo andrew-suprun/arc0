@@ -28,7 +28,8 @@ type scanner struct {
 	events   *stream.Stream[m.Event]
 	commands *stream.Stream[m.FileCommand]
 	lc       *lifecycle.Lifecycle
-	files    map[uint64]*m.Meta
+	byInode  map[uint64]*m.Meta
+	files    []m.Meta
 	stored   map[uint64]*m.Meta
 	sent     map[m.Id]struct{}
 }
@@ -68,11 +69,6 @@ func (s *scanner) handleCommand(cmd m.FileCommand) {
 }
 
 func (s *scanner) scanArchive() {
-	// TODO
-}
-
-func (s *scanner) hashArchive() {
-	files := []m.Meta{}
 	fsys := os.DirFS(s.root.String())
 	fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if s.lc.ShoudStop() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") {
@@ -103,8 +99,8 @@ func (s *scanner) hashArchive() {
 			Size:    uint64(meta.Size()),
 		}
 
-		s.files[sys.Ino] = file
-		files = append(files, *file)
+		s.byInode[sys.Ino] = file
+		s.files = append(s.files, *file)
 		log.Printf("file: %q", file.Id)
 
 		return nil
@@ -112,15 +108,18 @@ func (s *scanner) hashArchive() {
 
 	s.events.Push(m.ArchiveScanned{
 		Root:  s.root,
-		Files: files,
+		Files: s.files,
 	})
+}
+
+func (s *scanner) hashArchive() {
 
 	s.readMeta()
 	defer func() {
 		s.storeMeta()
 	}()
 
-	for ino, file := range s.files {
+	for ino, file := range s.byInode {
 		if stored, ok := s.stored[ino]; ok && stored.ModTime == file.ModTime && stored.Size == file.Size {
 			file.Hash = stored.Hash
 			s.events.Push(m.FileHashed{Id: file.Id, Hash: file.Hash})
@@ -128,7 +127,7 @@ func (s *scanner) hashArchive() {
 		}
 	}
 
-	for _, file := range files {
+	for _, file := range s.files {
 		if _, ok := s.sent[file.Id]; ok {
 			continue
 		}
@@ -222,7 +221,7 @@ func (s *scanner) readMeta() {
 				Size:    uint64(size),
 				Hash:    m.Hash(hash),
 			}
-			info, ok := s.files[iNode]
+			info, ok := s.byInode[iNode]
 			if hash != "" && ok && info.ModTime == modTime && info.Size == size {
 				info.Hash = m.Hash(hash)
 			}
@@ -231,10 +230,10 @@ func (s *scanner) readMeta() {
 }
 
 func (s *scanner) storeMeta() error {
-	result := make([][]string, 1, len(s.files)+1)
+	result := make([][]string, 1, len(s.byInode)+1)
 	result[0] = []string{"INode", "Name", "Size", "ModTime", "Hash"}
 
-	for iNode, file := range s.files {
+	for iNode, file := range s.byInode {
 		result = append(result, []string{
 			fmt.Sprint(iNode),
 			norm.NFC.String(file.Name.String()),

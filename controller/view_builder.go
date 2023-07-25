@@ -4,7 +4,6 @@ import (
 	m "arch/model"
 	w "arch/widgets"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -41,23 +40,22 @@ func (c *controller) title() w.Widget {
 	)
 }
 
-func (s *controller) folderWidget() w.Widget {
+func (c *controller) folderWidget() w.Widget {
 	return w.Column(colConstraint,
-		s.breadcrumbs(),
+		c.breadcrumbs(),
 		w.Styled(styleArchiveHeader,
 			w.Row(rowConstraint,
 				w.Text(" Status").Width(13),
-				w.MouseTarget(m.SortByName, w.Text(" Document"+s.sortIndicator(m.SortByName)).Width(20).Flex(1)),
-				w.MouseTarget(m.SortByTime, w.Text("  Date Modified"+s.sortIndicator(m.SortByTime)).Width(19)),
-				w.MouseTarget(m.SortBySize, w.Text(fmt.Sprintf("%22s", "Size"+s.sortIndicator(m.SortBySize)+" "))),
+				w.MouseTarget(m.SortByName, w.Text(" Document"+c.sortIndicator(m.SortByName)).Width(20).Flex(1)),
+				w.MouseTarget(m.SortByTime, w.Text("  Date Modified"+c.sortIndicator(m.SortByTime)).Width(19)),
+				w.MouseTarget(m.SortBySize, w.Text(fmt.Sprintf("%22s", "Size"+c.sortIndicator(m.SortBySize)+" "))),
 			),
 		),
 		w.Scroll(m.Scroll{}, w.Constraint{Size: w.Size{Width: 0, Height: 0}, Flex: w.Flex{X: 1, Y: 1}},
 			func(size w.Size) w.Widget {
-				folder := s.currentFolder()
+				folder := c.currentFolder()
 				sorted := folder.sort()
-				log.Printf("folderWidget: folder: %v", folder)
-				s.fileTreeLines = size.Height
+				c.fileTreeLines = size.Height
 				if folder.offsetIdx > len(folder.entries)+1-size.Height {
 					folder.offsetIdx = len(folder.entries) + 1 - size.Height
 				}
@@ -69,9 +67,9 @@ func (s *controller) folderWidget() w.Widget {
 					if i >= size.Height {
 						break
 					}
-					rows = append(rows, w.Styled(s.styleFile(file, folder.selectedEntry == file),
+					rows = append(rows, w.Styled(c.styleFile(file, folder.selectedEntry == file),
 						w.MouseTarget(m.SelectFile(file.Id), w.Row(rowConstraint,
-							s.fileRow(file)...,
+							c.fileRow(file)...,
 						)),
 					))
 				}
@@ -82,7 +80,7 @@ func (s *controller) folderWidget() w.Widget {
 	)
 }
 
-func (s *controller) fileRow(file *m.File) []w.Widget {
+func (c *controller) fileRow(file *m.File) []w.Widget {
 	result := []w.Widget{w.Text(stateString(file.State)).Width(11)}
 
 	if file.Kind == m.FileRegular {
@@ -175,10 +173,10 @@ func (c *controller) progressXXX() []w.ProgressInfo {
 	return infos
 }
 
-func (s *controller) progress() w.Widget {
+func (c *controller) progress() w.Widget {
 	tabWidth := 0
 	rootWidth := 0
-	for _, progress := range s.progressInfos {
+	for _, progress := range c.progressInfos {
 		if tabWidth < len(progress.Tab) {
 			tabWidth = len(progress.Tab)
 		}
@@ -188,7 +186,7 @@ func (s *controller) progress() w.Widget {
 	}
 
 	stats := []w.Widget{}
-	for _, progress := range s.progressInfos {
+	for _, progress := range c.progressInfos {
 		stats = append(stats,
 			w.Row(w.Constraint{Size: w.Size{Width: 0, Height: 1}, Flex: w.Flex{X: 1, Y: 0}},
 				w.Text(progress.Tab).Width(tabWidth),
