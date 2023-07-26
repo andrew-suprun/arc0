@@ -50,8 +50,8 @@ func (c *controller) keepFile(file *m.File) {
 				scanner.Send(m.RenameFile{From: keepFile.Id, To: newId, Hash: file.Hash})
 				pending = true
 				keepFile.State = m.Pending
-				delete(c.byName, keepFile.Name)
-				c.byName[fileName] = keepFile
+				delete(c.byId, keepFile.Name)
+				c.byId[fileName] = keepFile
 				c.removeEntry(keepFile.Id)
 				c.addFile(keepFile)
 				keepFile.Id = newId
@@ -59,7 +59,7 @@ func (c *controller) keepFile(file *m.File) {
 		} else {
 			scanner.Send(m.DeleteFile{Id: entry.Id, Hash: file.Hash})
 			pending = true
-			delete(c.byName, file.Name)
+			delete(c.byId, file.Name)
 			c.removeEntry(file.Id)
 		}
 	}
@@ -110,7 +110,7 @@ func (c *controller) deleteRegularFile(hash m.Hash) {
 	c.pendingFiles++
 	for _, entry := range c.byHash[hash] {
 		c.archives[c.origin].scanner.Send(m.DeleteFile{Id: entry.Id, Hash: entry.Hash})
-		delete(c.byName, entry.Name)
+		delete(c.byId, entry.Name)
 		c.removeEntry(entry.Id)
 	}
 }
@@ -119,7 +119,7 @@ func (c *controller) deleteFolderFile(file *m.File) {
 	path := file.Name.String()
 	hashes := map[m.Hash]struct{}{}
 
-	for _, entry := range c.byName {
+	for _, entry := range c.byId {
 		if entry.State == m.Absent && strings.HasPrefix(entry.Path.String(), path) {
 			hashes[entry.Hash] = struct{}{}
 		}

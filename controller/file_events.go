@@ -8,7 +8,7 @@ import (
 )
 
 func (c *controller) archiveScanned(event m.ArchiveScanned) {
-	c.addOriginFiles(event)
+	c.addFiles(event)
 
 	archive := c.archives[event.Root]
 	for _, file := range event.Files {
@@ -31,120 +31,9 @@ func (c *controller) archiveScanned(event m.ArchiveScanned) {
 	}
 }
 
-func (c *controller) addOriginFiles(event m.ArchiveScanned) {
-	for _, file := range event.Files {
-		entry := &m.File{
-			Meta:  file,
-			Kind:  m.FileRegular,
-			State: m.Initial,
-		}
-		c.byName[entry.Name] = entry
-
-		entries := c.bySize[file.Size]
-		entries = append(entries, entry)
-		c.bySize[file.Size] = entries
-
-		if event.Root == c.origin {
-			c.addFile(entry)
-		}
-	}
-	c.setInitialSelection("")
-	c.currentPath = ""
-}
-
-func (c *controller) addFile(file *m.File) {
-	folder := c.getFolder(file.Path)
-	folder.entries[file.Base] = file
-	name := file.ParentName()
-	for name.Base != "." {
-		parentFolder := c.getFolder(name.Path)
-		item := parentFolder.entries[name.Base]
-		if item != nil {
-			if item.Kind != m.FileFolder {
-				log.Panicf("ERROR: Name collision in controller.addEntry(): %q", name.Base)
-			}
-			item.Size += file.Size
-			if item.ModTime.Before(file.ModTime) {
-				item.ModTime = file.ModTime
-			}
-		} else {
-			folderEntry := &m.File{
-				Meta: m.Meta{
-					Id: m.Id{
-						Root: file.Root,
-						Name: name,
-					},
-					Size:    file.Size,
-					ModTime: file.ModTime,
-				},
-				Kind:  m.FileFolder,
-				State: m.Initial,
-			}
-			c.addFile(folderEntry)
-		}
-
-		name = name.Path.ParentName()
-	}
-}
-
-func (c *controller) addCopyFile(file *m.File) {
-	if newName, ok := c.resolveName(file.Name); ok {
-		c.archives[c.origin].scanner.Send(m.RenameFile{
-			Hash: file.Hash,
-			From: m.Id{Root: file.Root, Name: file.Name},
-			To:   m.Id{Root: file.Root, Name: newName},
-		})
-		file.Name = newName
-	}
-	c.addFile(file)
-}
-
-func (c *controller) resolveName(name m.Name) (m.Name, bool) {
-	log.Printf("resolveName: name: %q", name)
-	parts := strings.Split(name.Path.String(), "/")
-	log.Printf("resolveName: parts: %s", parts)
-	for i := 1; i < len(parts); i++ {
-		path := m.Path(strings.Join(parts[:i], "/"))
-		base := m.Base(parts[i])
-		nameName := m.Name{Path: path, Base: base}
-		log.Printf("resolveName: path: %q, base: %q, name: %q", path, base, nameName)
-		if _, ok := c.byName[nameName]; ok {
-			// TODO Don't ignore Hashes in c.byName
-			newBase := c.uniqueBase(nameName)
-			log.Printf("resolveName: new base: %q", newBase)
-			parts[i] = newBase.String()
-			log.Printf("resolveName: parts: %s", parts)
-			nameName.Path = m.Path(strings.Join(parts, "/"))
-			nameName.Base = name.Base
-
-			return nameName, true
-		}
-	}
-	if _, ok := c.byName[name]; ok {
-		newBase := c.uniqueBase(name)
-		return m.Name{Path: name.Path, Base: newBase}, true
-	}
-	return name, false
-}
-
-func (c *controller) setInitialSelection(path m.Path) {
-	c.currentPath = path
-	c.selectFirst()
-	for _, entry := range c.currentFolder().entries {
-		if entry.Kind == m.FileFolder {
-			c.setInitialSelection(m.Path(entry.Name.String()))
-		}
-	}
-}
-
-func (c *controller) removeEntry(id m.Id) {
-	log.Panic("Implement controller.remove()")
-	c.updateFolderStates("")
-}
-
 func (c *controller) fileHashed(event m.FileHashed) {
 	log.Printf("file hashed: %s", event)
-	file := c.byName[event.Name]
+	file := c.byId[event.Id]
 	file.Hash = event.Hash
 
 	archive := c.archives[event.Root]
@@ -196,6 +85,125 @@ func (c *controller) fileHashed(event m.FileHashed) {
 	}
 }
 
+func (c *controller) addFiles(event m.ArchiveScanned) {
+	for _, file := range event.Files {
+		entry := &m.File{
+			Meta:  file,
+			Kind:  m.FileRegular,
+			State: m.Initial,
+		}
+		c.byId[entry.Id] = entry
+
+		entries := c.bySize[file.Size]
+		entries = append(entries, entry)
+		c.bySize[file.Size] = entries
+
+		if event.Root == c.origin {
+			c.addFile(entry)
+		}
+	}
+	c.setInitialSelection("")
+	c.currentPath = ""
+}
+
+func (c *controller) addFile(file *m.File) {
+	folder := c.getFolder(file.Path)
+	folder.entries[file.Base] = file
+	name := file.ParentName()
+	for name.Base != "." {
+		parentFolder := c.getFolder(name.Path)
+		item := parentFolder.entries[name.Base]
+		if item != nil {
+			if item.Kind != m.FileFolder {
+				log.Panicf("ERROR: Name collision in controller.addEntry(): %q", name.Base)
+			}
+			item.Size += file.Size
+			if item.ModTime.Before(file.ModTime) {
+				item.ModTime = file.ModTime
+			}
+		} else {
+			folderEntry := &m.File{
+				Meta: m.Meta{
+					Id: m.Id{
+						Root: file.Root,
+						Name: name,
+					},
+					Size:    file.Size,
+					ModTime: file.ModTime,
+				},
+				Kind:  m.FileFolder,
+				State: m.Initial,
+			}
+			c.addFile(folderEntry)
+		}
+
+		name = name.Path.ParentName()
+	}
+}
+
+func (c *controller) addCopyFile(file *m.File) {
+	if newName, ok := c.resolveName(file); ok {
+		c.rename(file, newName)
+	}
+	c.addFile(file)
+}
+
+func (c *controller) rename(file *m.File, newName m.Name) {
+	nh := namehash{name: file.Name, hash: file.Hash}
+	if _, ok := c.renames[nh]; !ok {
+		c.archives[c.origin].scanner.Send(m.RenameFile{
+			Hash: file.Hash,
+			From: m.Id{Root: file.Root, Name: file.Name},
+			To:   m.Id{Root: file.Root, Name: newName},
+		})
+	}
+	file.Name = newName
+	c.renames[nh] = file.Base
+}
+
+func (c *controller) resolveName(file *m.File) (m.Name, bool) {
+	log.Printf("resolveName: name: %q", file)
+	parts := strings.Split(file.Path.String(), "/")
+	log.Printf("resolveName: parts: %s", parts)
+	for i := 1; i < len(parts); i++ {
+		path := m.Path(strings.Join(parts[:i], "/"))
+		base := m.Base(parts[i])
+		newId := m.Id{Root: file.Root, Name: m.Name{Path: path, Base: base}}
+		log.Printf("resolveName: path: %q, base: %q, name: %q", path, base, newId)
+		if _, ok := c.byId[newId]; ok {
+			// TODO Don't ignore Hashes in c.byName
+			newBase := c.uniqueBase(newId)
+			log.Printf("resolveName: new base: %q", newBase)
+			parts[i] = newBase.String()
+			log.Printf("resolveName: parts: %s", parts)
+			newId.Path = m.Path(strings.Join(parts, "/"))
+			newId.Base = newId.Base
+
+			return newId.Name, true
+		}
+	}
+	if _, ok := c.byId[file.Id]; ok {
+		newBase := c.uniqueBase(file.Name)
+		return m.Name{Path: file.Path, Base: newBase}, true
+	}
+	return file.Name, false
+}
+
+func (c *controller) setInitialSelection(path m.Path) {
+	c.currentPath = path
+	c.selectFirst()
+	for _, entry := range c.currentFolder().entries {
+		if entry.Kind == m.FileFolder {
+			c.setInitialSelection(m.Path(entry.Name.String()))
+		}
+	}
+}
+
+func (c *controller) removeEntry(id m.Id) {
+	log.Panic("Implement controller.remove()")
+	c.updateFolderStates("")
+}
+
 func (c *controller) handleHashingProgress(event m.HashingProgress) {
 	c.archives[event.Root].fileHashed = event.Hashed
 }
@@ -220,7 +228,7 @@ func (c *controller) fileCopied(event m.FileCopied) {
 	c.setState(event.Hash, m.Resolved)
 	c.pendingFiles--
 	c.fileCopiedSize = 0
-	file := c.byName[event.From.Name]
+	file := c.byId[event.From]
 	c.totalCopiedSize += file.Size
 	if c.totalCopiedSize == c.copySize {
 		c.totalCopiedSize, c.copySize = 0, 0
@@ -256,8 +264,8 @@ func mergeState(state1, state2 m.State) m.State {
 	return state2
 }
 
-func (c *controller) uniqueBase(name m.Name) m.Base {
-	parts := strings.Split(name.Base.String(), ".")
+func (c *controller) uniqueBase(file *m.File) m.Base {
+	parts := strings.Split(file.Base.String(), ".")
 
 	var part string
 	if len(parts) == 1 {
@@ -273,8 +281,8 @@ func (c *controller) uniqueBase(name m.Name) m.Base {
 			parts[len(parts)-2] = fmt.Sprintf("%s [%d]", part, idx)
 			newBase = m.Base(strings.Join(parts, "."))
 		}
-		newName := m.Name{Path: name.Path, Base: m.Base(newBase)}
-		if _, ok := c.byName[newName]; !ok {
+		newId := m.Id{Root: file.Root, Name: m.Name{Path: file.Path, Base: m.Base(newBase)}}
+		if _, ok := c.byId[newId]; !ok {
 			// c.allNames[newName] = struct{}{}
 			// TODO add folder to allNames
 			return newBase
@@ -293,11 +301,11 @@ const (
 	done
 )
 
-func stripIdx(name string) string {
+func stripIdx(file string) string {
 	state := expectCloseBracket
-	i := len(name) - 1
+	i := len(file) - 1
 	for ; i >= 0; i-- {
-		ch := name[i]
+		ch := file[i]
 		if ch == ']' && state == expectCloseBracket {
 			state = expectDigit
 		} else if ch >= '0' && ch <= '9' && (state == expectDigit || state == expectDigitOrOpenBracket) {
@@ -307,8 +315,8 @@ func stripIdx(name string) string {
 		} else if ch == ' ' && state == expectSpace {
 			break
 		} else {
-			return name
+			return file
 		}
 	}
-	return name[:i]
+	return file[:i]
 }

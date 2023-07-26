@@ -15,7 +15,7 @@ type controller struct {
 
 	archives map[m.Root]*archive
 	folders  map[m.Path]*folder
-	byName   map[m.Name]*m.File
+	byId     map[m.Id]*m.File
 	bySize   map[uint64][]*m.File
 	byHash   map[m.Hash][]*m.File
 	renames  map[namehash]m.Base
@@ -64,7 +64,7 @@ type folder struct {
 }
 
 type namehash struct {
-	name string
+	name m.Name
 	hash m.Hash
 }
 
@@ -78,7 +78,7 @@ func newController(roots []m.Root) *controller {
 		bySize:   map[uint64][]*m.File{},
 		byHash:   map[m.Hash][]*m.File{},
 		renames:  map[namehash]m.Base{},
-		byName:   map[m.Name]*m.File{},
+		byId:     map[m.Id]*m.File{},
 	}
 }
 
